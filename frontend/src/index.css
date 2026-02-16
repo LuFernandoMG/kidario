@@ -1,0 +1,300 @@
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/poppins/700.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+  Kidario Design System
+  Calma Premium (65%) + Bienestar y Crecimiento (35%)
+  Mobile-first, educación infantil Brasil (PT-BR)
+*/
+
+@layer base {
+  :root {
+    /* Brand Colors - Kidario Palette */
+    --kidario-mint: 158 64% 52%;
+    --kidario-mint-light: 158 64% 94%;
+    --kidario-mint-dark: 158 64% 35%;
+    
+    --kidario-lavender: 270 50% 75%;
+    --kidario-lavender-light: 270 50% 95%;
+    
+    --kidario-coral: 16 100% 75%;
+    --kidario-coral-light: 16 100% 95%;
+    
+    --kidario-cream: 45 33% 97%;
+    --kidario-warm-white: 40 20% 99%;
+    
+    /* Semantic Colors */
+    --background: 40 20% 99%;
+    --foreground: 220 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 15%;
+
+    --primary: 158 64% 42%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 158 64% 35%;
+
+    --secondary: 270 50% 75%;
+    --secondary-foreground: 270 50% 20%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 16 100% 75%;
+    --accent-foreground: 16 100% 25%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 15%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 158 64% 42%;
+
+    --radius: 1rem;
+    --radius-sm: 0.75rem;
+    --radius-lg: 1.25rem;
+    --radius-xl: 1.5rem;
+    --radius-full: 9999px;
+
+    /* Shadows - Soft & Premium */
+    --shadow-sm: 0 1px 2px 0 hsl(220 20% 15% / 0.03);
+    --shadow-md: 0 4px 6px -1px hsl(220 20% 15% / 0.05), 0 2px 4px -2px hsl(220 20% 15% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(220 20% 15% / 0.08), 0 4px 6px -4px hsl(220 20% 15% / 0.05);
+    --shadow-card: 0 2px 8px -2px hsl(220 20% 15% / 0.06), 0 0 0 1px hsl(var(--border) / 0.5);
+    --shadow-elevated: 0 20px 25px -5px hsl(220 20% 15% / 0.1), 0 8px 10px -6px hsl(220 20% 15% / 0.1);
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 158 64% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 158 64% 94%;
+    --sidebar-accent-foreground: 158 64% 25%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 158 64% 42%;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 220 14% 96%;
+
+    --card: 220 20% 13%;
+    --card-foreground: 220 14% 96%;
+
+    --popover: 220 20% 13%;
+    --popover-foreground: 220 14% 96%;
+
+    --primary: 158 64% 52%;
+    --primary-foreground: 220 20% 10%;
+
+    --secondary: 270 50% 40%;
+    --secondary-foreground: 270 50% 95%;
+
+    --muted: 220 20% 18%;
+    --muted-foreground: 220 10% 60%;
+
+    --accent: 16 100% 65%;
+    --accent-foreground: 16 100% 95%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 158 64% 52%;
+    
+    --sidebar-background: 220 20% 10%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-primary: 158 64% 52%;
+    --sidebar-primary-foreground: 220 20% 10%;
+    --sidebar-accent: 220 20% 18%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 220 20% 20%;
+    --sidebar-ring: 158 64% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Poppins", system-ui, sans-serif;
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  /* Card Styles */
+  .card-kidario {
+    @apply bg-card rounded-xl border border-border/50;
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-kidario-elevated {
+    @apply bg-card rounded-xl;
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* Chip/Tag Styles */
+  .chip {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .chip-mint {
+    @apply bg-kidario-mint-light text-primary;
+  }
+
+  .chip-lavender {
+    @apply bg-kidario-lavender-light text-secondary-foreground;
+  }
+
+  .chip-coral {
+    @apply bg-kidario-coral-light text-accent-foreground;
+  }
+
+  /* Status Pills */
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .status-confirmada {
+    @apply bg-success/10 text-success;
+  }
+
+  .status-pendente {
+    @apply bg-warning/10 text-warning;
+  }
+
+  .status-cancelada {
+    @apply bg-destructive/10 text-destructive;
+  }
+
+  .status-concluida {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Bottom Navigation */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t border-border;
+    box-shadow: 0 -4px 20px -5px hsl(220 20% 15% / 0.08);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottom-nav-item {
+    @apply flex flex-col items-center justify-center gap-0.5 py-2 px-3 text-muted-foreground transition-colors;
+  }
+
+  .bottom-nav-item.active {
+    @apply text-primary;
+  }
+
+  .bottom-nav-item:hover:not(.active) {
+    @apply text-foreground;
+  }
+
+  /* Safe area padding for mobile */
+  .safe-bottom {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  /* Page container */
+  .page-container {
+    @apply min-h-screen bg-background px-4 pt-4 safe-bottom;
+  }
+
+  /* Section spacing */
+  .section-title {
+    @apply text-lg font-semibold text-foreground mb-3;
+    font-family: "Poppins", system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Gradient utilities */
+  .gradient-mint {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--kidario-mint-dark)) 100%);
+  }
+
+  .gradient-lavender {
+    background: linear-gradient(135deg, hsl(var(--kidario-lavender)) 0%, hsl(270 50% 65%) 100%);
+  }
+
+  .gradient-hero {
+    background: linear-gradient(180deg, hsl(var(--kidario-mint-light)) 0%, hsl(var(--background)) 100%);
+  }
+}
