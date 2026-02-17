@@ -14,6 +14,8 @@ import Agenda from "./pages/Agenda";
 import Progress from "./pages/Progress";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import TeacherPrivateSignup from "./pages/TeacherPrivateSignup";
+import { TEACHER_PRIVATE_SIGNUP_PATH } from "./lib/privateRoutes";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +30,7 @@ const App = () => (
           <Route path="/" element={<Welcome />} />
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Signup />} />
+          <Route path={TEACHER_PRIVATE_SIGNUP_PATH} element={<TeacherPrivateSignup />} />
           {/* Parent Flow */}
           <Route path="/explorar" element={<Explore />} />
           <Route path="/professora/:id" element={<TeacherProfile />} />
