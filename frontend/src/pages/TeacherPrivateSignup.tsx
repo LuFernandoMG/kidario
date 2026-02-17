@@ -49,6 +49,8 @@ interface TeacherSignupFormData {
   hourlyRate: string;
   lessonDuration: string;
   profilePhoto: File | null;
+  requestExperienceAnonymity: boolean;
+  acceptTerms: boolean;
   specialties: string[];
   formations: AcademicFormation[];
   experiences: ProfessionalExperience[];
@@ -149,13 +151,18 @@ export default function TeacherPrivateSignup() {
     hourlyRate: "",
     lessonDuration: "",
     profilePhoto: null,
+    requestExperienceAnonymity: false,
+    acceptTerms: false,
     specialties: [],
     formations: [createEmptyFormation()],
-    experiences: [createEmptyExperience()],
+    experiences: [],
     weeklyAvailability: [],
   });
 
-  const setField = (field: keyof TeacherSignupFormData, value: string | File | null | string[]) => {
+  const setField = (
+    field: keyof TeacherSignupFormData,
+    value: string | File | null | string[] | boolean,
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value as never }));
   };
 
@@ -256,6 +263,9 @@ export default function TeacherPrivateSignup() {
       if (!formData.miniBio.trim()) nextErrors.miniBio = "Informe uma mini bio profissional.";
       if (formData.specialties.length === 0) {
         nextErrors.specialties = "Adicione pelo menos uma especialidade.";
+      }
+      if (!formData.acceptTerms) {
+        nextErrors.acceptTerms = "Voce precisa aceitar os termos e condicoes.";
       }
 
       formData.formations.forEach((formation, index) => {
@@ -660,22 +670,47 @@ export default function TeacherPrivateSignup() {
                 </KidarioButton>
               </div>
 
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="anonimato-experiencia"
+                    checked={formData.requestExperienceAnonymity}
+                    onCheckedChange={(checked) => {
+                      setField("requestExperienceAnonymity", checked === true);
+                    }}
+                  />
+                  <label
+                    htmlFor="anonimato-experiencia"
+                    className="text-sm text-foreground cursor-pointer"
+                  >
+                    Solicitar anonimato na experiencia profissional
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se marcado, seus dados de experiencia poderao ser exibidos com anonimato na plataforma.
+                </p>
+              </div>
+
+              {formData.experiences.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  Experiencia profissional e opcional neste momento. Recem-graduadas podem seguir sem preencher.
+                </div>
+              )}
+
               {formData.experiences.map((experience, index) => (
                 <div key={index} className="card-kidario p-4 space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-medium text-foreground">Experiencia {index + 1}</p>
-                    {formData.experiences.length > 1 && (
-                      <KidarioButton
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeExperience(index)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Remover
-                      </KidarioButton>
-                    )}
+                    <KidarioButton
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeExperience(index)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Remover
+                    </KidarioButton>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -761,6 +796,25 @@ export default function TeacherPrivateSignup() {
                   </FormField>
                 </div>
               ))}
+            </section>
+
+            <section className="card-kidario p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="aceite-termos-professora"
+                  checked={formData.acceptTerms}
+                  onCheckedChange={(checked) => {
+                    setField("acceptTerms", checked === true);
+                  }}
+                />
+                <label
+                  htmlFor="aceite-termos-professora"
+                  className="text-sm text-foreground cursor-pointer"
+                >
+                  Li e aceito os termos e condicoes da plataforma
+                </label>
+              </div>
+              <FieldError message={errors.acceptTerms} />
             </section>
           </>
         )}
