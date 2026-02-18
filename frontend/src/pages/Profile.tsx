@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { 
+import {
   User, 
   Settings, 
   CreditCard, 
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { KidarioButton } from "@/components/ui/KidarioButton";
+import { signOutFromSupabase } from "@/lib/authSession";
 
 const menuItems = [
   { icon: User, label: "Dados pessoais", path: "/perfil/dados" },
@@ -29,8 +30,8 @@ const mockChildren = [
 export default function Profile() {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    // En producción, implementar logout con Supabase
+  const handleLogout = async () => {
+    await signOutFromSupabase();
     navigate("/");
   };
 

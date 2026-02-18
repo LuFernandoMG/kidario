@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SignupStepCarousel, type SignupStep } from "@/components/forms/SignupStepCarousel";
+import { signUpWithEmailPassword } from "@/lib/authSession";
+import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 
 interface ChildFormData {
   name: string;
@@ -98,11 +100,27 @@ const createEmptyChild = (): ChildFormData => ({
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnToParam = searchParams.get("returnTo");
+  const roleParam = searchParams.get("role");
+  const authQuery = searchParams.toString();
+  const loginLink = authQuery ? `/login?${authQuery}` : "/login";
+
+  const decodedReturnTo = useMemo(() => {
+    if (!returnToParam) return "";
+    try {
+      return decodeURIComponent(returnToParam);
+    } catch {
+      return returnToParam;
+    }
+  }, [returnToParam]);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState("");
+  const [submitNotice, setSubmitNotice] = useState("");
   const [formData, setFormData] = useState<ParentSignupFormData>({
     fullName: "",
     phone: "",
@@ -211,8 +229,10 @@ export default function Signup() {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError("");
+    setSubmitNotice("");
 
     if (currentStep < signupSteps.length - 1) {
       handleNext();
@@ -222,36 +242,43 @@ export default function Signup() {
     if (!validateStep(currentStep)) return;
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      const result = await signUpWithEmailPassword({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.fullName,
+        role: "parent",
+      });
+
+      if (result.emailConfirmationRequired) {
+        const params = new URLSearchParams();
+        params.set("email", formData.email);
+        params.set("notice", "check-email");
+        if (decodedReturnTo) params.set("returnTo", encodeURIComponent(decodedReturnTo));
+        if (roleParam === "parent" || roleParam === "teacher") params.set("role", roleParam);
+
+        navigate(`/login?${params.toString()}`);
+        return;
+      }
+
+      navigate(decodedReturnTo || "/explorar");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Não foi possível criar sua conta.",
+      );
+    } finally {
       setIsLoading(false);
-      navigate("/explorar");
-    }, 1200);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background px-6 py-8">
-      <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span>Voltar</span>
-        </Link>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mt-8"
-      >
-        <h1 className="font-display text-3xl font-bold text-foreground">Criar conta</h1>
-        <p className="text-muted-foreground mt-2">
-          Cadastro publico para pais e responsaveis.
-        </p>
-      </motion.div>
-
+    <AuthPageLayout
+      title="Criar conta"
+      subtitle="Cadastro publico para pais e responsaveis."
+      titleContainerClassName="mt-8"
+      contentContainerClassName="mt-0"
+    >
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
@@ -597,12 +624,14 @@ export default function Signup() {
         transition={{ delay: 0.3 }}
         className="text-center text-muted-foreground pb-8"
       >
+        {submitNotice && <span className="block mb-3 text-sm text-success">{submitNotice}</span>}
+        {submitError && <span className="block mb-3 text-sm text-destructive">{submitError}</span>}
         Ja tem conta?{" "}
-        <Link to="/login" className="text-primary font-medium hover:underline">
+        <Link to={loginLink} className="text-primary font-medium hover:underline">
           Entrar
         </Link>
       </motion.p>
-    </div>
+    </AuthPageLayout>
   );
 }
 

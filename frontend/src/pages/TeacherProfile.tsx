@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Video, MapPin, Clock, Calendar, MessageCircle } from "lucide-react";
+import { Video, MapPin, Calendar, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
@@ -8,18 +9,20 @@ import { RatingStars } from "@/components/marketplace/RatingStars";
 import { VerifiedBadge } from "@/components/marketplace/VerifiedBadge";
 import { Chip } from "@/components/ui/Chip";
 import { getTeacherById } from "@/data/mockTeachers";
-
-// Horarios disponibles mock
-const availableSlots = [
-  { date: "Hoje", slots: ["14:00", "15:00", "16:00"] },
-  { date: "Amanhã", slots: ["09:00", "10:00", "14:00", "15:00"] },
-  { date: "Qua, 30", slots: ["10:00", "11:00"] },
-];
+import { buildTeacherAvailability } from "@/lib/bookingUtils";
 
 export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const teacher = getTeacherById(id || "");
+  const availableSlots = useMemo(() => {
+    if (!teacher) return [];
+    return buildTeacherAvailability(teacher.id, {
+      days: 3,
+      baseSlots: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
+      maxSlotsPerDay: 4,
+    });
+  }, [teacher]);
 
   if (!teacher) {
     return (
@@ -154,13 +157,13 @@ export default function TeacherProfile() {
               <div key={dayIndex} className="card-kidario p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Calendar className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-foreground">{day.date}</span>
+                  <span className="font-medium text-foreground">{day.dateLabel}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {day.slots.map((slot, slotIndex) => (
                     <button
                       key={slotIndex}
-                      onClick={() => navigate(`/agendar/${teacher.id}?date=${day.date}&time=${slot}`)}
+                      onClick={() => navigate(`/agendar/${teacher.id}?date=${day.dateIso}&time=${slot}`)}
                       className="px-3 py-2 bg-muted hover:bg-primary hover:text-primary-foreground rounded-lg text-sm font-medium transition-colors"
                     >
                       {slot}

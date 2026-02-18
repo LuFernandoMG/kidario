@@ -1,60 +1,83 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
+import { signInWithEmailPassword } from "@/lib/authSession";
+import { TEACHER_PRIVATE_SIGNUP_PATH } from "@/lib/privateRoutes";
+import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [searchParams] = useSearchParams();
+  const initialEmail = searchParams.get("email") ?? "";
+  const noticeParam = searchParams.get("notice");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const navigate = useNavigate();
+
+  const returnToParam = searchParams.get("returnTo");
+  const roleParam = searchParams.get("role");
+
+  const decodedReturnTo = (() => {
+    if (!returnToParam) return "";
+    try {
+      return decodeURIComponent(returnToParam);
+    } catch {
+      return returnToParam;
+    }
+  })();
+
+  const authQuery = searchParams.toString();
+  const signupLink = authQuery ? `/cadastro?${authQuery}` : "/cadastro";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError("");
     setIsLoading(true);
-    
-    // Simular login - en producción conectar con Supabase
-    setTimeout(() => {
+
+    try {
+      const roleFromQuery = roleParam === "parent" || roleParam === "teacher" ? roleParam : null;
+      const session = await signInWithEmailPassword({
+        email,
+        password,
+        roleHint: roleFromQuery,
+      });
+
+      if (decodedReturnTo) {
+        navigate(decodedReturnTo);
+        return;
+      }
+
+      if (session.role) {
+        navigate(session.role === "parent" ? "/explorar" : TEACHER_PRIVATE_SIGNUP_PATH);
+        return;
+      }
+
+      navigate("/escolher-perfil");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Não foi possível entrar. Tente novamente.",
+      );
+    } finally {
       setIsLoading(false);
-      navigate("/explorar");
-    }, 1500);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background px-6 py-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-      >
-        <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-          <span>Voltar</span>
-        </Link>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mt-10"
-      >
-        <h1 className="font-display text-3xl font-bold text-foreground">
-          Bem-vindo de volta
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Entre na sua conta para continuar
-        </p>
-      </motion.div>
-
+    <AuthPageLayout
+      title="Bem-vindo de volta"
+      subtitle="Entre na sua conta para continuar"
+      contentContainerClassName="mt-10"
+    >
       <motion.form
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
         onSubmit={handleSubmit}
-        className="mt-10 space-y-5"
+        className="space-y-5"
       >
         {/* Email */}
         <div className="space-y-2">
@@ -117,6 +140,12 @@ export default function Login() {
         >
           {isLoading ? "Entrando..." : "Entrar"}
         </KidarioButton>
+        {noticeParam === "check-email" && (
+          <p className="text-sm text-success">
+            Conta criada. Verifique seu e-mail para confirmar o cadastro antes de entrar.
+          </p>
+        )}
+        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
       </motion.form>
 
       {/* Sign Up Link */}
@@ -127,10 +156,10 @@ export default function Login() {
         className="text-center mt-8 text-muted-foreground"
       >
         Não tem conta?{" "}
-        <Link to="/cadastro" className="text-primary font-medium hover:underline">
+        <Link to={signupLink} className="text-primary font-medium hover:underline">
           Criar conta
         </Link>
       </motion.p>
-    </div>
+    </AuthPageLayout>
   );
 }

@@ -31,9 +31,9 @@ The frontend already includes the main visual foundation and part of the parent 
 
 | Flow | Status |
 | --- | --- |
-| Auth screens and role entry | In progress (UI implemented, backend auth pending) |
+| Auth screens and role entry | In progress (Supabase Auth MVP integrado) |
 | Parent explore + teacher profile | Implemented with mock data |
-| Booking checkout and confirmation | Planned |
+| Booking checkout and confirmation | In progress (UI + flujo mock) |
 | Parent agenda | In progress (list/tabs implemented, detail actions pending) |
 | Parent progress | In progress (overview UI implemented, full history pending) |
 | Teacher onboarding and dashboard | Planned |
@@ -44,10 +44,15 @@ Defined in `src/App.tsx`:
 
 - `/` - Welcome
 - `/login` - Login
+- `/recuperar-senha` - Password recovery
 - `/cadastro` - Signup
+- `/escolher-perfil` - Role selection
 - `/escolher-professora` - Role selection
 - `/explorar` - Teacher marketplace
 - `/professora/:id` - Teacher profile
+- `/agendar/:id` - Booking scheduler
+- `/checkout/:id` - Booking checkout
+- `/confirmacao-reserva/:bookingId` - Booking confirmation
 - `/agenda` - Parent agenda
 - `/progresso` - Parent progress
 - `/perfil` - Parent profile
@@ -110,6 +115,46 @@ The following product artifacts define expected behavior and UX direction:
 npm install
 npm run dev
 ```
+
+### Supabase Auth MVP setup
+
+Prueba A uses a `Supabase-only` auth integration from frontend (no FastAPI in this phase).
+The frontend calls Supabase Auth REST endpoints directly for `signup`, `login`, and `logout`.
+
+Create `.env.local` in the frontend folder using `.env.example`:
+
+```bash
+cp .env.example .env.local
+```
+
+Set:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+In Supabase dashboard:
+
+1. Go to `Authentication -> Providers -> Email` and enable Email provider.
+2. Keep `Confirm email` enabled to validate the real signup flow.
+3. Add your local URL in `Authentication -> URL Configuration`:
+   - `Site URL`: `http://localhost:8080`
+   - `Redirect URLs`: `http://localhost:8080/*`
+4. Save settings and restart `npm run dev` if env values were changed while the app was running.
+5. In this MVP, after signup the user is redirected to login with a "check email" notice.
+   The user must confirm the email from inbox first, then login manually.
+
+### Signup/Login/Auth validation checklist (Prueba A)
+
+1. Open app and sign up as parent in `/escolher-perfil?intent=signup` -> `/cadastro`.
+2. Confirm redirect to `/login` with check-email notice.
+3. Open inbox and click Supabase confirmation link.
+4. Login from `/login` with same credentials and confirm redirect to `/explorar`.
+5. Log out from `/perfil`.
+6. Try booking: go to `/professora/:id` -> `/agendar/:id` -> `/checkout/:id`.
+7. If logged out, checkout should redirect to login with `returnTo`.
+8. Login from that redirect and confirm it returns automatically to checkout.
+9. Complete booking and validate redirect to `/confirmacao-reserva/:bookingId`.
+10. Open `/agenda` and confirm new booking appears in upcoming list.
 
 ### Useful scripts
 

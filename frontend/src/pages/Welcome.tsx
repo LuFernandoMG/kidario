@@ -82,7 +82,7 @@ export default function Welcome() {
           </Link>
           <span className="text-muted-foreground">•</span>
           <Link 
-            to="/cadastro" 
+            to="/escolher-perfil?intent=signup" 
             className="text-primary font-medium text-sm hover:underline"
           >
             Criar conta

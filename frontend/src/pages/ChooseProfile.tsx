@@ -1,18 +1,43 @@
-import { useNavigate } from "react-router-dom";
+import { useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Users, GraduationCap } from "lucide-react";
-import { KidarioButton } from "@/components/ui/KidarioButton";
+import { getAuthSession, saveAuthSession } from "@/lib/authSession";
+import { TEACHER_PRIVATE_SIGNUP_PATH } from "@/lib/privateRoutes";
+import { RoleOptionCard } from "@/components/auth/RoleOptionCard";
 
 export default function ChooseProfile() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const intent = searchParams.get("intent");
+  const returnTo = searchParams.get("returnTo");
+
+  const decodedReturnTo = useMemo(() => {
+    if (!returnTo) return "";
+    try {
+      return decodeURIComponent(returnTo);
+    } catch {
+      return returnTo;
+    }
+  }, [returnTo]);
 
   const handleSelectRole = (role: "parent" | "teacher") => {
-    // En producción, guardar el rol en la base de datos
-    if (role === "parent") {
-      navigate("/explore");
-    } else {
-      navigate("/teacher/onboarding");
+    const authSession = getAuthSession();
+    if (authSession.isAuthenticated) {
+      saveAuthSession({ ...authSession, role });
     }
+
+    if (role === "teacher") {
+      navigate(TEACHER_PRIVATE_SIGNUP_PATH);
+      return;
+    }
+
+    if (intent === "signup") {
+      navigate("/cadastro");
+      return;
+    }
+
+    navigate(decodedReturnTo || "/explorar");
   };
 
   return (
@@ -30,47 +55,22 @@ export default function ChooseProfile() {
         </p>
 
         <div className="mt-10 space-y-4">
-          {/* Parent Option */}
-          <motion.button
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
+          <RoleOptionCard
+            title="Sou responsável"
+            description="Quero encontrar pedagogas e acompanhar o progresso do meu filho"
+            icon={<Users className="w-7 h-7 text-primary" />}
             onClick={() => handleSelectRole("parent")}
-            className="w-full card-kidario p-5 flex items-start gap-4 text-left hover:shadow-kidario-lg transition-all active:scale-[0.99]"
-          >
-            <div className="w-14 h-14 rounded-2xl bg-kidario-mint-light flex items-center justify-center shrink-0">
-              <Users className="w-7 h-7 text-primary" />
-            </div>
-            <div>
-              <h2 className="font-display font-semibold text-lg text-foreground">
-                Sou responsável
-              </h2>
-              <p className="text-muted-foreground text-sm mt-1">
-                Quero encontrar pedagogas e acompanhar o progresso do meu filho
-              </p>
-            </div>
-          </motion.button>
-
-          {/* Teacher Option */}
-          <motion.button
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
+            delay={0.1}
+            iconContainerClassName="bg-kidario-mint-light"
+          />
+          <RoleOptionCard
+            title="Sou pedagoga"
+            description="Quero oferecer meus serviços e gerenciar minha agenda"
+            icon={<GraduationCap className="w-7 h-7 text-secondary" />}
             onClick={() => handleSelectRole("teacher")}
-            className="w-full card-kidario p-5 flex items-start gap-4 text-left hover:shadow-kidario-lg transition-all active:scale-[0.99]"
-          >
-            <div className="w-14 h-14 rounded-2xl bg-kidario-lavender-light flex items-center justify-center shrink-0">
-              <GraduationCap className="w-7 h-7 text-secondary" />
-            </div>
-            <div>
-              <h2 className="font-display font-semibold text-lg text-foreground">
-                Sou pedagoga
-              </h2>
-              <p className="text-muted-foreground text-sm mt-1">
-                Quero oferecer meus serviços e gerenciar minha agenda
-              </p>
-            </div>
-          </motion.button>
+            delay={0.2}
+            iconContainerClassName="bg-kidario-lavender-light"
+          />
         </div>
       </motion.div>
 

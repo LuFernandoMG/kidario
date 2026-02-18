@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Calendar, Clock, Video, MapPin } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { BookingStatusPill } from "@/components/booking/BookingStatusPill";
+import { getStoredBookings } from "@/lib/bookingsStorage";
 
 type TabType = "proximas" | "passadas";
 
@@ -12,6 +13,7 @@ interface Booking {
   teacherName: string;
   teacherAvatar: string;
   date: string;
+  dateIso?: string;
   time: string;
   status: "confirmada" | "pendente" | "cancelada" | "concluida";
   isOnline: boolean;
@@ -66,7 +68,42 @@ const pastBookings: Booking[] = [
 
 export default function Agenda() {
   const [activeTab, setActiveTab] = useState<TabType>("proximas");
-  const bookings = activeTab === "proximas" ? mockBookings : pastBookings;
+
+  const storedBookings = useMemo(() => {
+    return getStoredBookings().map((booking) => ({
+      id: booking.id,
+      teacherName: booking.teacherName,
+      teacherAvatar: booking.teacherAvatar,
+      date: booking.dateLabel,
+      dateIso: booking.dateIso,
+      time: booking.time,
+      status: booking.status,
+      isOnline: booking.modality === "online",
+      specialty: booking.specialty,
+    }));
+  }, []);
+
+  const today = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+  }, []);
+
+  const upcomingStoredBookings = storedBookings.filter((booking) => {
+    if (!booking.dateIso) return true;
+    const parsedDate = new Date(`${booking.dateIso}T00:00:00`);
+    return parsedDate >= today;
+  });
+
+  const pastStoredBookings = storedBookings.filter((booking) => {
+    if (!booking.dateIso) return false;
+    const parsedDate = new Date(`${booking.dateIso}T00:00:00`);
+    return parsedDate < today;
+  });
+
+  const upcomingBookings = [...upcomingStoredBookings, ...mockBookings];
+  const historyBookings = [...pastStoredBookings, ...pastBookings];
+  const bookings = activeTab === "proximas" ? upcomingBookings : historyBookings;
 
   return (
     <AppShell>
