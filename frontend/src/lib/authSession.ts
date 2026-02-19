@@ -30,6 +30,7 @@ interface SupabaseAuthResponse {
   token_type?: string;
   user?: {
     email?: string;
+    identities?: Array<{ id?: string }> | null;
     user_metadata?: {
       full_name?: string;
       role?: UserRole;
@@ -51,6 +52,7 @@ interface SignUpParams {
   password: string;
   fullName?: string;
   role?: UserRole;
+  metadata?: Record<string, unknown>;
 }
 
 interface SignInParams {
@@ -159,15 +161,22 @@ async function supabaseAuthRequest(
 }
 
 export function getAuthSession(): AuthSession {
+  const tokens = getStoredTokens();
+  const hasValidTokens = Boolean(tokens?.accessToken && tokens?.refreshToken);
+
   if (!canUseStorage()) return defaultSession;
 
   const rawValue = window.localStorage.getItem(AUTH_SESSION_KEY);
-  if (!rawValue) return defaultSession;
+  if (!rawValue) {
+    if (!hasValidTokens) return defaultSession;
+    return {
+      ...defaultSession,
+      isAuthenticated: true,
+    };
+  }
 
   try {
     const parsed = JSON.parse(rawValue) as Partial<AuthSession>;
-    const tokens = getStoredTokens();
-    const hasValidTokens = Boolean(tokens?.accessToken && tokens?.refreshToken);
     return {
       isAuthenticated: parsed.isAuthenticated === true && hasValidTokens,
       role: normalizeRole(parsed.role),
@@ -175,6 +184,12 @@ export function getAuthSession(): AuthSession {
       fullName: parsed.fullName,
     };
   } catch {
+    if (hasValidTokens) {
+      return {
+        ...defaultSession,
+        isAuthenticated: true,
+      };
+    }
     return defaultSession;
   }
 }
@@ -194,26 +209,45 @@ export function isAuthenticated() {
   return getAuthSession().isAuthenticated;
 }
 
+export function hasSupabaseBearerToken() {
+  const tokens = getStoredTokens();
+  return Boolean(tokens?.accessToken);
+}
+
 export async function signUpWithEmailPassword({
   email,
   password,
   fullName,
   role = "parent",
+  metadata,
 }: SignUpParams): Promise<SignUpResult> {
+  const signupMetadata: Record<string, unknown> = {
+    ...(metadata ?? {}),
+    full_name: fullName,
+    role,
+  };
+
   const payload = await supabaseAuthRequest("signup", {
     method: "POST",
     body: {
       email,
       password,
-      data: {
-        full_name: fullName,
-        role,
-      },
+      data: signupMetadata,
     },
   });
 
   const sessionFromSignup = payload.session;
   const hasSession = Boolean(sessionFromSignup?.access_token && sessionFromSignup?.refresh_token);
+  const duplicateSignupDetected =
+    !hasSession &&
+    Array.isArray(payload.user?.identities) &&
+    payload.user.identities.length === 0;
+
+  if (duplicateSignupDetected) {
+    clearAuthSession();
+    throw new Error("Este e-mail já está cadastrado. Faça login ou confirme o e-mail da conta existente.");
+  }
+
   const sessionRole = normalizeRole(payload.user?.user_metadata?.role) || role;
 
   if (hasSession) {

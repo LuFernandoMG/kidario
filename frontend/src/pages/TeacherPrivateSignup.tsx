@@ -1,5 +1,5 @@
 import { type KeyboardEvent, type ReactNode, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, Plus, Trash2, X } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
@@ -19,6 +19,7 @@ import {
   WeeklyAvailabilityCalendar,
   type WeeklyAvailabilitySlot,
 } from "@/components/teacher/WeeklyAvailabilityCalendar";
+import { signUpWithEmailPassword } from "@/lib/authSession";
 
 interface AcademicFormation {
   degreeType: string;
@@ -39,6 +40,8 @@ interface ProfessionalExperience {
 interface TeacherSignupFormData {
   fullName: string;
   email: string;
+  password: string;
+  confirmPassword: string;
   phone: string;
   cpf: string;
   professionalRegistration: string;
@@ -133,14 +136,17 @@ const createEmptyExperience = (): ProfessionalExperience => ({
 });
 
 export default function TeacherPrivateSignup() {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [specialtyInput, setSpecialtyInput] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<TeacherSignupFormData>({
     fullName: "",
     email: "",
+    password: "",
+    confirmPassword: "",
     phone: "",
     cpf: "",
     professionalRegistration: "",
@@ -249,6 +255,18 @@ export default function TeacherPrivateSignup() {
     if (step === 0) {
       if (!formData.fullName.trim()) nextErrors.fullName = "Informe o nome completo.";
       if (!formData.email.trim()) nextErrors.email = "Informe o e-mail.";
+      if (!formData.password) nextErrors.password = "Crie uma senha.";
+      if (formData.password && formData.password.length < 8) {
+        nextErrors.password = "A senha deve ter pelo menos 8 caracteres.";
+      }
+      if (!formData.confirmPassword) nextErrors.confirmPassword = "Repita a senha.";
+      if (
+        formData.password &&
+        formData.confirmPassword &&
+        formData.password !== formData.confirmPassword
+      ) {
+        nextErrors.confirmPassword = "As senhas nao coincidem.";
+      }
       if (!formData.phone.trim()) nextErrors.phone = "Informe o telefone.";
       if (!formData.cpf.trim()) nextErrors.cpf = "Informe o CPF.";
       if (!formData.professionalRegistration.trim()) {
@@ -309,8 +327,9 @@ export default function TeacherPrivateSignup() {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError("");
 
     if (currentStep < steps.length - 1) {
       handleNextStep();
@@ -320,10 +339,50 @@ export default function TeacherPrivateSignup() {
     if (!validateStep(currentStep)) return;
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      const result = await signUpWithEmailPassword({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.fullName,
+        role: "teacher",
+        metadata: {
+          signup_source: "teacher_private_invite",
+          phone: formData.phone,
+          cpf: formData.cpf,
+          professional_registration: formData.professionalRegistration,
+          city: formData.city,
+          state: formData.state,
+          modality: formData.modality,
+          mini_bio: formData.miniBio,
+          hourly_rate: Number(formData.hourlyRate),
+          lesson_duration_minutes: Number(formData.lessonDuration),
+          profile_photo_file_name: formData.profilePhoto?.name ?? null,
+          request_experience_anonymity: formData.requestExperienceAnonymity,
+          specialties: formData.specialties,
+          formations: formData.formations,
+          experiences: formData.experiences,
+          weekly_availability: formData.weeklyAvailability,
+        },
+      });
+
+      if (result.emailConfirmationRequired) {
+        const params = new URLSearchParams();
+        params.set("email", formData.email);
+        params.set("notice", "check-email");
+        params.set("role", "teacher");
+        navigate(`/login?${params.toString()}`);
+        return;
+      }
+
+      navigate("/explorar");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Não foi possível criar o cadastro da professora.",
+      );
+    } finally {
       setIsLoading(false);
-      setIsSubmitted(true);
-    }, 1000);
+    }
   };
 
   return (
@@ -403,6 +462,30 @@ export default function TeacherPrivateSignup() {
                     className="h-12 rounded-xl bg-muted/50"
                   />
                   <FieldError message={errors.phone} />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Senha">
+                  <Input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setField("password", e.target.value)}
+                    placeholder="Minimo 8 caracteres"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.password} />
+                </FormField>
+
+                <FormField label="Repetir senha">
+                  <Input
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setField("confirmPassword", e.target.value)}
+                    placeholder="Repita a senha"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.confirmPassword} />
                 </FormField>
               </div>
 
@@ -854,16 +937,12 @@ export default function TeacherPrivateSignup() {
               </KidarioButton>
             ) : (
               <KidarioButton type="submit" variant="hero" size="lg" disabled={isLoading}>
-                {isLoading ? "Enviando..." : "Salvar pre-cadastro"}
+                {isLoading ? "Criando conta..." : "Criar conta de professora"}
               </KidarioButton>
             )}
           </div>
 
-          {isSubmitted && (
-            <p className="text-sm text-success mt-3">
-              Pre-cadastro enviado. A equipe Kidario revisara os dados em seguida.
-            </p>
-          )}
+          {submitError && <p className="text-sm text-destructive mt-3">{submitError}</p>}
         </div>
       </motion.form>
     </div>

@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { signInWithEmailPassword } from "@/lib/authSession";
-import { TEACHER_PRIVATE_SIGNUP_PATH } from "@/lib/privateRoutes";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 
 export default function Login() {
@@ -51,12 +50,12 @@ export default function Login() {
         return;
       }
 
-      if (session.role) {
-        navigate(session.role === "parent" ? "/explorar" : TEACHER_PRIVATE_SIGNUP_PATH);
+      if (session.role === "parent" || session.role === "teacher") {
+        navigate("/explorar");
         return;
       }
 
-      navigate("/escolher-perfil");
+      navigate("/explorar");
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Não foi possível entrar. Tente novamente.",

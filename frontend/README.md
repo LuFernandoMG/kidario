@@ -46,8 +46,9 @@ Defined in `src/App.tsx`:
 - `/login` - Login
 - `/recuperar-senha` - Password recovery
 - `/cadastro` - Signup
-- `/escolher-perfil` - Role selection
-- `/escolher-professora` - Role selection
+- `/escolher-perfil` - Legacy redirect to `/cadastro`
+- `/escolher-professora` - Legacy redirect to private teacher signup
+- `/convites/professoras/cadastro-privado-kidario-a8k3m2` - Teacher private signup
 - `/explorar` - Teacher marketplace
 - `/professora/:id` - Teacher profile
 - `/agendar/:id` - Booking scheduler
@@ -145,16 +146,18 @@ In Supabase dashboard:
 
 ### Signup/Login/Auth validation checklist (Prueba A)
 
-1. Open app and sign up as parent in `/escolher-perfil?intent=signup` -> `/cadastro`.
+1. Open app and sign up as parent in `/cadastro`.
 2. Confirm redirect to `/login` with check-email notice.
 3. Open inbox and click Supabase confirmation link.
 4. Login from `/login` with same credentials and confirm redirect to `/explorar`.
 5. Log out from `/perfil`.
-6. Try booking: go to `/professora/:id` -> `/agendar/:id` -> `/checkout/:id`.
-7. If logged out, checkout should redirect to login with `returnTo`.
-8. Login from that redirect and confirm it returns automatically to checkout.
-9. Complete booking and validate redirect to `/confirmacao-reserva/:bookingId`.
-10. Open `/agenda` and confirm new booking appears in upcoming list.
+6. Open private teacher signup `/convites/professoras/cadastro-privado-kidario-a8k3m2` and create a teacher account.
+7. Confirm redirect to `/login` with check-email notice, confirm email from inbox, then login.
+8. Try booking: go to `/professora/:id` -> `/agendar/:id` -> `/checkout/:id`.
+9. If logged out, checkout should redirect to login with `returnTo`.
+10. Login from that redirect and confirm it returns automatically to checkout.
+11. Complete booking and validate redirect to `/confirmacao-reserva/:bookingId`.
+12. Open `/agenda` and confirm new booking appears in upcoming list.
 
 ### Useful scripts
 

@@ -2,14 +2,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 // Pages
 import Welcome from "./pages/Welcome";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import RecoverPassword from "./pages/RecoverPassword";
-import ChooseProfile from "./pages/ChooseProfile";
 import Explore from "./pages/Explore";
 import TeacherProfile from "./pages/TeacherProfile";
 import BookingScheduler from "./pages/BookingScheduler";
@@ -36,8 +35,8 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/recuperar-senha" element={<RecoverPassword />} />
           <Route path="/cadastro" element={<Signup />} />
-          <Route path="/escolher-perfil" element={<ChooseProfile />} />
-          <Route path="/escolher-professora" element={<ChooseProfile />} />
+          <Route path="/escolher-perfil" element={<Navigate to="/cadastro" replace />} />
+          <Route path="/escolher-professora" element={<Navigate to={TEACHER_PRIVATE_SIGNUP_PATH} replace />} />
           <Route path={TEACHER_PRIVATE_SIGNUP_PATH} element={<TeacherPrivateSignup />} />
           {/* Parent Flow */}
           <Route path="/explorar" element={<Explore />} />

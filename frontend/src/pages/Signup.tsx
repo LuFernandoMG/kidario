@@ -249,6 +249,23 @@ export default function Signup() {
         password: formData.password,
         fullName: formData.fullName,
         role: "parent",
+        metadata: {
+          signup_source: "parent_public",
+          phone: formData.phone,
+          birth_date: formData.birthDate,
+          address: formData.address,
+          bio: formData.bio,
+          children: formData.children.map((child) => ({
+            name: child.name,
+            gender: child.gender,
+            age: Number(child.age),
+            current_grade: child.currentGrade,
+            birth_year: child.birthYear,
+            birth_month: child.birthMonth,
+            school: child.school,
+            focus_points: child.focusPoints,
+          })),
+        },
       });
 
       if (result.emailConfirmationRequired) {
