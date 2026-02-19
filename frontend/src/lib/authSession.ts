@@ -66,6 +66,12 @@ interface SignUpResult {
   emailConfirmationRequired: boolean;
 }
 
+interface RecoveryTokens {
+  accessToken: string;
+  refreshToken?: string;
+  type?: string;
+}
+
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
@@ -329,4 +335,45 @@ export async function signOutFromSupabase() {
   } finally {
     clearAuthSession();
   }
+}
+
+export async function requestPasswordRecovery(email: string, redirectTo?: string) {
+  const body: Record<string, unknown> = { email };
+  if (redirectTo) {
+    body.redirect_to = redirectTo;
+  }
+
+  await supabaseAuthRequest("recover", {
+    method: "POST",
+    body,
+  });
+}
+
+export function getRecoveryTokensFromUrlHash(): RecoveryTokens | null {
+  if (typeof window === "undefined") return null;
+
+  const hash = window.location.hash?.replace(/^#/, "");
+  if (!hash) return null;
+
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get("access_token") ?? params.get("access-token");
+  if (!accessToken) return null;
+
+  return {
+    accessToken,
+    refreshToken: params.get("refresh_token") ?? params.get("refresh-token") ?? undefined,
+    type: params.get("type") ?? undefined,
+  };
+}
+
+export async function updatePasswordWithRecoveryToken(accessToken: string, password: string) {
+  await supabaseAuthRequest("user", {
+    method: "PUT",
+    accessToken,
+    body: {
+      password,
+    },
+  });
+
+  clearAuthSession();
 }

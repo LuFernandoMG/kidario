@@ -2,9 +2,25 @@ import { Link, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
-import { getAuthSession, hasSupabaseBearerToken } from "@/lib/authSession";
+import {
+  getAuthSession,
+  getRecoveryTokensFromUrlHash,
+  hasSupabaseBearerToken,
+} from "@/lib/authSession";
 
 export default function Welcome() {
+  const recoveryTokens = getRecoveryTokensFromUrlHash();
+  const recoveryHash =
+    typeof window !== "undefined" &&
+    recoveryTokens?.accessToken &&
+    recoveryTokens.type === "recovery"
+      ? window.location.hash
+      : "";
+
+  if (recoveryHash) {
+    return <Navigate to={`/redefinir-senha${recoveryHash}`} replace />;
+  }
+
   const authSession = getAuthSession();
   if (authSession.isAuthenticated || hasSupabaseBearerToken()) {
     return <Navigate to="/explorar" replace />;

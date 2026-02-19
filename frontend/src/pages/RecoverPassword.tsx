@@ -3,20 +3,31 @@ import { motion } from "framer-motion";
 import { MailCheck } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
+import { requestPasswordRecovery } from "@/lib/authSession";
 
 export default function RecoverPassword() {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setSubmitError("");
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const redirectTo =
+        typeof window !== "undefined" ? `${window.location.origin}/redefinir-senha` : undefined;
+      await requestPasswordRecovery(email, redirectTo);
       setIsSent(true);
-    }, 1000);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Não foi possível enviar o link de recuperação.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -52,6 +63,16 @@ export default function RecoverPassword() {
           {isSubmitting ? "Enviando..." : "Enviar link de recuperacao"}
         </KidarioButton>
       </motion.form>
+
+      {submitError && (
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-sm text-destructive mt-4"
+        >
+          {submitError}
+        </motion.p>
+      )}
 
       {isSent && (
         <motion.div

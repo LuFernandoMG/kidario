@@ -45,6 +45,7 @@ Defined in `src/App.tsx`:
 - `/` - Welcome
 - `/login` - Login
 - `/recuperar-senha` - Password recovery
+- `/redefinir-senha` - Password reset (via Supabase recovery link)
 - `/cadastro` - Signup
 - `/escolher-perfil` - Legacy redirect to `/cadastro`
 - `/escolher-professora` - Legacy redirect to private teacher signup
@@ -158,6 +159,16 @@ In Supabase dashboard:
 10. Login from that redirect and confirm it returns automatically to checkout.
 11. Complete booking and validate redirect to `/confirmacao-reserva/:bookingId`.
 12. Open `/agenda` and confirm new booking appears in upcoming list.
+
+### Password recovery checklist
+
+1. Go to `/recuperar-senha`, enter a valid email, and send recovery link.
+2. Confirm success message appears in UI.
+3. Open the Supabase email and click the recovery link.
+4. Confirm app opens `/redefinir-senha` with valid token context.
+5. Set a new password and submit.
+6. Confirm redirect to `/login?notice=password-updated`.
+7. Login with the new password and verify access.
 
 ### Useful scripts
 

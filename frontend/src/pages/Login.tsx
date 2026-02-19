@@ -144,6 +144,9 @@ export default function Login() {
             Conta criada. Verifique seu e-mail para confirmar o cadastro antes de entrar.
           </p>
         )}
+        {noticeParam === "password-updated" && (
+          <p className="text-sm text-success">Senha atualizada com sucesso. Entre com sua nova senha.</p>
+        )}
         {submitError && <p className="text-sm text-destructive">{submitError}</p>}
       </motion.form>
 
