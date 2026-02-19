@@ -1,0 +1,29 @@
+[project]
+name = "kidario-backend"
+version = "0.1.0"
+description = "Kidario backend API (FastAPI + Supabase Postgres)"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn[standard]>=0.35.0",
+  "pydantic-settings>=2.10.0",
+  "sqlalchemy>=2.0.35",
+  "psycopg[binary]>=3.2.0",
+  "pyjwt[crypto]>=2.10.0",
+  "certifi>=2025.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "httpx>=0.28.0",
+  "ruff>=0.12.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["sql*", "tests*"]

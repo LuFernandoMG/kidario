@@ -1,0 +1,2 @@
+"""Kidario backend application package."""
+
