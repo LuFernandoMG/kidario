@@ -21,14 +21,14 @@ interface ChildFormData {
   gender: string;
   age: string;
   currentGrade: string;
-  birthYear: string;
-  birthMonth: string;
+  birthMonthYear: string;
   school: string;
   focusPoints: string;
 }
 
 interface ParentSignupFormData {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   phone: string;
   email: string;
   password: string;
@@ -54,21 +54,6 @@ const signupSteps: SignupStep[] = [
   },
 ];
 
-const monthOptions = [
-  { value: "01", label: "Janeiro" },
-  { value: "02", label: "Fevereiro" },
-  { value: "03", label: "Marco" },
-  { value: "04", label: "Abril" },
-  { value: "05", label: "Maio" },
-  { value: "06", label: "Junho" },
-  { value: "07", label: "Julho" },
-  { value: "08", label: "Agosto" },
-  { value: "09", label: "Setembro" },
-  { value: "10", label: "Outubro" },
-  { value: "11", label: "Novembro" },
-  { value: "12", label: "Dezembro" },
-];
-
 const brazilianGradeOptions = [
   { value: "creche", label: "Creche" },
   { value: "pre-escola", label: "Pre-escola" },
@@ -92,8 +77,7 @@ const createEmptyChild = (): ChildFormData => ({
   gender: "",
   age: "",
   currentGrade: "",
-  birthYear: "",
-  birthMonth: "",
+  birthMonthYear: "",
   school: "",
   focusPoints: "",
 });
@@ -122,7 +106,8 @@ export default function Signup() {
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
   const [formData, setFormData] = useState<ParentSignupFormData>({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     phone: "",
     email: "",
     password: "",
@@ -132,11 +117,6 @@ export default function Signup() {
     bio: "",
     children: [createEmptyChild()],
   });
-
-  const birthYearOptions = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    return Array.from({ length: 20 }, (_, index) => String(currentYear - index));
-  }, []);
 
   const setField = (field: keyof ParentSignupFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -169,7 +149,8 @@ export default function Signup() {
     const nextErrors: Record<string, string> = {};
 
     if (step === 0) {
-      if (!formData.fullName.trim()) nextErrors.fullName = "Informe seu nome completo.";
+      if (!formData.firstName.trim()) nextErrors.firstName = "Informe seu nome.";
+      if (!formData.lastName.trim()) nextErrors.lastName = "Informe seu sobrenome.";
       if (!formData.phone.trim()) nextErrors.phone = "Informe seu telefone.";
       if (!formData.email.trim()) nextErrors.email = "Informe seu e-mail.";
       if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -208,8 +189,7 @@ export default function Signup() {
           nextErrors[`${prefix}.age`] = "A idade deve estar entre 1 e 18 anos.";
         }
         if (!child.currentGrade.trim()) nextErrors[`${prefix}.currentGrade`] = "Informe o curso atual.";
-        if (!child.birthYear) nextErrors[`${prefix}.birthYear`] = "Selecione o ano.";
-        if (!child.birthMonth) nextErrors[`${prefix}.birthMonth`] = "Selecione o mes.";
+        if (!child.birthMonthYear) nextErrors[`${prefix}.birthMonthYear`] = "Informe mes e ano.";
         if (!child.school.trim()) nextErrors[`${prefix}.school`] = "Informe a escola.";
         if (!child.focusPoints.trim()) nextErrors[`${prefix}.focusPoints`] = "Descreva os pontos de atencao.";
       });
@@ -244,13 +224,16 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const result = await signUpWithEmailPassword({
         email: formData.email,
         password: formData.password,
-        fullName: formData.fullName,
+        fullName,
         role: "parent",
         metadata: {
           signup_source: "parent_public",
+          first_name: formData.firstName,
+          last_name: formData.lastName,
           phone: formData.phone,
           birth_date: formData.birthDate,
           address: formData.address,
@@ -260,8 +243,7 @@ export default function Signup() {
             gender: child.gender,
             age: Number(child.age),
             current_grade: child.currentGrade,
-            birth_year: child.birthYear,
-            birth_month: child.birthMonth,
+            birth_month_year: child.birthMonthYear,
             school: child.school,
             focus_points: child.focusPoints,
           })),
@@ -316,18 +298,34 @@ export default function Signup() {
           <section className="card-kidario p-5 space-y-4">
             <h2 className="font-display text-xl font-semibold text-foreground">Dados basicos</h2>
 
-            <div className="space-y-2">
-              <label htmlFor="fullName" className="text-sm font-medium text-foreground">
-                Nome completo
-              </label>
-              <Input
-                id="fullName"
-                value={formData.fullName}
-                onChange={(e) => setField("fullName", e.target.value)}
-                placeholder="Seu nome completo"
-                className="h-12 rounded-xl bg-muted/50"
-              />
-              <FieldError message={errors.fullName} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="firstName" className="text-sm font-medium text-foreground">
+                  Nome
+                </label>
+                <Input
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setField("firstName", e.target.value)}
+                  placeholder="Seu nome"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.firstName} />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="lastName" className="text-sm font-medium text-foreground">
+                  Sobrenome
+                </label>
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setField("lastName", e.target.value)}
+                  placeholder="Seu sobrenome"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.lastName} />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -535,46 +533,15 @@ export default function Signup() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Ano de nascimento</label>
-                    <Select
-                      value={child.birthYear}
-                      onValueChange={(value) => updateChild(index, "birthYear", value)}
-                    >
-                      <SelectTrigger className="h-12 rounded-xl bg-muted/50">
-                        <SelectValue placeholder="Selecione o ano" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {birthYearOptions.map((year) => (
-                          <SelectItem key={year} value={year}>
-                            {year}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldError message={errors[`children.${index}.birthYear`]} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Mes de nascimento</label>
-                    <Select
-                      value={child.birthMonth}
-                      onValueChange={(value) => updateChild(index, "birthMonth", value)}
-                    >
-                      <SelectTrigger className="h-12 rounded-xl bg-muted/50">
-                        <SelectValue placeholder="Selecione o mes" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {monthOptions.map((month) => (
-                          <SelectItem key={month.value} value={month.value}>
-                            {month.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldError message={errors[`children.${index}.birthMonth`]} />
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Mes e ano de nascimento</label>
+                  <Input
+                    type="month"
+                    value={child.birthMonthYear}
+                    onChange={(e) => updateChild(index, "birthMonthYear", e.target.value)}
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors[`children.${index}.birthMonthYear`]} />
                 </div>
 
                 <div className="space-y-2">

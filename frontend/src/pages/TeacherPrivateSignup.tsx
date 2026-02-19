@@ -38,7 +38,8 @@ interface ProfessionalExperience {
 }
 
 interface TeacherSignupFormData {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -143,7 +144,8 @@ export default function TeacherPrivateSignup() {
   const [specialtyInput, setSpecialtyInput] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<TeacherSignupFormData>({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -253,7 +255,8 @@ export default function TeacherPrivateSignup() {
     const nextErrors: Record<string, string> = {};
 
     if (step === 0) {
-      if (!formData.fullName.trim()) nextErrors.fullName = "Informe o nome completo.";
+      if (!formData.firstName.trim()) nextErrors.firstName = "Informe o nome.";
+      if (!formData.lastName.trim()) nextErrors.lastName = "Informe o sobrenome.";
       if (!formData.email.trim()) nextErrors.email = "Informe o e-mail.";
       if (!formData.password) nextErrors.password = "Crie uma senha.";
       if (formData.password && formData.password.length < 8) {
@@ -341,13 +344,16 @@ export default function TeacherPrivateSignup() {
     setIsLoading(true);
 
     try {
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const result = await signUpWithEmailPassword({
         email: formData.email,
         password: formData.password,
-        fullName: formData.fullName,
+        fullName,
         role: "teacher",
         metadata: {
           signup_source: "teacher_private_invite",
+          first_name: formData.firstName,
+          last_name: formData.lastName,
           phone: formData.phone,
           cpf: formData.cpf,
           professional_registration: formData.professionalRegistration,
@@ -432,15 +438,27 @@ export default function TeacherPrivateSignup() {
             <section className="card-kidario p-5 space-y-4">
               <h2 className="font-display text-xl font-semibold text-foreground">Dados basicos</h2>
 
-              <FormField label="Nome completo">
-                <Input
-                  value={formData.fullName}
-                  onChange={(e) => setField("fullName", e.target.value)}
-                  placeholder="Nome completo"
-                  className="h-12 rounded-xl bg-muted/50"
-                />
-                <FieldError message={errors.fullName} />
-              </FormField>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Nome">
+                  <Input
+                    value={formData.firstName}
+                    onChange={(e) => setField("firstName", e.target.value)}
+                    placeholder="Nome"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.firstName} />
+                </FormField>
+
+                <FormField label="Sobrenome">
+                  <Input
+                    value={formData.lastName}
+                    onChange={(e) => setField("lastName", e.target.value)}
+                    placeholder="Sobrenome"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.lastName} />
+                </FormField>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="E-mail">
