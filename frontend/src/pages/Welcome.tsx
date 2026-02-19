@@ -5,7 +5,6 @@ import { KidarioButton } from "@/components/ui/KidarioButton";
 import {
   getAuthSession,
   getRecoveryTokensFromUrlHash,
-  hasSupabaseBearerToken,
 } from "@/lib/authSession";
 
 export default function Welcome() {
@@ -22,7 +21,7 @@ export default function Welcome() {
   }
 
   const authSession = getAuthSession();
-  if (authSession.isAuthenticated || hasSupabaseBearerToken()) {
+  if (authSession.isAuthenticated) {
     return <Navigate to="/explorar" replace />;
   }
 

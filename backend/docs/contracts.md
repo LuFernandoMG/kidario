@@ -359,6 +359,25 @@ Mapeo sugerido:
 
 Mientras convivimos con metadata en Supabase Auth:
 
+## 8) RLS baseline (Supabase)
+
+SQL asociado:
+
+- `sql/002_rls_profiles.sql`
+- `sql/003_rls_validation.sql` (smoke test manual)
+
+Reglas aplicadas:
+
+1. RLS habilitado en todas las tablas de perfil (`profiles`, `parent_*`, `teacher_*`).
+2. Usuarios `authenticated` solo pueden leer/escribir sus propios registros (`auth.uid()`).
+3. Tablas de rol (`parent_*`, `teacher_*`) validan coherencia con `profiles.role`.
+4. `service_role`/`postgres` mantienen acceso total para procesos backend confiables (FastAPI).
+
+Nota:
+
+- El frontend no debe usar `service_role`.
+- Si en el futuro el marketplace requiere lectura pública parcial de profesoras, se recomienda exponer una `view` segura con columnas no sensibles en lugar de abrir `teacher_profiles` completo.
+
 1. Leer metadata en frontend solo como respaldo temporal.
 2. En primer login con sesión válida, persistir en backend (`PATCH` correspondiente).
 3. Backend pasa a ser fuente de verdad para perfiles.

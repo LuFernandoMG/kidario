@@ -3,8 +3,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
-import { signInWithEmailPassword } from "@/lib/authSession";
+import { getSupabaseAccessToken, signInWithEmailPassword } from "@/lib/authSession";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
+import { syncPendingProfileIfNeeded } from "@/lib/pendingProfileSync";
 
 export default function Login() {
   const [searchParams] = useSearchParams();
@@ -44,6 +45,15 @@ export default function Login() {
         password,
         roleHint: roleFromQuery,
       });
+
+      const accessToken = getSupabaseAccessToken();
+      if (accessToken) {
+        await syncPendingProfileIfNeeded({
+          accessToken,
+          role: session.role,
+          email: session.email,
+        });
+      }
 
       if (decodedReturnTo) {
         navigate(decodedReturnTo);

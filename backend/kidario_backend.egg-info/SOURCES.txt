@@ -25,3 +25,4 @@ kidario_backend.egg-info/dependency_links.txt
 kidario_backend.egg-info/requires.txt
 kidario_backend.egg-info/top_level.txt
 tests/test_health.py
+tests/test_profiles_api.py

@@ -19,7 +19,9 @@ import {
   WeeklyAvailabilityCalendar,
   type WeeklyAvailabilitySlot,
 } from "@/components/teacher/WeeklyAvailabilityCalendar";
-import { signUpWithEmailPassword } from "@/lib/authSession";
+import { getSupabaseAccessToken, signUpWithEmailPassword } from "@/lib/authSession";
+import { patchTeacherProfile } from "@/lib/backendProfiles";
+import { clearPendingProfileSync, savePendingProfileSync } from "@/lib/pendingProfileSync";
 
 interface AcademicFormation {
   degreeType: string;
@@ -119,6 +121,24 @@ const durationOptions = [
   { value: "90", label: "90 minutos" },
   { value: "120", label: "120 minutos" },
 ];
+
+const dayOfWeekToNumber: Record<string, number> = {
+  segunda: 0,
+  terca: 1,
+  quarta: 2,
+  quinta: 3,
+  sexta: 4,
+  sabado: 5,
+  domingo: 6,
+};
+
+function mapDayOfWeek(dayOfWeek: string): number {
+  const value = dayOfWeekToNumber[dayOfWeek];
+  if (value === undefined) {
+    throw new Error(`Dia da semana inválido: ${dayOfWeek}`);
+  }
+  return value;
+}
 
 const createEmptyFormation = (): AcademicFormation => ({
   degreeType: "",
@@ -344,6 +364,54 @@ export default function TeacherPrivateSignup() {
     setIsLoading(true);
 
     try {
+      const teacherProfilePayload = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phone,
+        cpf: formData.cpf,
+        professional_registration: formData.professionalRegistration,
+        city: formData.city,
+        state: formData.state,
+        modality: formData.modality,
+        mini_bio: formData.miniBio,
+        hourly_rate: Number(formData.hourlyRate),
+        lesson_duration_minutes: Number(formData.lessonDuration),
+        profile_photo_file_name: formData.profilePhoto?.name ?? null,
+        request_experience_anonymity: formData.requestExperienceAnonymity,
+        specialties_ops: {
+          add: formData.specialties,
+          remove: [],
+        },
+        formations_ops: {
+          upsert: formData.formations.map((formation) => ({
+            degree_type: formation.degreeType,
+            course_name: formation.courseName,
+            institution: formation.institution,
+            completion_year: formation.completionYear || null,
+          })),
+          delete_ids: [],
+        },
+        experiences_ops: {
+          upsert: formData.experiences.map((experience) => ({
+            institution: experience.institution,
+            role: experience.role,
+            responsibilities: experience.responsibilities,
+            period_from: experience.periodFrom,
+            period_to: experience.currentPosition ? null : experience.periodTo || null,
+            current_position: experience.currentPosition,
+          })),
+          delete_ids: [],
+        },
+        availability_ops: {
+          upsert: formData.weeklyAvailability.map((slot) => ({
+            day_of_week: mapDayOfWeek(slot.dayOfWeek),
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+          })),
+          delete_ids: [],
+        },
+      };
+
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const result = await signUpWithEmailPassword({
         email: formData.email,
@@ -373,6 +441,12 @@ export default function TeacherPrivateSignup() {
       });
 
       if (result.emailConfirmationRequired) {
+        savePendingProfileSync({
+          role: "teacher",
+          email: formData.email,
+          payload: teacherProfilePayload,
+        });
+
         const params = new URLSearchParams();
         params.set("email", formData.email);
         params.set("notice", "check-email");
@@ -380,6 +454,19 @@ export default function TeacherPrivateSignup() {
         navigate(`/login?${params.toString()}`);
         return;
       }
+
+      const accessToken = getSupabaseAccessToken();
+      if (!accessToken) {
+        throw new Error("Conta criada no Auth, mas token não encontrado para salvar o perfil.");
+      }
+
+      savePendingProfileSync({
+        role: "teacher",
+        email: formData.email,
+        payload: teacherProfilePayload,
+      });
+      await patchTeacherProfile(accessToken, teacherProfilePayload);
+      clearPendingProfileSync();
 
       navigate("/explorar");
     } catch (error) {

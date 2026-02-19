@@ -118,10 +118,10 @@ npm install
 npm run dev
 ```
 
-### Supabase Auth MVP setup
+### Supabase Auth + FastAPI profile setup
 
-Prueba A uses a `Supabase-only` auth integration from frontend (no FastAPI in this phase).
-The frontend calls Supabase Auth REST endpoints directly for `signup`, `login`, and `logout`.
+Prueba A keeps Supabase Auth from frontend for `signup`, `login`, and `logout`,
+and now sends profile data to FastAPI (`PATCH /profiles/parent` and `PATCH /profiles/teacher`).
 
 Create `.env.local` in the frontend folder using `.env.example`:
 
@@ -133,6 +133,7 @@ Set:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_BACKEND_API_URL` (default local: `http://localhost:8000/api/v1`)
 
 In Supabase dashboard:
 
@@ -142,23 +143,33 @@ In Supabase dashboard:
    - `Site URL`: `http://localhost:8080`
    - `Redirect URLs`: `http://localhost:8080/*`
 4. Save settings and restart `npm run dev` if env values were changed while the app was running.
-5. In this MVP, after signup the user is redirected to login with a "check email" notice.
+5. Start backend API on port `8000` so profile persistence can complete after signup:
+
+```bash
+cd ../backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+```
+6. In this MVP, after signup the user is redirected to login with a "check email" notice.
    The user must confirm the email from inbox first, then login manually.
+   The app stores a pending profile draft and syncs it with FastAPI on first successful login.
 
 ### Signup/Login/Auth validation checklist (Prueba A)
 
 1. Open app and sign up as parent in `/cadastro`.
-2. Confirm redirect to `/login` with check-email notice.
-3. Open inbox and click Supabase confirmation link.
-4. Login from `/login` with same credentials and confirm redirect to `/explorar`.
-5. Log out from `/perfil`.
-6. Open private teacher signup `/convites/professoras/cadastro-privado-kidario-a8k3m2` and create a teacher account.
-7. Confirm redirect to `/login` with check-email notice, confirm email from inbox, then login.
-8. Try booking: go to `/professora/:id` -> `/agendar/:id` -> `/checkout/:id`.
-9. If logged out, checkout should redirect to login with `returnTo`.
-10. Login from that redirect and confirm it returns automatically to checkout.
-11. Complete booking and validate redirect to `/confirmacao-reserva/:bookingId`.
-12. Open `/agenda` and confirm new booking appears in upcoming list.
+2. If signup creates session immediately, confirm redirect to `/explorar` and that backend profile is created.
+3. If email confirmation is enabled, confirm redirect to `/login` with check-email notice.
+4. Open inbox and click Supabase confirmation link.
+5. Login from `/login` with same credentials and confirm redirect to `/explorar`.
+6. Validate profile persistence calling backend `GET /api/v1/profiles/me` with the session bearer token.
+7. Log out from `/perfil`.
+8. Open private teacher signup `/convites/professoras/cadastro-privado-kidario-a8k3m2` and create a teacher account.
+9. Confirm redirect to `/login` with check-email notice, confirm email from inbox, then login.
+10. Try booking: go to `/professora/:id` -> `/agendar/:id` -> `/checkout/:id`.
+11. If logged out, checkout should redirect to login with `returnTo`.
+12. Login from that redirect and confirm it returns automatically to checkout.
+13. Complete booking and validate redirect to `/confirmacao-reserva/:bookingId`.
+14. Open `/agenda` and confirm new booking appears in upcoming list.
 
 ### Password recovery checklist
 

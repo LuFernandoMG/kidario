@@ -13,7 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SignupStepCarousel, type SignupStep } from "@/components/forms/SignupStepCarousel";
-import { signUpWithEmailPassword } from "@/lib/authSession";
+import { getSupabaseAccessToken, signUpWithEmailPassword } from "@/lib/authSession";
+import { patchParentProfile } from "@/lib/backendProfiles";
+import { clearPendingProfileSync, savePendingProfileSync } from "@/lib/pendingProfileSync";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 
 interface ChildFormData {
@@ -224,6 +226,27 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
+      const parentProfilePayload = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phone,
+        birth_date: formData.birthDate,
+        address: formData.address,
+        bio: formData.bio,
+        children_ops: {
+          upsert: formData.children.map((child) => ({
+            name: child.name,
+            gender: child.gender,
+            age: Number(child.age),
+            current_grade: child.currentGrade,
+            birth_month_year: child.birthMonthYear,
+            school: child.school,
+            focus_points: child.focusPoints,
+          })),
+          delete_ids: [],
+        },
+      };
+
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const result = await signUpWithEmailPassword({
         email: formData.email,
@@ -251,6 +274,12 @@ export default function Signup() {
       });
 
       if (result.emailConfirmationRequired) {
+        savePendingProfileSync({
+          role: "parent",
+          email: formData.email,
+          payload: parentProfilePayload,
+        });
+
         const params = new URLSearchParams();
         params.set("email", formData.email);
         params.set("notice", "check-email");
@@ -260,6 +289,19 @@ export default function Signup() {
         navigate(`/login?${params.toString()}`);
         return;
       }
+
+      const accessToken = getSupabaseAccessToken();
+      if (!accessToken) {
+        throw new Error("Conta criada no Auth, mas token não encontrado para salvar o perfil.");
+      }
+
+      savePendingProfileSync({
+        role: "parent",
+        email: formData.email,
+        payload: parentProfilePayload,
+      });
+      await patchParentProfile(accessToken, parentProfilePayload);
+      clearPendingProfileSync();
 
       navigate(decodedReturnTo || "/explorar");
     } catch (error) {

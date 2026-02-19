@@ -18,9 +18,15 @@ const defaultSession: AuthSession = {
 
 interface SupabaseTokens {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   expiresIn?: number;
   tokenType?: string;
+}
+
+interface StoredAuthMetadata {
+  role?: UserRole;
+  email?: string;
+  fullName?: string;
 }
 
 interface SupabaseAuthResponse {
@@ -100,7 +106,7 @@ function getStoredTokens(): SupabaseTokens | null {
 
   try {
     const parsed = JSON.parse(rawValue) as Partial<SupabaseTokens>;
-    if (!parsed.accessToken || !parsed.refreshToken) return null;
+    if (!parsed.accessToken) return null;
 
     return {
       accessToken: parsed.accessToken,
@@ -125,6 +131,24 @@ function clearSupabaseTokens() {
 
 function normalizeRole(value: unknown): UserRole {
   return value === "parent" || value === "teacher" ? value : null;
+}
+
+function getStoredAuthMetadata(): StoredAuthMetadata | null {
+  if (!canUseStorage()) return null;
+
+  const rawValue = window.localStorage.getItem(AUTH_SESSION_KEY);
+  if (!rawValue) return null;
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<AuthSession>;
+    return {
+      role: normalizeRole(parsed.role),
+      email: parsed.email,
+      fullName: parsed.fullName,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function supabaseAuthRequest(
@@ -168,41 +192,36 @@ async function supabaseAuthRequest(
 
 export function getAuthSession(): AuthSession {
   const tokens = getStoredTokens();
-  const hasValidTokens = Boolean(tokens?.accessToken && tokens?.refreshToken);
+  const hasValidTokens = Boolean(tokens?.accessToken);
+  const metadata = getStoredAuthMetadata();
 
   if (!canUseStorage()) return defaultSession;
 
-  const rawValue = window.localStorage.getItem(AUTH_SESSION_KEY);
-  if (!rawValue) {
-    if (!hasValidTokens) return defaultSession;
+  if (!hasValidTokens) {
     return {
       ...defaultSession,
-      isAuthenticated: true,
+      role: metadata?.role ?? null,
+      email: metadata?.email,
+      fullName: metadata?.fullName,
     };
   }
 
-  try {
-    const parsed = JSON.parse(rawValue) as Partial<AuthSession>;
-    return {
-      isAuthenticated: parsed.isAuthenticated === true && hasValidTokens,
-      role: normalizeRole(parsed.role),
-      email: parsed.email,
-      fullName: parsed.fullName,
-    };
-  } catch {
-    if (hasValidTokens) {
-      return {
-        ...defaultSession,
-        isAuthenticated: true,
-      };
-    }
-    return defaultSession;
-  }
+  return {
+    isAuthenticated: true,
+    role: metadata?.role ?? null,
+    email: metadata?.email,
+    fullName: metadata?.fullName,
+  };
 }
 
 export function saveAuthSession(session: AuthSession) {
   if (!canUseStorage()) return;
-  window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+  const metadata: StoredAuthMetadata = {
+    role: normalizeRole(session.role),
+    email: session.email,
+    fullName: session.fullName,
+  };
+  window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(metadata));
 }
 
 export function clearAuthSession() {
@@ -216,8 +235,12 @@ export function isAuthenticated() {
 }
 
 export function hasSupabaseBearerToken() {
+  return Boolean(getSupabaseAccessToken());
+}
+
+export function getSupabaseAccessToken(): string | null {
   const tokens = getStoredTokens();
-  return Boolean(tokens?.accessToken);
+  return tokens?.accessToken ?? null;
 }
 
 export async function signUpWithEmailPassword({

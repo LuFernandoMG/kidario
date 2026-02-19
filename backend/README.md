@@ -27,6 +27,7 @@ pytest -q
 Current automated test:
 
 - `tests/test_health.py` (smoke test de `/api/v1/health`)
+- `tests/test_profiles_api.py` (contratos HTTP de `/profiles/me`, `PATCH /profiles/parent`, `PATCH /profiles/teacher`, y conflicto de rol)
 
 ## Run tests (manual API checks)
 
@@ -86,11 +87,33 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
 
 ## Database schema
 
-Initial SQL migration:
+Apply SQL scripts in order (Supabase SQL Editor):
 
 - `sql/001_init_profiles.sql`
+- `sql/002_rls_profiles.sql`
+- `sql/003_rls_validation.sql` (optional smoke test)
 
-Apply manually in Supabase SQL Editor for now.
+`002` enables RLS with owner-based policies for `authenticated` users and keeps
+full access for `service_role/postgres` so current FastAPI direct DB access keeps working.
+
+Quick verification query:
+
+```sql
+select schemaname, tablename, policyname, roles, cmd
+from pg_policies
+where schemaname = 'public'
+  and tablename in (
+    'profiles',
+    'parent_profiles',
+    'parent_children',
+    'teacher_profiles',
+    'teacher_specialties',
+    'teacher_formations',
+    'teacher_experiences',
+    'teacher_availability'
+  )
+order by tablename, policyname;
+```
 
 ## Auth
 
