@@ -39,8 +39,10 @@ export function BottomNav() {
             >
               {isActive && (
                 <motion.div
+                  initial={{ x: 0 }}
+                  animate={{ x: -18 }}
                   layoutId="bottomNavIndicator"
-                  className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full"
+                  className="absolute -top-0.5 left-1/2 w-8 h-1 bg-primary rounded-full"
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
               )}
