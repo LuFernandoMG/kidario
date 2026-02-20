@@ -1,35 +1,78 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Video, MapPin, Calendar, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
+import { type Teacher } from "@/components/marketplace/TeacherCard";
 import { RatingStars } from "@/components/marketplace/RatingStars";
 import { VerifiedBadge } from "@/components/marketplace/VerifiedBadge";
 import { Chip } from "@/components/ui/Chip";
 import { getTeacherById } from "@/data/mockTeachers";
-import { buildTeacherAvailability } from "@/lib/bookingUtils";
+import { buildTeacherAvailability, type DayAvailability } from "@/lib/bookingUtils";
+import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
 
 export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const teacher = getTeacherById(id || "");
+  const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
+  const [remoteAvailability, setRemoteAvailability] = useState<DayAvailability[] | null>(null);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+
+  useEffect(() => {
+    if (!id) {
+      setTeacher(null);
+      setRemoteAvailability(null);
+      return;
+    }
+
+    const localTeacher = getTeacherById(id) ?? null;
+    setTeacher(localTeacher);
+    setRemoteAvailability(null);
+    setIsLoadingRemote(true);
+
+    let isMounted = true;
+    getMarketplaceTeacherDetail(id)
+      .then((remoteTeacher) => {
+        if (!isMounted) return;
+        setTeacher(remoteTeacher.teacher);
+        setRemoteAvailability(remoteTeacher.nextSlots);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setRemoteAvailability(null);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoadingRemote(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
   const availableSlots = useMemo(() => {
     if (!teacher) return [];
+    if (remoteAvailability && remoteAvailability.length > 0) {
+      return remoteAvailability;
+    }
     return buildTeacherAvailability(teacher.id, {
       days: 3,
       baseSlots: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
       maxSlotsPerDay: 4,
     });
-  }, [teacher]);
+  }, [remoteAvailability, teacher]);
 
   if (!teacher) {
     return (
       <AppShell hideNav>
         <TopBar title="Perfil" showBack />
         <div className="flex items-center justify-center h-[60vh]">
-          <p className="text-muted-foreground">Professora não encontrada</p>
+          <p className="text-muted-foreground">
+            {isLoadingRemote ? "Carregando perfil da professora..." : "Professora não encontrada"}
+          </p>
         </div>
       </AppShell>
     );

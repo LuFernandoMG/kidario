@@ -1,16 +1,20 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CreditCard, Landmark, TicketPercent } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { getTeacherById } from "@/data/mockTeachers";
-import { getAuthSession } from "@/lib/authSession";
+import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
 import { appendStoredBooking } from "@/lib/bookingsStorage";
 import { BookingSummaryCard } from "@/components/booking/BookingSummaryCard";
 import { TeacherBookingHeaderCard } from "@/components/booking/TeacherBookingHeaderCard";
 import { PaymentMethodOption } from "@/components/booking/PaymentMethodOption";
 import { BookingModality, formatDateLong } from "@/lib/bookingUtils";
+import { createBooking } from "@/lib/backendBookings";
+import { useToast } from "@/hooks/use-toast";
+import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
+import { type Teacher } from "@/components/marketplace/TeacherCard";
 
 type PaymentMethod = "cartao" | "pix";
 
@@ -22,8 +26,10 @@ export default function Checkout() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const teacher = getTeacherById(id || "");
+  const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
+  const [isLoadingTeacher, setIsLoadingTeacher] = useState(false);
   const authSession = getAuthSession();
 
   const dateIso = searchParams.get("date") ?? "";
@@ -38,6 +44,33 @@ export default function Checkout() {
   const [appliedCoupon, setAppliedCoupon] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [couponError, setCouponError] = useState("");
+
+  useEffect(() => {
+    if (!id) {
+      setTeacher(null);
+      return;
+    }
+
+    const localTeacher = getTeacherById(id) ?? null;
+    setTeacher(localTeacher);
+    setIsLoadingTeacher(true);
+
+    let isMounted = true;
+    getMarketplaceTeacherDetail(id)
+      .then((detail) => {
+        if (!isMounted) return;
+        setTeacher(detail.teacher);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoadingTeacher(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   const basePrice = useMemo(() => {
     if (!teacher) return 0;
@@ -65,7 +98,7 @@ export default function Checkout() {
     setAppliedCoupon(normalized);
   };
 
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     if (!isPayloadValid || !teacher) return;
 
     if (!authSession.isAuthenticated) {
@@ -75,6 +108,51 @@ export default function Checkout() {
     }
 
     setIsSubmitting(true);
+
+    const accessToken = getSupabaseAccessToken();
+    const canUseBackendBooking = Boolean(accessToken && isUuidLike(teacher.id));
+
+    if (canUseBackendBooking && accessToken) {
+      try {
+        const response = await createBooking(accessToken, {
+          teacher_profile_id: teacher.id,
+          date_iso: dateIso,
+          time,
+          duration_minutes: duration,
+          modality,
+          payment_method: paymentMethod,
+          coupon_code: appliedCoupon || undefined,
+        });
+
+        appendStoredBooking({
+          id: response.booking_id,
+          teacherId: teacher.id,
+          teacherName: teacher.name,
+          teacherAvatar: teacher.avatar,
+          specialty: teacher.specialties[0] ?? "Apoio pedagogico",
+          dateLabel,
+          dateIso,
+          time,
+          modality,
+          status: response.booking_status,
+          createdAtIso: new Date().toISOString(),
+          updatedAtIso: new Date().toISOString(),
+        });
+
+        navigate(`/confirmacao-reserva/${response.booking_id}`);
+        return;
+      } catch (error) {
+        setIsSubmitting(false);
+        toast({
+          title: "Nao foi possivel concluir no backend",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Tente novamente em alguns instantes.",
+        });
+        return;
+      }
+    }
 
     const bookingId = getBookingId();
     const bookingStatus = paymentMethod === "cartao" ? "confirmada" : "pendente";
@@ -104,7 +182,9 @@ export default function Checkout() {
         <TopBar title="Checkout" showBack />
         <div className="px-4 pt-10">
           <div className="card-kidario p-6 text-center">
-            <p className="text-foreground font-medium">Dados da reserva incompletos.</p>
+            <p className="text-foreground font-medium">
+              {isLoadingTeacher ? "Carregando dados da professora..." : "Dados da reserva incompletos."}
+            </p>
             <Link to="/explorar" className="text-primary text-sm font-medium hover:underline mt-3 inline-block">
               Voltar para explorar
             </Link>
@@ -222,4 +302,10 @@ function getBookingId() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.round(Math.random() * 1_000_000)}`;
+}
+
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }

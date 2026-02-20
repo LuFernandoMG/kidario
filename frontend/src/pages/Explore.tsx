@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { SearchField } from "@/components/forms/SearchField";
 import { TeacherCard } from "@/components/marketplace/TeacherCard";
+import { type Teacher } from "@/components/marketplace/TeacherCard";
 import { Chip } from "@/components/ui/Chip";
-import { mockTeachers } from "@/data/mockTeachers";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getMarketplaceTeachers } from "@/lib/backendMarketplace";
 
 const filterOptions = [
   { label: "Todas", value: "all" },
@@ -16,24 +18,49 @@ const filterOptions = [
 export default function Explore() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [remoteTeachers, setRemoteTeachers] = useState<Teacher[]>([]);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
 
-  const filteredTeachers = mockTeachers.filter((teacher) => {
-    // Search filter
-    const matchesSearch = 
-      teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      teacher.specialties.some((s) => 
-        s.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingRemote(true);
 
-    // Category filter
-    const matchesFilter = 
-      activeFilter === "all" ||
-      (activeFilter === "online" && teacher.isOnline) ||
-      (activeFilter === "presencial" && teacher.isPresential) ||
-      (activeFilter === "verified" && teacher.isVerified);
+    getMarketplaceTeachers()
+      .then((teachers) => {
+        if (!isMounted) return;
+        setRemoteTeachers(teachers);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setRemoteTeachers([]);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoadingRemote(false);
+      });
 
-    return matchesSearch && matchesFilter;
-  });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredTeachers = useMemo(() => {
+    return remoteTeachers.filter((teacher) => {
+      const matchesSearch =
+        teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        teacher.specialties.some((specialty) =>
+          specialty.toLowerCase().includes(searchQuery.toLowerCase()),
+        );
+
+      const matchesFilter =
+        activeFilter === "all" ||
+        (activeFilter === "online" && teacher.isOnline) ||
+        (activeFilter === "presencial" && teacher.isPresential) ||
+        (activeFilter === "verified" && teacher.isVerified);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [activeFilter, searchQuery, remoteTeachers]);
 
   return (
     <AppShell>
@@ -91,7 +118,9 @@ export default function Explore() {
 
       {/* Teacher List */}
       <div className="px-4 pb-6 space-y-3">
-        {filteredTeachers.length > 0 ? (
+        {isLoadingRemote ? (
+          <ExploreTeachersSkeleton />
+        ) : filteredTeachers.length > 0 ? (
           filteredTeachers.map((teacher, index) => (
             <TeacherCard 
               key={teacher.id} 
@@ -106,11 +135,41 @@ export default function Explore() {
             className="text-center py-12"
           >
             <p className="text-muted-foreground">
-              Nenhuma pedagoga encontrada
+              Ainda nao temos professoras disponiveis por aqui. Que tal tentar novamente em instantes e conferir sua conexao com a internet?
             </p>
           </motion.div>
         )}
       </div>
     </AppShell>
+  );
+}
+
+function ExploreTeachersSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="card-kidario p-4">
+          <div className="flex gap-3">
+            <Skeleton className="h-16 w-16 rounded-2xl shrink-0" />
+            <div className="flex-1 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+                <Skeleton className="h-4 w-14" />
+              </div>
+              <Skeleton className="h-3 w-32" />
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-36" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   );
 }

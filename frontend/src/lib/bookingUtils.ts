@@ -18,7 +18,7 @@ export function buildTeacherAvailability(
   teacherId: string,
   options: BuildAvailabilityOptions = {},
 ): DayAvailability[] {
-  const teacherSeed = Number(teacherId) || 1;
+  const teacherSeed = getStableSeed(teacherId);
   const days = options.days ?? 7;
   const baseSlots = options.baseSlots ?? defaultBaseSlots;
   const maxSlotsPerDay = options.maxSlotsPerDay ?? 4;
@@ -40,6 +40,17 @@ export function buildTeacherAvailability(
       slots,
     };
   });
+}
+
+function getStableSeed(input: string) {
+  const numeric = Number(input);
+  if (Number.isFinite(numeric) && numeric > 0) return Math.floor(numeric);
+
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) % 9973;
+  }
+  return hash || 1;
 }
 
 export function toDateIso(date: Date) {

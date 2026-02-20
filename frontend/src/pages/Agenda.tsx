@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Calendar, Clock, Video, MapPin } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { BookingStatusPill } from "@/components/booking/BookingStatusPill";
 import { getStoredBookings } from "@/lib/bookingsStorage";
+import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
+import { getParentAgenda } from "@/lib/backendBookings";
 
 type TabType = "proximas" | "passadas";
 
@@ -68,6 +70,8 @@ const pastBookings: Booking[] = [
 
 export default function Agenda() {
   const [activeTab, setActiveTab] = useState<TabType>("proximas");
+  const [remoteBookings, setRemoteBookings] = useState<Booking[] | null>(null);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
 
   const storedBookings = useMemo(() => {
     return getStoredBookings().map((booking) => ({
@@ -103,7 +107,54 @@ export default function Agenda() {
 
   const upcomingBookings = [...upcomingStoredBookings, ...mockBookings];
   const historyBookings = [...pastStoredBookings, ...pastBookings];
-  const bookings = activeTab === "proximas" ? upcomingBookings : historyBookings;
+
+  useEffect(() => {
+    const authSession = getAuthSession();
+    const accessToken = getSupabaseAccessToken();
+    if (!authSession.isAuthenticated || !accessToken) {
+      setRemoteBookings(null);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingRemote(true);
+
+    const backendTab = activeTab === "proximas" ? "upcoming" : "past";
+    getParentAgenda(accessToken, { tab: backendTab })
+      .then((response) => {
+        if (!isMounted) return;
+
+        const mapped = response.lessons.map((lesson) => ({
+          id: lesson.id,
+          teacherName: lesson.teacher_name,
+          teacherAvatar:
+            lesson.teacher_avatar_url ||
+            "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face",
+          date: lesson.date_label,
+          dateIso: lesson.date_iso,
+          time: lesson.time,
+          status: lesson.status,
+          isOnline: lesson.modality === "online",
+          specialty: lesson.specialty || "Apoio pedagogico",
+        }));
+        setRemoteBookings(mapped);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setRemoteBookings(null);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoadingRemote(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab]);
+
+  const bookings =
+    remoteBookings !== null ? remoteBookings : activeTab === "proximas" ? upcomingBookings : historyBookings;
 
   return (
     <AppShell>
@@ -152,6 +203,9 @@ export default function Agenda() {
 
         {/* Bookings List */}
         <div className="mt-6 space-y-3 pb-6">
+          {isLoadingRemote && (
+            <div className="card-kidario p-4 text-sm text-muted-foreground">Carregando agenda...</div>
+          )}
           {bookings.length > 0 ? (
             bookings.map((booking, index) => (
               <BookingCard key={booking.id} booking={booking} index={index} />

@@ -28,6 +28,8 @@ Current automated test:
 
 - `tests/test_health.py` (smoke test de `/api/v1/health`)
 - `tests/test_profiles_api.py` (contratos HTTP de `/profiles/me`, `PATCH /profiles/parent`, `PATCH /profiles/teacher`, y conflicto de rol)
+- `tests/test_bookings_api.py` (contratos HTTP de creación/agenda/detalle/cancelación de bookings)
+- `tests/test_marketplace_api.py` (contratos HTTP del marketplace de profesoras)
 
 ## Run tests (manual API checks)
 
@@ -82,6 +84,18 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
   - `GET /api/v1/profiles/me`
   - `PATCH /api/v1/profiles/parent`
   - `PATCH /api/v1/profiles/teacher`
+- Marketplace:
+  - `GET /api/v1/marketplace/teachers`
+  - `GET /api/v1/marketplace/teachers/{teacher_profile_id}`
+- Bookings:
+  - `POST /api/v1/bookings`
+  - `GET /api/v1/bookings/parent/agenda`
+  - `GET /api/v1/bookings/teacher/agenda`
+  - `GET /api/v1/bookings/{booking_id}`
+  - `PATCH /api/v1/bookings/{booking_id}/reschedule`
+  - `PATCH /api/v1/bookings/{booking_id}/cancel`
+  - `PATCH /api/v1/bookings/{booking_id}/complete`
+  - `GET /api/v1/teachers/{teacher_profile_id}/availability/slots`
 - Admin:
   - `PATCH /api/v1/admin/teachers/{profile_id}/activation`
 
@@ -91,6 +105,8 @@ Apply SQL scripts in order (Supabase SQL Editor):
 
 - `sql/001_init_profiles.sql`
 - `sql/002_rls_profiles.sql`
+- `sql/004_init_bookings.sql`
+- `sql/005_rls_bookings.sql`
 - `sql/003_rls_validation.sql` (optional smoke test)
 
 `002` enables RLS with owner-based policies for `authenticated` users and keeps

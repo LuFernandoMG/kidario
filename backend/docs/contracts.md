@@ -7,6 +7,7 @@ Definir contratos de dominio para persistir datos fuera de Supabase Auth:
 - Perfil común de usuario (`profiles`)
 - Perfil de padre/madre/tutor (`parent_profiles` + `parent_children`)
 - Perfil de profesora (`teacher_profiles` + tablas auxiliares)
+- Booking/aulas y seguimiento pedagógico (`bookings` + `booking_follow_ups`)
 
 Este documento cubre:
 
@@ -137,6 +138,49 @@ Notas:
 Índices:
 
 - `index teacher_availability_profile_id`
+
+## 3.9 Tabla `bookings`
+
+- `id uuid primary key`
+- `parent_profile_id uuid not null references parent_profiles(profile_id) on delete restrict`
+- `child_id uuid not null references parent_children(id) on delete restrict`
+- `teacher_profile_id uuid not null references teacher_profiles(profile_id) on delete restrict`
+- `date_iso date not null`
+- `time text not null` (`HH:mm`)
+- `duration_minutes int not null`
+- `modality text not null` (`online|presencial`)
+- `status text not null` (`pendente|confirmada|cancelada|concluida`)
+- `payment_method text not null` (`cartao|pix`)
+- `payment_status text not null` (`pendente|pago|falhou`)
+- `price_total numeric(10,2) not null`
+- `currency text not null default 'BRL'`
+- `cancellation_reason text`
+- `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+
+Índices:
+
+- `index bookings_parent_profile_id`
+- `index bookings_child_id`
+- `index bookings_teacher_profile_id`
+- `index bookings_date_iso`
+
+## 3.10 Tabla `booking_follow_ups`
+
+- `id uuid primary key`
+- `booking_id uuid not null unique references bookings(id) on delete cascade`
+- `teacher_profile_id uuid not null references teacher_profiles(profile_id) on delete restrict`
+- `child_id uuid not null references parent_children(id) on delete restrict`
+- `summary text not null`
+- `next_steps text not null`
+- `tags text[] not null default '{}'`
+- `attention_points text[] not null default '{}'`
+- `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+
+Convención:
+
+- `attention_points` es opcional a nivel funcional y puede venir vacío `[]`.
 
 ## 4) Contratos HTTP (v1)
 
@@ -330,6 +374,328 @@ Errores:
 - `403` usuario sin permisos admin
 - `404` profesora no encontrada
 
+## 4.4.1 GET `/api/v1/marketplace/teachers`
+
+Descripción:
+
+- Lista profesoras activas para marketplace de booking.
+- Respuesta normalizada para consumo directo del frontend.
+
+Response `200`:
+
+```json
+{
+  "teachers": [
+    {
+      "id": "uuid",
+      "name": "Ana Carolina Silva",
+      "avatar_url": "https://...",
+      "rating": 4.9,
+      "review_count": 120,
+      "price_per_class": 120.0,
+      "specialties": ["Alfabetizacao"],
+      "is_verified": true,
+      "is_online": true,
+      "is_presential": true,
+      "next_availability": "Hoje, 14h",
+      "experience_label": "Experiencia validada pela plataforma",
+      "bio_snippet": "Pedagoga com foco em alfabetizacao..."
+    }
+  ]
+}
+```
+
+## 4.4.2 GET `/api/v1/marketplace/teachers/{teacher_profile_id}`
+
+Descripción:
+
+- Devuelve detalle de una profesora activa para pantalla de perfil y scheduler.
+
+Response `200`:
+
+```json
+{
+  "id": "uuid",
+  "name": "Ana Carolina Silva",
+  "avatar_url": "https://...",
+  "rating": 4.9,
+  "review_count": 120,
+  "price_per_class": 120.0,
+  "specialties": ["Alfabetizacao"],
+  "is_verified": true,
+  "is_online": true,
+  "is_presential": true,
+  "experience_label": "Experiencia validada pela plataforma",
+  "bio": "Pedagoga com foco em alfabetizacao...",
+  "city": "Sao Paulo",
+  "state": "SP",
+  "lesson_duration_minutes": 60,
+  "next_slots": [
+    {
+      "date_iso": "2026-02-25",
+      "date_label": "25/02/2026",
+      "times": ["14:00", "15:00", "16:00"]
+    }
+  ]
+}
+```
+
+## 4.5 POST `/api/v1/bookings`
+
+Descripción:
+
+- Crea una reserva (aula) entre responsable, alumno y profesora.
+- `child_id` debe pertenecer al `parent_profile_id`.
+
+Request body:
+
+```json
+{
+  "parent_profile_id": "uuid",
+  "child_id": "uuid",
+  "teacher_profile_id": "uuid",
+  "date_iso": "2026-02-25",
+  "time": "14:00",
+  "duration_minutes": 60,
+  "modality": "online",
+  "payment_method": "cartao",
+  "coupon_code": "KIDARIO10"
+}
+```
+
+Response `201`:
+
+```json
+{
+  "status": "ok",
+  "booking_id": "uuid",
+  "booking_status": "confirmada",
+  "payment_status": "pago"
+}
+```
+
+## 4.6 GET `/api/v1/bookings/parent/agenda`
+
+Query params:
+
+- `tab=upcoming|past`
+- `child_id` (opcional)
+
+Descripción:
+
+- Lista agenda del responsable autenticado.
+- Convención de respuesta: usar `lessons` (no `items`).
+
+Response `200`:
+
+```json
+{
+  "lessons": [
+    {
+      "id": "uuid",
+      "teacher_id": "uuid",
+      "teacher_name": "Ana Carolina Silva",
+      "teacher_avatar_url": "https://...",
+      "specialty": "Alfabetizacao",
+      "child_id": "uuid",
+      "child_name": "Lucas",
+      "date_iso": "2026-02-25",
+      "date_label": "quarta-feira, 25 de fevereiro",
+      "time": "14:00",
+      "modality": "online",
+      "status": "confirmada",
+      "created_at_iso": "2026-02-20T10:00:00Z",
+      "updated_at_iso": "2026-02-20T10:00:00Z"
+    }
+  ]
+}
+```
+
+## 4.7 GET `/api/v1/bookings/teacher/agenda`
+
+Query params:
+
+- `tab=upcoming|past`
+- `status` (opcional)
+
+Descripción:
+
+- Lista agenda de la profesora autenticada.
+- Convención de respuesta: usar `lessons` (no `items`).
+
+Response `200`:
+
+```json
+{
+  "lessons": [
+    {
+      "id": "uuid",
+      "parent_profile_id": "uuid",
+      "child_id": "uuid",
+      "child_name": "Lucas",
+      "child_age": 8,
+      "date_iso": "2026-02-25",
+      "time": "14:00",
+      "duration_minutes": 60,
+      "modality": "online",
+      "status": "confirmada"
+    }
+  ]
+}
+```
+
+## 4.8 GET `/api/v1/bookings/{booking_id}`
+
+Descripción:
+
+- Devuelve detalle de aula para responsable o profesora con acceso permitido.
+
+Response `200`:
+
+```json
+{
+  "id": "uuid",
+  "parent_profile_id": "uuid",
+  "child_id": "uuid",
+  "child_name": "Lucas",
+  "teacher_id": "uuid",
+  "teacher_name": "Ana Carolina Silva",
+  "teacher_avatar_url": "https://...",
+  "specialty": "Alfabetizacao",
+  "date_iso": "2026-02-25",
+  "date_label": "quarta-feira, 25 de fevereiro",
+  "time": "14:00",
+  "duration_minutes": 60,
+  "modality": "online",
+  "status": "confirmada",
+  "price_total": 120.0,
+  "currency": "BRL",
+  "cancellation_reason": null,
+  "latest_follow_up": {
+    "updated_at": "2026-02-24T18:00:00Z",
+    "summary": "Trabalhamos leitura guiada...",
+    "next_steps": "Manter rotina de 15 minutos...",
+    "tags": ["Leitura", "Atencao"],
+    "attention_points": []
+  },
+  "actions": {
+    "can_reschedule": true,
+    "can_cancel": true,
+    "can_complete": false
+  }
+}
+```
+
+## 4.9 PATCH `/api/v1/bookings/{booking_id}/reschedule`
+
+Request body:
+
+```json
+{
+  "new_date_iso": "2026-02-28",
+  "new_time": "16:00",
+  "reason": "Conflito de horario"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "status": "ok",
+  "booking_id": "uuid",
+  "date_iso": "2026-02-28",
+  "time": "16:00",
+  "booking_status": "confirmada",
+  "updated_at_iso": "2026-02-21T12:00:00Z"
+}
+```
+
+## 4.10 PATCH `/api/v1/bookings/{booking_id}/cancel`
+
+Request body:
+
+```json
+{
+  "reason": "Imprevisto familiar"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "status": "ok",
+  "booking_id": "uuid",
+  "booking_status": "cancelada",
+  "cancellation_reason": "Imprevisto familiar",
+  "updated_at_iso": "2026-02-21T12:10:00Z"
+}
+```
+
+## 4.11 PATCH `/api/v1/bookings/{booking_id}/complete`
+
+Descripción:
+
+- Marca la clase como concluida y registra/actualiza el follow-up (1 por booking).
+
+Request body:
+
+```json
+{
+  "follow_up": {
+    "summary": "Sessao focada em leitura...",
+    "next_steps": "Reforcar leitura em casa...",
+    "tags": ["Leitura", "Autonomia"],
+    "attention_points": []
+  }
+}
+```
+
+Response `200`:
+
+```json
+{
+  "status": "ok",
+  "booking_id": "uuid",
+  "booking_status": "concluida",
+  "latest_follow_up": {
+    "updated_at": "2026-02-25T19:00:00Z",
+    "summary": "Sessao focada em leitura...",
+    "next_steps": "Reforcar leitura em casa...",
+    "tags": ["Leitura", "Autonomia"],
+    "attention_points": []
+  }
+}
+```
+
+## 4.12 GET `/api/v1/teachers/{teacher_profile_id}/availability/slots`
+
+Query params:
+
+- `from=YYYY-MM-DD`
+- `to=YYYY-MM-DD`
+- `duration_minutes=60`
+
+Descripción:
+
+- Retorna slots concretos para agendar/reagendar combinando disponibilidad semanal y ocupación.
+
+Response `200`:
+
+```json
+{
+  "teacher_profile_id": "uuid",
+  "slots": [
+    {
+      "date_iso": "2026-02-28",
+      "date_label": "sabado, 28 de fevereiro",
+      "times": ["14:00", "15:00"]
+    }
+  ]
+}
+```
+
 ## 5) Reglas de negocio (v1)
 
 1. Un `profile_id` no puede existir en `parent_profiles` y `teacher_profiles` al mismo tiempo.
@@ -340,6 +706,12 @@ Errores:
 6. Para `teacher_experiences`: si `current_position=true`, `period_to` puede ser null.
 7. `teacher_profiles.is_active_teacher` inicia siempre en `false`.
 8. `is_active_teacher` no se recibe en onboarding público; solo admins pueden actualizarlo.
+9. Todo booking debe referenciar explícitamente `parent_profile_id`, `child_id` y `teacher_profile_id`.
+10. En `POST /bookings`, `child_id` debe pertenecer al `parent_profile_id` enviado.
+11. En endpoints de agenda (`/bookings/parent/agenda`, `/bookings/teacher/agenda`), la lista de respuesta se llama `lessons`.
+12. `PATCH /bookings/{id}/reschedule` y `PATCH /bookings/{id}/cancel` solo aplican para estados `pendente|confirmada`.
+13. `booking_follow_ups` permite exactamente 1 follow-up por booking (`unique(booking_id)`).
+14. `attention_points` es opcional y por convención puede venir vacío `[]`.
 
 ## 6) Mapeo frontend -> backend
 
