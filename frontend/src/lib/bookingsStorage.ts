@@ -12,6 +12,8 @@ export interface StoredBooking {
   modality: "online" | "presencial";
   status: BookingStatus;
   createdAtIso: string;
+  updatedAtIso?: string;
+  cancellationReason?: string;
 }
 
 const BOOKINGS_STORAGE_KEY = "kidario_parent_bookings_v1";
@@ -47,4 +49,23 @@ export function appendStoredBooking(booking: StoredBooking) {
 
 export function getStoredBookingById(bookingId: string) {
   return getStoredBookings().find((booking) => booking.id === bookingId);
+}
+
+export function updateStoredBooking(bookingId: string, updates: Partial<StoredBooking>) {
+  const previousBookings = getStoredBookings();
+  const targetIndex = previousBookings.findIndex((booking) => booking.id === bookingId);
+
+  if (targetIndex === -1) return null;
+
+  const updatedBooking: StoredBooking = {
+    ...previousBookings[targetIndex],
+    ...updates,
+    id: previousBookings[targetIndex].id,
+  };
+
+  const nextBookings = [...previousBookings];
+  nextBookings[targetIndex] = updatedBooking;
+  saveStoredBookings(nextBookings);
+
+  return updatedBooking;
 }
