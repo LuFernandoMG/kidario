@@ -16,6 +16,7 @@ import { getTeacherById } from "@/data/mockTeachers";
 import { BookingActionModal, type BookingActionMode } from "@/components/booking/BookingActionModal";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
+import { resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
 import {
   cancelBooking,
   getBookingDetail,
@@ -62,9 +63,7 @@ function mapBackendDetailToStoredBooking(detail: BookingDetailResponse, fallback
     teacherId: detail.teacher_id,
     teacherName: detail.teacher_name,
     teacherAvatar:
-      detail.teacher_avatar_url ||
-      fallback?.teacherAvatar ||
-      "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face",
+      resolveTeacherAvatarUrl(detail.teacher_avatar_url) || fallback?.teacherAvatar,
     specialty: detail.specialty || fallback?.specialty || "Apoio pedagogico",
     dateLabel: detail.date_label,
     dateIso: detail.date_iso,

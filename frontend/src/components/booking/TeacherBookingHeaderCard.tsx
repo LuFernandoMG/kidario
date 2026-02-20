@@ -1,3 +1,5 @@
+import { DEFAULT_TEACHER_AVATAR } from "@/lib/avatarUrl";
+
 interface TeacherBookingHeaderCardProps {
   teacherName: string;
   teacherAvatar: string;
@@ -18,6 +20,10 @@ export function TeacherBookingHeaderCard({
           src={teacherAvatar}
           alt={teacherName}
           className="w-14 h-14 rounded-2xl object-cover bg-muted"
+          onError={(event) => {
+            event.currentTarget.onerror = null;
+            event.currentTarget.src = DEFAULT_TEACHER_AVATAR;
+          }}
         />
         <div className="min-w-0">
           <h2 className="font-display font-semibold text-foreground truncate">{teacherName}</h2>

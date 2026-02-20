@@ -12,6 +12,7 @@ import { Chip } from "@/components/ui/Chip";
 import { getTeacherById } from "@/data/mockTeachers";
 import { buildTeacherAvailability, type DayAvailability } from "@/lib/bookingUtils";
 import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
+import { DEFAULT_TEACHER_AVATAR } from "@/lib/avatarUrl";
 
 export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
@@ -96,6 +97,10 @@ export default function TeacherProfile() {
             src={teacher.avatar}
             alt={teacher.name}
             className="w-32 h-32 rounded-3xl object-cover border-4 border-card shadow-kidario-elevated"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = DEFAULT_TEACHER_AVATAR;
+            }}
           />
           {teacher.isOnline && (
             <span className="absolute bottom-2 right-2 w-8 h-8 bg-success rounded-full border-4 border-card flex items-center justify-center">

@@ -5,6 +5,7 @@ import { RatingStars } from "./RatingStars";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { SpecialtiesChipsRow } from "@/components/ui/Chip";
 import { cn } from "@/lib/utils";
+import { DEFAULT_TEACHER_AVATAR } from "@/lib/avatarUrl";
 
 export interface Teacher {
   id: string;
@@ -49,6 +50,10 @@ export function TeacherCard({ teacher, className, index = 0 }: TeacherCardProps)
               src={teacher.avatar}
               alt={teacher.name}
               className="w-16 h-16 rounded-2xl object-cover bg-muted"
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = DEFAULT_TEACHER_AVATAR;
+              }}
             />
             {teacher.isOnline && (
               <span className="absolute -bottom-1 -right-1 w-5 h-5 bg-success rounded-full border-2 border-card flex items-center justify-center">

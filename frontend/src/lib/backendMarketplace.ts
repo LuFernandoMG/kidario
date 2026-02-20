@@ -1,5 +1,6 @@
 import type { Teacher } from "@/components/marketplace/TeacherCard";
 import type { DayAvailability } from "@/lib/bookingUtils";
+import { resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
 
 export interface MarketplaceTeacherSummaryResponse {
   id: string;
@@ -99,15 +100,11 @@ async function marketplaceRequest<TResponse>(path: string): Promise<TResponse> {
   return payload as TResponse;
 }
 
-function fallbackAvatar() {
-  return "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face";
-}
-
 function toTeacherModel(response: MarketplaceTeacherSummaryResponse): Teacher {
   return {
     id: response.id,
     name: response.name,
-    avatar: response.avatar_url || fallbackAvatar(),
+    avatar: resolveTeacherAvatarUrl(response.avatar_url),
     rating: response.rating,
     reviewCount: response.review_count,
     pricePerClass: Math.round(response.price_per_class),
@@ -128,7 +125,7 @@ export function mapMarketplaceTeacherDetail(
     teacher: {
       id: response.id,
       name: response.name,
-      avatar: response.avatar_url || fallbackAvatar(),
+      avatar: resolveTeacherAvatarUrl(response.avatar_url),
       rating: response.rating,
       reviewCount: response.review_count,
       pricePerClass: Math.round(response.price_per_class),

@@ -22,6 +22,7 @@ import {
 import { getSupabaseAccessToken, signUpWithEmailPassword } from "@/lib/authSession";
 import { patchTeacherProfile } from "@/lib/backendProfiles";
 import { clearPendingProfileSync, savePendingProfileSync } from "@/lib/pendingProfileSync";
+import { uploadTeacherProfilePhoto } from "@/lib/supabaseStorage";
 
 interface AcademicFormation {
   degreeType: string;
@@ -364,7 +365,7 @@ export default function TeacherPrivateSignup() {
     setIsLoading(true);
 
     try {
-      const teacherProfilePayload = {
+      const buildTeacherProfilePayload = (profilePhotoFileName: string | null) => ({
         first_name: formData.firstName,
         last_name: formData.lastName,
         phone: formData.phone,
@@ -376,7 +377,7 @@ export default function TeacherPrivateSignup() {
         mini_bio: formData.miniBio,
         hourly_rate: Number(formData.hourlyRate),
         lesson_duration_minutes: Number(formData.lessonDuration),
-        profile_photo_file_name: formData.profilePhoto?.name ?? null,
+        profile_photo_file_name: profilePhotoFileName,
         request_experience_anonymity: formData.requestExperienceAnonymity,
         specialties_ops: {
           add: formData.specialties,
@@ -410,9 +411,10 @@ export default function TeacherPrivateSignup() {
           })),
           delete_ids: [],
         },
-      };
+      });
 
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+      const pendingPhotoFileName = formData.profilePhoto?.name ?? null;
       const result = await signUpWithEmailPassword({
         email: formData.email,
         password: formData.password,
@@ -431,7 +433,7 @@ export default function TeacherPrivateSignup() {
           mini_bio: formData.miniBio,
           hourly_rate: Number(formData.hourlyRate),
           lesson_duration_minutes: Number(formData.lessonDuration),
-          profile_photo_file_name: formData.profilePhoto?.name ?? null,
+          profile_photo_file_name: pendingPhotoFileName,
           request_experience_anonymity: formData.requestExperienceAnonymity,
           specialties: formData.specialties,
           formations: formData.formations,
@@ -444,7 +446,7 @@ export default function TeacherPrivateSignup() {
         savePendingProfileSync({
           role: "teacher",
           email: formData.email,
-          payload: teacherProfilePayload,
+          payload: buildTeacherProfilePayload(pendingPhotoFileName),
         });
 
         const params = new URLSearchParams();
@@ -460,6 +462,16 @@ export default function TeacherPrivateSignup() {
         throw new Error("Conta criada no Auth, mas token não encontrado para salvar o perfil.");
       }
 
+      let profilePhotoFileName = pendingPhotoFileName;
+      if (formData.profilePhoto) {
+        profilePhotoFileName = await uploadTeacherProfilePhoto({
+          accessToken,
+          file: formData.profilePhoto,
+          email: formData.email,
+        });
+      }
+
+      const teacherProfilePayload = buildTeacherProfilePayload(profilePhotoFileName);
       savePendingProfileSync({
         role: "teacher",
         email: formData.email,

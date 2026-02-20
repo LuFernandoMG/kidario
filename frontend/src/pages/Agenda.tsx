@@ -7,6 +7,7 @@ import { BookingStatusPill } from "@/components/booking/BookingStatusPill";
 import { getStoredBookings } from "@/lib/bookingsStorage";
 import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
 import { getParentAgenda } from "@/lib/backendBookings";
+import { DEFAULT_TEACHER_AVATAR, resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
 
 type TabType = "proximas" | "passadas";
 
@@ -128,8 +129,7 @@ export default function Agenda() {
           id: lesson.id,
           teacherName: lesson.teacher_name,
           teacherAvatar:
-            lesson.teacher_avatar_url ||
-            "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face",
+            resolveTeacherAvatarUrl(lesson.teacher_avatar_url),
           date: lesson.date_label,
           dateIso: lesson.date_iso,
           time: lesson.time,
@@ -253,6 +253,10 @@ function BookingCard({ booking, index }: { booking: Booking; index: number }) {
             src={booking.teacherAvatar}
             alt={booking.teacherName}
             className="w-12 h-12 rounded-xl object-cover bg-muted shrink-0"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = DEFAULT_TEACHER_AVATAR;
+            }}
           />
 
           {/* Content */}
