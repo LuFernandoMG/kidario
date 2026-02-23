@@ -13,9 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SignupStepCarousel, type SignupStep } from "@/components/forms/SignupStepCarousel";
-import { getSupabaseAccessToken, signUpWithEmailPassword } from "@/lib/authSession";
-import { patchParentProfile } from "@/lib/backendProfiles";
-import { clearPendingProfileSync, savePendingProfileSync } from "@/lib/pendingProfileSync";
+import { applyBackendSignupSession } from "@/lib/authSession";
+import { signUpWithBackend } from "@/lib/backendAuth";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 
 interface ChildFormData {
@@ -106,7 +105,6 @@ export default function Signup() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
-  const [submitNotice, setSubmitNotice] = useState("");
   const [formData, setFormData] = useState<ParentSignupFormData>({
     firstName: "",
     lastName: "",
@@ -214,7 +212,6 @@ export default function Signup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError("");
-    setSubmitNotice("");
 
     if (currentStep < signupSteps.length - 1) {
       handleNext();
@@ -248,11 +245,12 @@ export default function Signup() {
       };
 
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-      const result = await signUpWithEmailPassword({
+      const result = await signUpWithBackend({
         email: formData.email,
         password: formData.password,
-        fullName,
+        full_name: fullName,
         role: "parent",
+        parent_profile: parentProfilePayload,
         metadata: {
           signup_source: "parent_public",
           first_name: formData.firstName,
@@ -273,13 +271,17 @@ export default function Signup() {
         },
       });
 
-      if (result.emailConfirmationRequired) {
-        savePendingProfileSync({
-          role: "parent",
-          email: formData.email,
-          payload: parentProfilePayload,
-        });
+      applyBackendSignupSession({
+        role: result.role,
+        email: formData.email,
+        fullName,
+        accessToken: result.access_token ?? undefined,
+        refreshToken: result.refresh_token ?? undefined,
+        expiresIn: result.expires_in ?? undefined,
+        tokenType: result.token_type ?? undefined,
+      });
 
+      if (result.email_confirmation_required) {
         const params = new URLSearchParams();
         params.set("email", formData.email);
         params.set("notice", "check-email");
@@ -289,19 +291,6 @@ export default function Signup() {
         navigate(`/login?${params.toString()}`);
         return;
       }
-
-      const accessToken = getSupabaseAccessToken();
-      if (!accessToken) {
-        throw new Error("Conta criada no Auth, mas token não encontrado para salvar o perfil.");
-      }
-
-      savePendingProfileSync({
-        role: "parent",
-        email: formData.email,
-        payload: parentProfilePayload,
-      });
-      await patchParentProfile(accessToken, parentProfilePayload);
-      clearPendingProfileSync();
 
       navigate(decodedReturnTo || "/explorar");
     } catch (error) {
@@ -650,7 +639,6 @@ export default function Signup() {
         transition={{ delay: 0.3 }}
         className="text-center text-muted-foreground pb-8"
       >
-        {submitNotice && <span className="block mb-3 text-sm text-success">{submitNotice}</span>}
         {submitError && <span className="block mb-3 text-sm text-destructive">{submitError}</span>}
         Ja tem conta?{" "}
         <Link to={loginLink} className="text-primary font-medium hover:underline">

@@ -243,6 +243,39 @@ export function getSupabaseAccessToken(): string | null {
   return tokens?.accessToken ?? null;
 }
 
+export function applyBackendSignupSession(params: {
+  role: UserRole;
+  email: string;
+  fullName?: string;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  expiresIn?: number | null;
+  tokenType?: string | null;
+}): AuthSession {
+  const hasSession = Boolean(params.accessToken && params.refreshToken);
+
+  if (hasSession) {
+    saveSupabaseTokens({
+      accessToken: params.accessToken || "",
+      refreshToken: params.refreshToken || "",
+      expiresIn: params.expiresIn ?? undefined,
+      tokenType: params.tokenType ?? undefined,
+    });
+  } else {
+    clearSupabaseTokens();
+  }
+
+  const nextSession: AuthSession = {
+    isAuthenticated: hasSession,
+    role: normalizeRole(params.role),
+    email: params.email,
+    fullName: params.fullName,
+  };
+
+  saveAuthSession(nextSession);
+  return nextSession;
+}
+
 export async function signUpWithEmailPassword({
   email,
   password,

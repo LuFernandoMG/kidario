@@ -27,6 +27,7 @@ pytest -q
 Current automated test:
 
 - `tests/test_health.py` (smoke test de `/api/v1/health`)
+- `tests/test_auth_api.py` (contratos HTTP de `POST /auth/signup`)
 - `tests/test_profiles_api.py` (contratos HTTP de `/profiles/me`, `PATCH /profiles/parent`, `PATCH /profiles/teacher`, y conflicto de rol)
 - `tests/test_bookings_api.py` (contratos HTTP de creación/agenda/detalle/cancelación de bookings)
 - `tests/test_marketplace_api.py` (contratos HTTP del marketplace de profesoras)
@@ -80,6 +81,8 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
 
 - Prefix: `/api/v1`
 - Health: `/api/v1/health`
+- Auth:
+  - `POST /api/v1/auth/signup`
 - Profiles:
   - `GET /api/v1/profiles/me`
   - `PATCH /api/v1/profiles/parent`
@@ -140,7 +143,8 @@ If your Supabase project signs JWTs with `HS256`, configure:
 
 - `KIDARIO_SUPABASE_JWT_SECRET` in `.env` (Project Settings -> API -> JWT secret)
 
-If you get SSL errors fetching JWKS (e.g. `CERTIFICATE_VERIFY_FAILED`):
+If you get SSL errors calling Supabase (JWKS or Auth endpoints like `/auth/v1/signup`, e.g. `CERTIFICATE_VERIFY_FAILED`):
 
 - Upgrade deps to install `certifi`: `pip install -e ".[dev]"`
 - Optionally set `KIDARIO_SUPABASE_JWKS_CA_BUNDLE` to your corporate/local CA bundle path.
+  - Example macOS with python.org installer: run `Install Certificates.command`.

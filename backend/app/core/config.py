@@ -12,10 +12,13 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     supabase_url: str
+    supabase_anon_key: str | None = None
+    supabase_service_role_key: str | None = None
     supabase_jwt_audience: str = "authenticated"
     supabase_jwt_issuer: str | None = None
     supabase_jwt_secret: str | None = None
     supabase_jwks_ca_bundle: str | None = None
+    supabase_http_timeout_seconds: float = 15.0
 
     database_url: str
 

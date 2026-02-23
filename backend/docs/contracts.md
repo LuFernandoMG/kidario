@@ -191,6 +191,97 @@ Autorización:
 - Header `Authorization: Bearer <supabase_access_token>`
 - Backend valida JWT de Supabase y extrae `user_id` (`sub`), `email`.
 
+## 4.0 POST `/api/v1/auth/signup`
+
+Descripción:
+
+- Crea cuenta en Supabase Auth y persiste el perfil de dominio (`parent` o `teacher`) en una sola operación backend.
+- Reduce dependencia de sincronización en cliente para completar onboarding.
+
+Request body (parent):
+
+```json
+{
+  "email": "maria@email.com",
+  "password": "senha-forte-123",
+  "full_name": "Maria Silva",
+  "role": "parent",
+  "parent_profile": {
+    "first_name": "Maria",
+    "last_name": "Silva",
+    "phone": "(11) 99999-9999",
+    "birth_date": "1987-10-01",
+    "address": "Rua X, 123",
+    "bio": "Busca apoio pedagogico...",
+    "children_ops": {
+      "upsert": [
+        {
+          "name": "Lucas",
+          "gender": "masculino",
+          "age": 8,
+          "current_grade": "3-ano-fundamental",
+          "birth_month_year": "2017-04",
+          "school": "Colegio Y",
+          "focus_points": "leitura e concentracao"
+        }
+      ],
+      "delete_ids": []
+    }
+  }
+}
+```
+
+Request body (teacher):
+
+```json
+{
+  "email": "ana@email.com",
+  "password": "senha-forte-123",
+  "full_name": "Ana Souza",
+  "role": "teacher",
+  "teacher_profile": {
+    "first_name": "Ana",
+    "last_name": "Souza",
+    "phone": "(11) 98888-7777",
+    "cpf": "000.000.000-00",
+    "professional_registration": "ABC123",
+    "city": "Sao Paulo",
+    "state": "SP",
+    "modality": "hibrido",
+    "mini_bio": "Pedagoga com foco em alfabetizacao",
+    "hourly_rate": 320.0,
+    "lesson_duration_minutes": 60,
+    "profile_photo_file_name": "teacher@email.com/1700000000000-foto.jpg",
+    "request_experience_anonymity": false,
+    "specialties_ops": { "add": ["Alfabetizacao"], "remove": [] },
+    "formations_ops": { "upsert": [], "delete_ids": [] },
+    "experiences_ops": { "upsert": [], "delete_ids": [] },
+    "availability_ops": { "upsert": [], "delete_ids": [] }
+  }
+}
+```
+
+Response `201`:
+
+```json
+{
+  "status": "ok",
+  "profile_id": "uuid",
+  "auth_user_id": "uuid",
+  "role": "parent",
+  "email_confirmation_required": false,
+  "access_token": "jwt-or-null",
+  "refresh_token": "token-or-null",
+  "expires_in": 3600,
+  "token_type": "bearer"
+}
+```
+
+Notas:
+
+- Si Supabase requiere confirmación de email, `email_confirmation_required` vendrá como `true` y los tokens podrán venir `null`.
+- Si falla la persistencia de perfil tras crear Auth user, backend intenta compensar eliminando el usuario de Auth cuando `KIDARIO_SUPABASE_SERVICE_ROLE_KEY` está configurada.
+
 ## 4.1 GET `/api/v1/profiles/me`
 
 Descripción:

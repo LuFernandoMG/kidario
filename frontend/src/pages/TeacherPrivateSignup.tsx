@@ -19,9 +19,9 @@ import {
   WeeklyAvailabilityCalendar,
   type WeeklyAvailabilitySlot,
 } from "@/components/teacher/WeeklyAvailabilityCalendar";
-import { getSupabaseAccessToken, signUpWithEmailPassword } from "@/lib/authSession";
+import { applyBackendSignupSession } from "@/lib/authSession";
+import { signUpWithBackend } from "@/lib/backendAuth";
 import { patchTeacherProfile } from "@/lib/backendProfiles";
-import { clearPendingProfileSync, savePendingProfileSync } from "@/lib/pendingProfileSync";
 import { uploadTeacherProfilePhoto } from "@/lib/supabaseStorage";
 
 interface AcademicFormation {
@@ -414,12 +414,12 @@ export default function TeacherPrivateSignup() {
       });
 
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-      const pendingPhotoFileName = formData.profilePhoto?.name ?? null;
-      const result = await signUpWithEmailPassword({
+      const result = await signUpWithBackend({
         email: formData.email,
         password: formData.password,
-        fullName,
+        full_name: fullName,
         role: "teacher",
+        teacher_profile: buildTeacherProfilePayload(null),
         metadata: {
           signup_source: "teacher_private_invite",
           first_name: formData.firstName,
@@ -433,7 +433,7 @@ export default function TeacherPrivateSignup() {
           mini_bio: formData.miniBio,
           hourly_rate: Number(formData.hourlyRate),
           lesson_duration_minutes: Number(formData.lessonDuration),
-          profile_photo_file_name: pendingPhotoFileName,
+          profile_photo_file_name: null,
           request_experience_anonymity: formData.requestExperienceAnonymity,
           specialties: formData.specialties,
           formations: formData.formations,
@@ -442,13 +442,17 @@ export default function TeacherPrivateSignup() {
         },
       });
 
-      if (result.emailConfirmationRequired) {
-        savePendingProfileSync({
-          role: "teacher",
-          email: formData.email,
-          payload: buildTeacherProfilePayload(pendingPhotoFileName),
-        });
+      applyBackendSignupSession({
+        role: result.role,
+        email: formData.email,
+        fullName,
+        accessToken: result.access_token ?? undefined,
+        refreshToken: result.refresh_token ?? undefined,
+        expiresIn: result.expires_in ?? undefined,
+        tokenType: result.token_type ?? undefined,
+      });
 
+      if (result.email_confirmation_required) {
         const params = new URLSearchParams();
         params.set("email", formData.email);
         params.set("notice", "check-email");
@@ -457,28 +461,22 @@ export default function TeacherPrivateSignup() {
         return;
       }
 
-      const accessToken = getSupabaseAccessToken();
+      const accessToken = result.access_token || undefined;
       if (!accessToken) {
         throw new Error("Conta criada no Auth, mas token não encontrado para salvar o perfil.");
       }
 
-      let profilePhotoFileName = pendingPhotoFileName;
       if (formData.profilePhoto) {
-        profilePhotoFileName = await uploadTeacherProfilePhoto({
+        const profilePhotoFileName = await uploadTeacherProfilePhoto({
           accessToken,
           file: formData.profilePhoto,
           email: formData.email,
         });
-      }
 
-      const teacherProfilePayload = buildTeacherProfilePayload(profilePhotoFileName);
-      savePendingProfileSync({
-        role: "teacher",
-        email: formData.email,
-        payload: teacherProfilePayload,
-      });
-      await patchTeacherProfile(accessToken, teacherProfilePayload);
-      clearPendingProfileSync();
+        await patchTeacherProfile(accessToken, {
+          profile_photo_file_name: profilePhotoFileName,
+        });
+      }
 
       navigate("/explorar");
     } catch (error) {
@@ -1054,7 +1052,7 @@ export default function TeacherPrivateSignup() {
               </KidarioButton>
             ) : (
               <KidarioButton type="submit" variant="hero" size="lg" disabled={isLoading}>
-                {isLoading ? "Criando conta..." : "Criar conta de professora"}
+                {isLoading ? "Criando conta..." : "Criar conta"}
               </KidarioButton>
             )}
           </div>
