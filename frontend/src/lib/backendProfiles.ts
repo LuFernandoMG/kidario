@@ -1,5 +1,10 @@
 import type { ChildGender } from "@/lib/childProfile";
-import { extractErrorMessage, getBackendApiBaseUrl, throwBackendError } from "@/lib/backendApi";
+import {
+  extractErrorMessage,
+  getBackendApiBaseUrl,
+  resolveProtectedAccessToken,
+  throwBackendError,
+} from "@/lib/backendApi";
 
 export type BackendUserRole = "parent" | "teacher";
 
@@ -167,13 +172,14 @@ async function backendRequest<TResponse>(params: {
 }): Promise<TResponse> {
   const { path, accessToken, method = "GET", body } = params;
   const url = `${getBackendApiBaseUrl()}${path}`;
+  const bearerToken = await resolveProtectedAccessToken(accessToken);
 
   let response: Response;
   try {
     response = await fetch(url, {
       method,
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${bearerToken}`,
         Accept: "application/json",
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
@@ -249,6 +255,7 @@ export async function uploadTeacherProfilePhoto(
   file: File,
 ): Promise<TeacherPhotoUploadResponse> {
   const url = `${getBackendApiBaseUrl()}/profiles/teacher/photo`;
+  const bearerToken = await resolveProtectedAccessToken(accessToken);
   const body = new FormData();
   body.append("file", file);
 
@@ -257,7 +264,7 @@ export async function uploadTeacherProfilePhoto(
     response = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${bearerToken}`,
         Accept: "application/json",
       },
       body,

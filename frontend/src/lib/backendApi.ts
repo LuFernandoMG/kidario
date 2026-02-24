@@ -1,4 +1,4 @@
-import { handleExpiredSessionRedirect } from "@/lib/authSession";
+import { getValidSupabaseAccessToken, handleExpiredSessionRedirect } from "@/lib/authSession";
 
 export function getBackendApiBaseUrl(): string {
   const configured = import.meta.env.VITE_BACKEND_API_URL?.trim();
@@ -43,4 +43,13 @@ export function throwBackendError(params: {
   }
 
   throw new Error(extractErrorMessage(payload, fallback));
+}
+
+export async function resolveProtectedAccessToken(fallbackAccessToken?: string): Promise<string> {
+  const validToken = await getValidSupabaseAccessToken();
+  if (validToken) return validToken;
+  if (fallbackAccessToken) return fallbackAccessToken;
+
+  handleExpiredSessionRedirect();
+  throw new Error("Sua sessão expirou. Faça login novamente.");
 }

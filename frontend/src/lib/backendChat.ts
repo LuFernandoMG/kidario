@@ -1,4 +1,4 @@
-import { getBackendApiBaseUrl, throwBackendError } from "@/lib/backendApi";
+import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
 
 export interface ChatThreadView {
   id: string;
@@ -49,13 +49,14 @@ async function backendRequest<TResponse>(params: {
 }): Promise<TResponse> {
   const { path, accessToken, method = "GET", body } = params;
   const url = `${getBackendApiBaseUrl()}${path}`;
+  const bearerToken = await resolveProtectedAccessToken(accessToken);
 
   let response: Response;
   try {
     response = await fetch(url, {
       method,
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${bearerToken}`,
         Accept: "application/json",
         ...(body ? { "Content-Type": "application/json" } : {}),
       },

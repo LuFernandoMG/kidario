@@ -21,6 +21,7 @@ interface SupabaseTokens {
   accessToken: string;
   refreshToken?: string;
   expiresIn?: number;
+  expiresAt?: number;
   tokenType?: string;
 }
 
@@ -80,6 +81,9 @@ interface RecoveryTokens {
   type?: string;
 }
 
+const TOKEN_REFRESH_LEEWAY_SECONDS = 60;
+let refreshInFlight: Promise<string | null> | null = null;
+
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
@@ -114,6 +118,7 @@ function getStoredTokens(): SupabaseTokens | null {
       accessToken: parsed.accessToken,
       refreshToken: parsed.refreshToken,
       expiresIn: parsed.expiresIn,
+      expiresAt: typeof parsed.expiresAt === "number" ? parsed.expiresAt : undefined,
       tokenType: parsed.tokenType,
     };
   } catch {
@@ -121,9 +126,35 @@ function getStoredTokens(): SupabaseTokens | null {
   }
 }
 
+function getUnixNowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+function normalizeSupabaseTokens(tokens: SupabaseTokens): SupabaseTokens {
+  const normalizedExpiresIn = typeof tokens.expiresIn === "number" && Number.isFinite(tokens.expiresIn)
+    ? Math.max(0, Math.floor(tokens.expiresIn))
+    : undefined;
+
+  const computedExpiresAt =
+    typeof tokens.expiresAt === "number" && Number.isFinite(tokens.expiresAt)
+      ? Math.floor(tokens.expiresAt)
+      : normalizedExpiresIn != null
+        ? getUnixNowSeconds() + normalizedExpiresIn
+        : undefined;
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresIn: normalizedExpiresIn,
+    expiresAt: computedExpiresAt,
+    tokenType: tokens.tokenType,
+  };
+}
+
 function saveSupabaseTokens(tokens: SupabaseTokens) {
   if (!canUseStorage()) return;
-  window.localStorage.setItem(SUPABASE_TOKENS_KEY, JSON.stringify(tokens));
+  const normalized = normalizeSupabaseTokens(tokens);
+  window.localStorage.setItem(SUPABASE_TOKENS_KEY, JSON.stringify(normalized));
 }
 
 function clearSupabaseTokens() {
@@ -135,6 +166,16 @@ function clearAuthStorageKeys() {
   if (!canUseStorage()) return;
   window.localStorage.removeItem(AUTH_SESSION_KEY);
   window.localStorage.removeItem(SUPABASE_TOKENS_KEY);
+}
+
+function hasTokenExpired(tokens: SupabaseTokens): boolean {
+  if (typeof tokens.expiresAt !== "number") return false;
+  return tokens.expiresAt <= getUnixNowSeconds();
+}
+
+function shouldRefreshToken(tokens: SupabaseTokens, minValiditySeconds = TOKEN_REFRESH_LEEWAY_SECONDS): boolean {
+  if (typeof tokens.expiresAt !== "number") return false;
+  return tokens.expiresAt - getUnixNowSeconds() <= Math.max(0, minValiditySeconds);
 }
 
 function translateSupabaseAuthError(payload: SupabaseAuthResponse): string {
@@ -286,6 +327,7 @@ export function getSupabaseAccessToken(): string | null {
 }
 
 export function clearClientCache() {
+  refreshInFlight = null;
   if (!canUseStorage()) return;
 
   for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
@@ -308,6 +350,61 @@ export function handleExpiredSessionRedirect() {
   if (typeof window === "undefined") return;
   if (window.location.pathname === "/login") return;
   window.location.replace("/login?notice=session-expired");
+}
+
+async function executeTokenRefresh(existingTokens: SupabaseTokens): Promise<string | null> {
+  if (!existingTokens.refreshToken) {
+    return hasTokenExpired(existingTokens) ? null : existingTokens.accessToken;
+  }
+
+  const payload = await supabaseAuthRequest("token?grant_type=refresh_token", {
+    method: "POST",
+    body: { refresh_token: existingTokens.refreshToken },
+  });
+
+  if (!payload.access_token) {
+    throw new Error("Sessão inválida. Faça login novamente.");
+  }
+
+  const nextTokens: SupabaseTokens = {
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token || existingTokens.refreshToken,
+    expiresIn: payload.expires_in,
+    tokenType: payload.token_type || existingTokens.tokenType,
+  };
+  saveSupabaseTokens(nextTokens);
+  return nextTokens.accessToken;
+}
+
+export async function getValidSupabaseAccessToken(options?: {
+  forceRefresh?: boolean;
+  minValiditySeconds?: number;
+}): Promise<string | null> {
+  const tokens = getStoredTokens();
+  if (!tokens?.accessToken) return null;
+
+  const minValiditySeconds = options?.minValiditySeconds ?? TOKEN_REFRESH_LEEWAY_SECONDS;
+  const forceRefresh = options?.forceRefresh ?? false;
+  const tokenExpired = hasTokenExpired(tokens);
+  const refreshNeeded = forceRefresh || shouldRefreshToken(tokens, minValiditySeconds);
+
+  if (!refreshNeeded) return tokens.accessToken;
+  if (!tokens.refreshToken && !tokenExpired) return tokens.accessToken;
+
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        return await executeTokenRefresh(tokens);
+      } catch {
+        clearAuthStorageKeys();
+        return null;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+  }
+
+  return refreshInFlight;
 }
 
 export function applyBackendSignupSession(params: {
