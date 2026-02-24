@@ -13,6 +13,8 @@ import { type Teacher } from "@/components/marketplace/TeacherCard";
 import { getSupabaseAccessToken } from "@/lib/authSession";
 import { getTeacherAvailabilitySlots } from "@/lib/backendBookings";
 import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
+import { getParentProfile, type BackendParentChildView } from "@/lib/backendProfiles";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const durationOptions = [45, 60, 90];
 
@@ -20,10 +22,14 @@ export default function BookingScheduler() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryChildId = searchParams.get("childId") || "";
 
   const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
   const [remoteAvailability, setRemoteAvailability] = useState<DayAvailability[] | null>(null);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const [children, setChildren] = useState<BackendParentChildView[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState(queryChildId);
+  const [isLoadingChildren, setIsLoadingChildren] = useState(false);
 
   const modalities = useMemo<BookingModality[]>(() => {
     if (!teacher) return ["online"];
@@ -92,6 +98,42 @@ export default function BookingScheduler() {
       isMounted = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    const accessToken = getSupabaseAccessToken();
+    if (!accessToken) {
+      setChildren([]);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingChildren(true);
+
+    getParentProfile(accessToken)
+      .then((payload) => {
+        if (!isMounted) return;
+        const nextChildren = payload.children || [];
+        setChildren(nextChildren);
+        setSelectedChildId((current) => {
+          if (current && nextChildren.some((child) => child.id === current)) return current;
+          if (queryChildId && nextChildren.some((child) => child.id === queryChildId)) return queryChildId;
+          if (nextChildren.length === 1) return nextChildren[0].id;
+          return "";
+        });
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setChildren([]);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoadingChildren(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [queryChildId]);
 
   useEffect(() => {
     if (!teacher || !isUuidLike(teacher.id)) {
@@ -167,6 +209,9 @@ export default function BookingScheduler() {
 
   const selectedDayLabel = availability.find((day) => day.dateIso === selectedDate)?.dateLabel ?? "-";
   const estimatedPrice = Math.round((teacher?.pricePerClass ?? 0) * (selectedDuration / 60));
+  const selectedChildName =
+    children.find((child) => child.id === selectedChildId)?.name || "Não selecionado";
+  const requiresChildSelection = children.length > 0;
 
   const handleDateSelection = (dateIso: string) => {
     setSelectedDate(dateIso);
@@ -174,7 +219,13 @@ export default function BookingScheduler() {
     setSelectedTime(nextDaySlots[0] ?? "");
   };
 
-  const canContinue = Boolean(teacher && selectedDate && selectedTime && selectedDuration > 0);
+  const canContinue = Boolean(
+    teacher
+      && selectedDate
+      && selectedTime
+      && selectedDuration > 0
+      && (!requiresChildSelection || selectedChildId),
+  );
 
   const handleContinue = () => {
     if (!teacher || !canContinue) return;
@@ -185,6 +236,7 @@ export default function BookingScheduler() {
       duration: String(selectedDuration),
       modality: selectedModality,
     });
+    if (selectedChildId) checkoutParams.set("childId", selectedChildId);
 
     navigate(`/checkout/${teacher.id}?${checkoutParams.toString()}`);
   };
@@ -218,6 +270,32 @@ export default function BookingScheduler() {
           specialty={teacher.specialties[0]}
           pricePerHour={teacher.pricePerClass}
         />
+
+        <section className="card-kidario p-4 space-y-3">
+          <h3 className="font-display text-lg font-semibold text-foreground">Para qual filho é esta aula?</h3>
+          {isLoadingChildren ? (
+            <p className="text-sm text-muted-foreground">Carregando crianças...</p>
+          ) : children.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {getSupabaseAccessToken()
+                ? "Nenhuma criança cadastrada. Complete o cadastro no perfil de responsável."
+                : "Entre como responsável para selecionar a criança da aula."}
+            </p>
+          ) : (
+            <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a criança" />
+              </SelectTrigger>
+              <SelectContent>
+                {children.map((child) => (
+                  <SelectItem key={child.id} value={child.id}>
+                    {child.name || "Sem nome"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </section>
 
         <section className="card-kidario p-4 space-y-3">
           <h3 className="font-display text-lg font-semibold text-foreground">Modalidade</h3>
@@ -292,6 +370,7 @@ export default function BookingScheduler() {
         <BookingSummaryCard
           title="Resumo da reserva"
           rows={[
+            { label: "Filho(a):", value: selectedChildName },
             { label: "Data:", value: selectedDayLabel },
             { label: "Horario:", value: selectedTime || "-" },
             { label: "Modalidade:", value: selectedModality === "online" ? "Online" : "Presencial" },

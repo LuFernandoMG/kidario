@@ -1,6 +1,7 @@
 import type { Teacher } from "@/components/marketplace/TeacherCard";
 import type { DayAvailability } from "@/lib/bookingUtils";
 import { resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
+import { extractErrorMessage, getBackendApiBaseUrl } from "@/lib/backendApi";
 
 export interface MarketplaceTeacherSummaryResponse {
   id: string;
@@ -55,27 +56,6 @@ export interface MarketplaceTeacherDetailMapped {
   state?: string | null;
 }
 
-function getBackendApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_BACKEND_API_URL?.trim();
-  const baseUrl = configured || "http://localhost:8000/api/v1";
-  return baseUrl.replace(/\/+$/, "");
-}
-
-function extractErrorMessage(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== "object") return fallback;
-
-  const detail = (payload as { detail?: unknown }).detail;
-  if (typeof detail === "string" && detail.trim()) return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    const firstMessage = detail
-      .map((item) => (item && typeof item === "object" ? (item as { msg?: unknown }).msg : null))
-      .find((msg) => typeof msg === "string" && msg.trim());
-    if (typeof firstMessage === "string") return firstMessage;
-  }
-
-  return fallback;
-}
-
 async function marketplaceRequest<TResponse>(path: string): Promise<TResponse> {
   const url = `${getBackendApiBaseUrl()}${path}`;
   let response: Response;
@@ -88,12 +68,12 @@ async function marketplaceRequest<TResponse>(path: string): Promise<TResponse> {
       },
     });
   } catch {
-    throw new Error("No fue posible conectar con el backend de Kidario.");
+    throw new Error("Não foi possível conectar ao backend do Kidario.");
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const fallback = "No fue posible cargar datos del marketplace.";
+    const fallback = "Não foi possível carregar os dados do marketplace.";
     throw new Error(extractErrorMessage(payload, fallback));
   }
 

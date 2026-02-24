@@ -48,6 +48,7 @@ function emptyChild(): BackendParentChildView {
   return {
     id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: "",
+    birth_month_year: "",
     current_grade: "",
     school: "",
     focus_points: "",
@@ -192,12 +193,10 @@ export default function ParentProfileSettings() {
       setError("Preencha nome e sobrenome.");
       return;
     }
-    if (form.children.length === 0) {
-      setError("Adicione pelo menos uma criança.");
-      return;
-    }
-    if (form.children.some((child) => !child.name?.trim())) {
-      setError("Todas as crianças devem ter nome.");
+
+    const childValidationError = validateChildrenForSave(form.children);
+    if (childValidationError) {
+      setError(childValidationError);
       return;
     }
 
@@ -437,17 +436,31 @@ export default function ParentProfileSettings() {
                           <StaticFieldValue value={formatChildGradeLabel(child.current_grade)} />
                         )}
                       </Field>
-                      <Field label="Escola">
+                      <Field label="Nascimento (mês/ano)">
                         {isEditingChild ? (
                           <Input
-                            value={child.school || ""}
-                            onChange={(event) => updateChild(child.id, "school", event.target.value)}
+                            type="month"
+                            value={child.birth_month_year || ""}
+                            onChange={(event) =>
+                              updateChild(child.id, "birth_month_year", event.target.value || null)
+                            }
                           />
                         ) : (
-                          <StaticFieldValue value={child.school || "Não informada"} />
+                          <StaticFieldValue value={formatBirthMonthYearLabel(child.birth_month_year)} />
                         )}
                       </Field>
                     </div>
+
+                    <Field label="Escola">
+                      {isEditingChild ? (
+                        <Input
+                          value={child.school || ""}
+                          onChange={(event) => updateChild(child.id, "school", event.target.value)}
+                        />
+                      ) : (
+                        <StaticFieldValue value={child.school || "Não informada"} />
+                      )}
+                    </Field>
 
                     <Field label="Pontos de atenção">
                       {isEditingChild ? (
@@ -524,4 +537,49 @@ function StaticFieldValue({ value, multiline = false }: { value: string; multili
       {value}
     </div>
   );
+}
+
+function validateChildrenForSave(children: BackendParentChildView[]): string | null {
+  if (children.length === 0) return "Adicione pelo menos uma criança.";
+
+  if (children.some((child) => !child.name?.trim())) {
+    return "Todas as crianças devem ter nome.";
+  }
+
+  for (const child of children) {
+    if (!child.id.startsWith("tmp-")) continue;
+
+    if (!normalizeChildGender(child.gender)) {
+      return `Selecione o gênero de ${child.name?.trim() || "cada nova criança"}.`;
+    }
+
+    if (child.age == null || Number.isNaN(child.age) || child.age < 1 || child.age > 18) {
+      return `Informe uma idade válida (1 a 18) para ${child.name?.trim() || "cada nova criança"}.`;
+    }
+
+    if (!child.current_grade?.trim()) {
+      return `Selecione a série/curso de ${child.name?.trim() || "cada nova criança"}.`;
+    }
+
+    if (!child.birth_month_year) {
+      return `Informe mês/ano de nascimento de ${child.name?.trim() || "cada nova criança"}.`;
+    }
+
+    if (!child.school?.trim()) {
+      return `Informe a escola de ${child.name?.trim() || "cada nova criança"}.`;
+    }
+
+    if (!child.focus_points?.trim()) {
+      return `Descreva os pontos de atenção de ${child.name?.trim() || "cada nova criança"}.`;
+    }
+  }
+
+  return null;
+}
+
+function formatBirthMonthYearLabel(value?: string | null): string {
+  if (!value) return "Não informado";
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  return `${month}/${year}`;
 }

@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ProgressEntry {
   id: string;
@@ -240,7 +241,7 @@ export default function Progress() {
           </div>
 
           {isLoadingChildren || isLoadingProgress ? (
-            <div className="card-kidario p-4 text-sm text-muted-foreground">Carregando progresso...</div>
+            <ProgressEntriesSkeleton />
           ) : error ? (
             <div className="card-kidario p-4 text-sm text-destructive">{error}</div>
           ) : children.length === 0 ? (
@@ -266,6 +267,31 @@ export default function Progress() {
         </motion.section>
       </div>
     </AppShell>
+  );
+}
+
+function ProgressEntriesSkeleton() {
+  return (
+    <>
+      <span className="sr-only">Carregando progresso...</span>
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="card-kidario p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <Skeleton className="w-4 h-4 mt-1" />
+            <div className="space-y-2 w-full">
+              <Skeleton className="h-3 w-56" />
+              <Skeleton className="h-3 w-36" />
+            </div>
+          </div>
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <div className="flex gap-2">
+            <Skeleton className="h-6 w-16 rounded-full" />
+            <Skeleton className="h-6 w-20 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </>
   );
 }
 

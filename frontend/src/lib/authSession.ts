@@ -10,6 +10,7 @@ export interface AuthSession {
 const AUTH_SESSION_KEY = "kidario_auth_session_v1";
 const SUPABASE_TOKENS_KEY = "kidario_supabase_tokens_v1";
 const SUPABASE_AUTH_VERSION = "v1";
+const APP_STORAGE_PREFIX = "kidario_";
 
 const defaultSession: AuthSession = {
   isAuthenticated: false,
@@ -51,6 +52,7 @@ interface SupabaseAuthResponse {
   msg?: string;
   error?: string;
   error_description?: string;
+  code?: string;
 }
 
 interface SignUpParams {
@@ -129,6 +131,48 @@ function clearSupabaseTokens() {
   window.localStorage.removeItem(SUPABASE_TOKENS_KEY);
 }
 
+function clearAuthStorageKeys() {
+  if (!canUseStorage()) return;
+  window.localStorage.removeItem(AUTH_SESSION_KEY);
+  window.localStorage.removeItem(SUPABASE_TOKENS_KEY);
+}
+
+function translateSupabaseAuthError(payload: SupabaseAuthResponse): string {
+  const rawMessage = payload.msg || payload.error_description || payload.error || "Erro de autenticação.";
+  const normalizedCode = String(payload.code || "").toLowerCase();
+  const normalizedMessage = String(rawMessage).toLowerCase();
+
+  if (
+    normalizedCode === "invalid_credentials"
+    || normalizedMessage.includes("invalid login credentials")
+    || normalizedMessage.includes("invalid credentials")
+  ) {
+    return "E-mail ou senha inválidos.";
+  }
+
+  if (normalizedMessage.includes("email not confirmed")) {
+    return "Confirme seu e-mail antes de entrar.";
+  }
+
+  if (normalizedMessage.includes("user already registered")) {
+    return "Este e-mail já está cadastrado.";
+  }
+
+  if (normalizedMessage.includes("password should be at least")) {
+    return "A senha deve ter pelo menos 6 caracteres.";
+  }
+
+  if (
+    normalizedMessage.includes("token has expired")
+    || normalizedMessage.includes("jwt expired")
+    || normalizedMessage.includes("session expired")
+  ) {
+    return "Sua sessão expirou. Faça login novamente.";
+  }
+
+  return rawMessage;
+}
+
 function normalizeRole(value: unknown): UserRole {
   return value === "parent" || value === "teacher" ? value : null;
 }
@@ -183,7 +227,7 @@ async function supabaseAuthRequest(
   const payload = (await response.json().catch(() => ({}))) as SupabaseAuthResponse;
 
   if (!response.ok) {
-    const message = payload.msg || payload.error_description || payload.error || "Erro de autenticação.";
+    const message = translateSupabaseAuthError(payload);
     throw new Error(message);
   }
 
@@ -225,9 +269,7 @@ export function saveAuthSession(session: AuthSession) {
 }
 
 export function clearAuthSession() {
-  if (!canUseStorage()) return;
-  window.localStorage.removeItem(AUTH_SESSION_KEY);
-  clearSupabaseTokens();
+  clearClientCache();
 }
 
 export function isAuthenticated() {
@@ -241,6 +283,31 @@ export function hasSupabaseBearerToken() {
 export function getSupabaseAccessToken(): string | null {
   const tokens = getStoredTokens();
   return tokens?.accessToken ?? null;
+}
+
+export function clearClientCache() {
+  if (!canUseStorage()) return;
+
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index);
+    if (!key || !key.startsWith(APP_STORAGE_PREFIX)) continue;
+    window.localStorage.removeItem(key);
+  }
+
+  try {
+    window.sessionStorage?.clear();
+  } catch {
+    // no-op in constrained environments
+  }
+}
+
+export function handleExpiredSessionRedirect() {
+  clearClientCache();
+  clearAuthStorageKeys();
+
+  if (typeof window === "undefined") return;
+  if (window.location.pathname === "/login") return;
+  window.location.replace("/login?notice=session-expired");
 }
 
 export function applyBackendSignupSession(params: {

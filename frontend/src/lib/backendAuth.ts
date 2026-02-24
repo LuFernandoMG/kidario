@@ -1,4 +1,5 @@
 import type { ParentProfilePatchPayload, TeacherProfilePatchPayload } from "@/lib/backendProfiles";
+import { extractErrorMessage, getBackendApiBaseUrl } from "@/lib/backendApi";
 
 export interface AuthSignupRequestPayload {
   email: string;
@@ -22,27 +23,6 @@ export interface AuthSignupResponse {
   token_type?: string | null;
 }
 
-function getBackendApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_BACKEND_API_URL?.trim();
-  const baseUrl = configured || "http://localhost:8000/api/v1";
-  return baseUrl.replace(/\/+$/, "");
-}
-
-function extractErrorMessage(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== "object") return fallback;
-
-  const detail = (payload as { detail?: unknown }).detail;
-  if (typeof detail === "string" && detail.trim()) return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    const firstMessage = detail
-      .map((item) => (item && typeof item === "object" ? (item as { msg?: unknown }).msg : null))
-      .find((msg) => typeof msg === "string" && msg.trim());
-    if (typeof firstMessage === "string") return firstMessage;
-  }
-
-  return fallback;
-}
-
 export async function signUpWithBackend(payload: AuthSignupRequestPayload): Promise<AuthSignupResponse> {
   const url = `${getBackendApiBaseUrl()}/auth/signup`;
 
@@ -57,12 +37,12 @@ export async function signUpWithBackend(payload: AuthSignupRequestPayload): Prom
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error("No fue posible conectar con el backend de Kidario.");
+    throw new Error("Não foi possível conectar ao backend do Kidario.");
   }
 
   const parsed = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(extractErrorMessage(parsed, "No fue posible crear la cuenta."));
+    throw new Error(extractErrorMessage(parsed, "Não foi possível criar a conta."));
   }
 
   return parsed as AuthSignupResponse;

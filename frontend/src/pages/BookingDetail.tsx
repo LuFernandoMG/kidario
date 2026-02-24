@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Calendar, Clock, MapPin, Video, FileText, Sparkles } from "lucide-react";
+import { Calendar, Clock, MapPin, Video, FileText, Sparkles, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
@@ -12,7 +12,6 @@ import {
   type StoredBooking,
 } from "@/lib/bookingsStorage";
 import { buildTeacherAvailability, formatDateLong, type DayAvailability } from "@/lib/bookingUtils";
-import { getTeacherById } from "@/data/mockTeachers";
 import { BookingActionModal, type BookingActionMode } from "@/components/booking/BookingActionModal";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
@@ -24,6 +23,7 @@ import {
   rescheduleBooking,
   type BookingDetailResponse,
 } from "@/lib/backendBookings";
+import { getOrCreateChatThreadFromBooking } from "@/lib/backendChat";
 
 interface FollowUpSnapshot {
   updatedAt: string;
@@ -32,30 +32,6 @@ interface FollowUpSnapshot {
   tags: string[];
   attentionPoints: string[];
 }
-
-const followUpByTeacher: Record<string, FollowUpSnapshot> = {
-  "1": {
-    updatedAt: "Ultima atualizacao: 2 dias atras",
-    summary: "Trabalhamos leitura guiada e o aluno conseguiu reconhecer novas silabas com mais autonomia.",
-    nextSteps: "Reforcar leitura em voz alta e manter rotina curta de 15 minutos por dia.",
-    tags: ["Leitura", "Atencao", "Constancia"],
-    attentionPoints: [],
-  },
-  "2": {
-    updatedAt: "Ultima atualizacao: 4 dias atras",
-    summary: "Boa evolucao na resolucao de problemas simples e maior confianca nas operacoes basicas.",
-    nextSteps: "Introduzir desafios curtos de logica antes das atividades de matematica.",
-    tags: ["Matematica", "Logica", "Autonomia"],
-    attentionPoints: [],
-  },
-  "3": {
-    updatedAt: "Ultima atualizacao: 3 dias atras",
-    summary: "Sessao focada em regulacao emocional e organizacao da tarefa com pausas planejadas.",
-    nextSteps: "Manter rotina visual de inicio/meio/fim durante os estudos em casa.",
-    tags: ["Organizacao", "Foco", "Rotina"],
-    attentionPoints: [],
-  },
-};
 
 function mapBackendDetailToStoredBooking(detail: BookingDetailResponse, fallback?: StoredBooking | null): StoredBooking {
   return {
@@ -77,15 +53,13 @@ function mapBackendDetailToStoredBooking(detail: BookingDetailResponse, fallback
 }
 
 function getLocalFollowUpSnapshot(booking: StoredBooking): FollowUpSnapshot {
-  return (
-    followUpByTeacher[booking.teacherId] ?? {
-      updatedAt: "Ultima atualizacao: recentemente",
-      summary: "A professora registrou observacoes positivas sobre participacao e engajamento.",
-      nextSteps: "Manter frequencia semanal e reforcar os exercicios sugeridos apos a aula.",
-      tags: [booking.specialty, "Acompanhamento"],
-      attentionPoints: [],
-    }
-  );
+  return {
+    updatedAt: "Ultima atualizacao: em breve",
+    summary: "A professora ainda nao registrou devolutiva para esta aula.",
+    nextSteps: "Apos a conclusao da aula, a devolutiva pedagogica aparecera aqui.",
+    tags: [booking.specialty, "Acompanhamento"],
+    attentionPoints: [],
+  };
 }
 
 export default function BookingDetail() {
@@ -101,6 +75,7 @@ export default function BookingDetail() {
   const [activeModalMode, setActiveModalMode] = useState<BookingActionMode>("reschedule");
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOpeningChat, setIsOpeningChat] = useState(false);
   const [remoteAvailability, setRemoteAvailability] = useState<DayAvailability[] | null>(null);
 
   useEffect(() => {
@@ -147,7 +122,6 @@ export default function BookingDetail() {
   }, [booking]);
 
   const availability = remoteAvailability && remoteAvailability.length > 0 ? remoteAvailability : localAvailability;
-  const teacher = booking ? getTeacherById(booking.teacherId) : undefined;
 
   useEffect(() => {
     if (!isActionModalOpen || activeModalMode !== "reschedule") return;
@@ -221,15 +195,48 @@ export default function BookingDetail() {
     ? backendDetail.actions.can_cancel
     : booking.status !== "cancelada" && booking.status !== "concluida";
 
-  const priceValue = backendDetail ? backendDetail.price_total : teacher?.pricePerClass ?? 0;
+  const priceValue = backendDetail ? backendDetail.price_total : 0;
   const priceLabel = `R$ ${Math.round(priceValue)}`;
   const pricePerHour = backendDetail
     ? Math.round(backendDetail.price_total / Math.max(backendDetail.duration_minutes / 60, 1))
-    : teacher?.pricePerClass ?? 0;
+    : 0;
 
   const openActionModal = (mode: BookingActionMode) => {
     setActiveModalMode(mode);
     setIsActionModalOpen(true);
+  };
+
+  const handleOpenChat = async () => {
+    if (!bookingId) return;
+
+    const authSession = getAuthSession();
+    if (!authSession.isAuthenticated) {
+      navigate(`/login?returnTo=${encodeURIComponent(`/aula/${bookingId}`)}`);
+      return;
+    }
+
+    const accessToken = getSupabaseAccessToken();
+    if (!accessToken) {
+      toast({
+        title: "Sessão inválida",
+        description: "Faça login novamente para abrir o chat.",
+      });
+      return;
+    }
+
+    setIsOpeningChat(true);
+    try {
+      const response = await getOrCreateChatThreadFromBooking(accessToken, bookingId);
+      navigate(`/chat/${response.thread.id}`);
+    } catch (error) {
+      toast({
+        title: "Chat indisponível",
+        description:
+          error instanceof Error ? error.message : "Não foi possível abrir o chat para esta aula.",
+      });
+    } finally {
+      setIsOpeningChat(false);
+    }
   };
 
   const handleConfirmAction = async (payload: { dateIso?: string; time?: string; reason?: string }) => {
@@ -418,6 +425,18 @@ export default function BookingDetail() {
             <p className="text-sm text-muted-foreground mt-2">{cancellationReason}</p>
           </section>
         )}
+
+        <KidarioButton
+          type="button"
+          variant="outline"
+          size="lg"
+          fullWidth
+          onClick={handleOpenChat}
+          disabled={isOpeningChat}
+        >
+          <MessageCircle className="w-4 h-4" />
+          {isOpeningChat ? "Abrindo chat..." : "Chat da aula"}
+        </KidarioButton>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <KidarioButton

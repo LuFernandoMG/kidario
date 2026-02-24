@@ -16,6 +16,7 @@ import BookingScheduler from "./pages/BookingScheduler";
 import Checkout from "./pages/Checkout";
 import BookingConfirmation from "./pages/BookingConfirmation";
 import BookingDetail from "./pages/BookingDetail";
+import Chat from "./pages/Chat";
 import Agenda from "./pages/Agenda";
 import Progress from "./pages/Progress";
 import Profile from "./pages/Profile";
@@ -50,6 +51,7 @@ const App = () => (
           <Route path="/checkout/:id" element={<Checkout />} />
           <Route path="/confirmacao-reserva/:bookingId" element={<BookingConfirmation />} />
           <Route path="/aula/:bookingId" element={<BookingDetail />} />
+          <Route path="/chat/:threadId" element={<Chat />} />
           <Route path="/agenda" element={<Agenda />} />
           <Route path="/progresso" element={<Progress />} />
           <Route path="/perfil" element={<Profile />} />

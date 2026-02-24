@@ -13,10 +13,12 @@ import { getTeacherById } from "@/data/mockTeachers";
 import { buildTeacherAvailability, type DayAvailability } from "@/lib/bookingUtils";
 import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
 import { DEFAULT_TEACHER_AVATAR } from "@/lib/avatarUrl";
+import { useToast } from "@/hooks/use-toast";
 
 export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
   const [remoteAvailability, setRemoteAvailability] = useState<DayAvailability[] | null>(null);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
@@ -260,7 +262,17 @@ export default function TeacherProfile() {
       {/* Fixed CTA */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
         <div className="flex gap-3 max-w-lg mx-auto">
-          <KidarioButton variant="outline" size="lg" className="shrink-0">
+          <KidarioButton
+            variant="outline"
+            size="lg"
+            className="shrink-0"
+            onClick={() =>
+              toast({
+                title: "Chat disponível após agendamento",
+                description: "Agende uma aula para liberar o chat com esta professora.",
+              })
+            }
+          >
             <MessageCircle className="w-5 h-5" />
           </KidarioButton>
           <KidarioButton 

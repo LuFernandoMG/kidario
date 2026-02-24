@@ -102,6 +102,26 @@ def _ensure_teacher_exists(db: Session, teacher_profile_id: UUID) -> None:
         raise BookingValidationError("Teacher profile not found.")
 
 
+def _ensure_teacher_supports_modality(db: Session, teacher_profile_id: UUID, requested_modality: str) -> None:
+    row = (
+        db.execute(
+            text("select modality from teacher_profiles where profile_id = :profile_id"),
+            {"profile_id": str(teacher_profile_id)},
+        )
+        .mappings()
+        .first()
+    )
+    if not row:
+        raise BookingValidationError("Teacher profile not found.")
+
+    teacher_modality = row.get("modality")
+    normalized_modality = str(teacher_modality).strip().lower() if teacher_modality else "online"
+    if normalized_modality == "hibrido":
+        return
+    if normalized_modality != requested_modality:
+        raise BookingValidationError("Selected modality is not offered by this teacher.")
+
+
 def _ensure_slot_is_available(
     db: Session,
     teacher_profile_id: UUID,
@@ -197,6 +217,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
 
     resolved_child_id = _resolve_child_id(db, user.user_id, payload.child_id)
     _ensure_teacher_exists(db, payload.teacher_profile_id)
+    _ensure_teacher_supports_modality(db, payload.teacher_profile_id, payload.modality)
     _ensure_slot_is_available(db, payload.teacher_profile_id, payload.date_iso, payload.time)
 
     teacher_hourly_rate = db.execute(

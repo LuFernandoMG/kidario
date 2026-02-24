@@ -1,4 +1,5 @@
 import type { ChildGender } from "@/lib/childProfile";
+import { extractErrorMessage, getBackendApiBaseUrl, throwBackendError } from "@/lib/backendApi";
 
 export type BackendUserRole = "parent" | "teacher";
 
@@ -158,27 +159,6 @@ interface TeacherPhotoUploadResponse extends StatusResponse {
   profile_photo_file_name: string;
 }
 
-function getBackendApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_BACKEND_API_URL?.trim();
-  const baseUrl = configured || "http://localhost:8000/api/v1";
-  return baseUrl.replace(/\/+$/, "");
-}
-
-function extractErrorMessage(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== "object") return fallback;
-
-  const detail = (payload as { detail?: unknown }).detail;
-  if (typeof detail === "string" && detail.trim()) return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    const firstMessage = detail
-      .map((item) => (item && typeof item === "object" ? (item as { msg?: unknown }).msg : null))
-      .find((msg) => typeof msg === "string" && msg.trim());
-    if (typeof firstMessage === "string") return firstMessage;
-  }
-
-  return fallback;
-}
-
 async function backendRequest<TResponse>(params: {
   path: string;
   accessToken: string;
@@ -200,13 +180,17 @@ async function backendRequest<TResponse>(params: {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error("No fue posible conectar con el backend de Kidario.");
+    throw new Error("Não foi possível conectar ao backend do Kidario.");
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const fallback = "No fue posible guardar el perfil en el backend.";
-    throw new Error(extractErrorMessage(payload, fallback));
+    throwBackendError({
+      status: response.status,
+      payload,
+      fallback: "Não foi possível salvar o perfil no backend.",
+      authProtected: true,
+    });
   }
 
   return payload as TResponse;
@@ -279,13 +263,17 @@ export async function uploadTeacherProfilePhoto(
       body,
     });
   } catch {
-    throw new Error("No fue posible conectar con el backend de Kidario.");
+    throw new Error("Não foi possível conectar ao backend do Kidario.");
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const fallback = "No fue posible subir la foto de perfil.";
-    throw new Error(extractErrorMessage(payload, fallback));
+    throwBackendError({
+      status: response.status,
+      payload,
+      fallback: "Não foi possível enviar a foto de perfil.",
+      authProtected: true,
+    });
   }
 
   return payload as TeacherPhotoUploadResponse;

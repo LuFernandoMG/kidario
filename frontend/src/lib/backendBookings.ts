@@ -1,3 +1,5 @@
+import { getBackendApiBaseUrl, throwBackendError } from "@/lib/backendApi";
+
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
 
@@ -113,27 +115,6 @@ export interface TeacherAvailabilitySlotsResponse {
   slots: TeacherAvailabilityDay[];
 }
 
-function getBackendApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_BACKEND_API_URL?.trim();
-  const baseUrl = configured || "http://localhost:8000/api/v1";
-  return baseUrl.replace(/\/+$/, "");
-}
-
-function extractErrorMessage(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== "object") return fallback;
-
-  const detail = (payload as { detail?: unknown }).detail;
-  if (typeof detail === "string" && detail.trim()) return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    const firstMessage = detail
-      .map((item) => (item && typeof item === "object" ? (item as { msg?: unknown }).msg : null))
-      .find((msg) => typeof msg === "string" && msg.trim());
-    if (typeof firstMessage === "string") return firstMessage;
-  }
-
-  return fallback;
-}
-
 async function backendRequest<TResponse>(params: {
   path: string;
   accessToken: string;
@@ -155,13 +136,17 @@ async function backendRequest<TResponse>(params: {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error("No fue posible conectar con el backend de Kidario.");
+    throw new Error("Não foi possível conectar ao backend do Kidario.");
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const fallback = "No fue posible procesar la operación en el backend.";
-    throw new Error(extractErrorMessage(payload, fallback));
+    throwBackendError({
+      status: response.status,
+      payload,
+      fallback: "Não foi possível processar a operação no backend.",
+      authProtected: true,
+    });
   }
 
   return payload as TResponse;

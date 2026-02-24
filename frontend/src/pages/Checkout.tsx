@@ -15,6 +15,8 @@ import { createBooking } from "@/lib/backendBookings";
 import { useToast } from "@/hooks/use-toast";
 import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
 import { type Teacher } from "@/components/marketplace/TeacherCard";
+import { getParentProfile, type BackendParentChildView } from "@/lib/backendProfiles";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type PaymentMethod = "cartao" | "pix";
 
@@ -27,6 +29,7 @@ export default function Checkout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryChildId = searchParams.get("childId") || "";
 
   const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
   const [isLoadingTeacher, setIsLoadingTeacher] = useState(false);
@@ -44,6 +47,9 @@ export default function Checkout() {
   const [appliedCoupon, setAppliedCoupon] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [couponError, setCouponError] = useState("");
+  const [children, setChildren] = useState<BackendParentChildView[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState(queryChildId);
+  const [isLoadingChildren, setIsLoadingChildren] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -72,6 +78,47 @@ export default function Checkout() {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!authSession.isAuthenticated) {
+      setChildren([]);
+      return;
+    }
+
+    const accessToken = getSupabaseAccessToken();
+    if (!accessToken) {
+      setChildren([]);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingChildren(true);
+
+    getParentProfile(accessToken)
+      .then((payload) => {
+        if (!isMounted) return;
+        const nextChildren = payload.children || [];
+        setChildren(nextChildren);
+        setSelectedChildId((current) => {
+          if (current && nextChildren.some((child) => child.id === current)) return current;
+          if (queryChildId && nextChildren.some((child) => child.id === queryChildId)) return queryChildId;
+          if (nextChildren.length === 1) return nextChildren[0].id;
+          return "";
+        });
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setChildren([]);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoadingChildren(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authSession.isAuthenticated, queryChildId]);
+
   const basePrice = useMemo(() => {
     if (!teacher) return 0;
     return Math.round(teacher.pricePerClass * (duration / 60));
@@ -81,6 +128,10 @@ export default function Checkout() {
   const discountValue = Math.round(basePrice * discountRate);
   const totalPrice = Math.max(basePrice - discountValue, 0);
   const dateLabel = formatDateLong(dateIso);
+  const requiresChildSelection = authSession.isAuthenticated && children.length > 0;
+  const selectedChildName =
+    children.find((child) => child.id === selectedChildId)?.name
+    || (authSession.isAuthenticated ? "Não selecionado" : "Definido após login");
 
   const isPayloadValid = Boolean(teacher && dateIso && time && duration > 0);
 
@@ -109,6 +160,15 @@ export default function Checkout() {
 
     setIsSubmitting(true);
 
+    if (requiresChildSelection && !selectedChildId) {
+      setIsSubmitting(false);
+      toast({
+        title: "Selecione a criança",
+        description: "Defina para qual filho esta aula será agendada.",
+      });
+      return;
+    }
+
     const accessToken = getSupabaseAccessToken();
     const canUseBackendBooking = Boolean(accessToken && isUuidLike(teacher.id));
 
@@ -116,6 +176,7 @@ export default function Checkout() {
       try {
         const response = await createBooking(accessToken, {
           teacher_profile_id: teacher.id,
+          child_id: selectedChildId || undefined,
           date_iso: dateIso,
           time,
           duration_minutes: duration,
@@ -209,11 +270,38 @@ export default function Checkout() {
         <BookingSummaryCard
           title="Resumo da reserva"
           rows={[
+            { label: "Filho(a):", value: selectedChildName },
             { label: "Data:", value: dateLabel },
             { label: "Horario:", value: `${time} (${duration} min)` },
             { label: "Modalidade:", value: modality === "online" ? "Online" : "Presencial" },
           ]}
         />
+
+        {authSession.isAuthenticated && (
+          <section className="card-kidario p-4 space-y-3">
+            <h2 className="font-display text-lg font-semibold text-foreground">Criança da aula</h2>
+            {isLoadingChildren ? (
+              <p className="text-sm text-muted-foreground">Carregando crianças...</p>
+            ) : children.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma criança cadastrada. Complete o cadastro no perfil de responsável.
+              </p>
+            ) : (
+              <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a criança" />
+                </SelectTrigger>
+                <SelectContent>
+                  {children.map((child) => (
+                    <SelectItem key={child.id} value={child.id}>
+                      {child.name || "Sem nome"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </section>
+        )}
 
         <section className="card-kidario p-4 space-y-3">
           <h2 className="font-display text-lg font-semibold text-foreground">Cupom</h2>
@@ -285,7 +373,13 @@ export default function Checkout() {
           </div>
         </section>
 
-        <KidarioButton variant="hero" size="xl" fullWidth onClick={handleConfirmBooking} disabled={isSubmitting}>
+        <KidarioButton
+          variant="hero"
+          size="xl"
+          fullWidth
+          onClick={handleConfirmBooking}
+          disabled={isSubmitting || (requiresChildSelection && !selectedChildId)}
+        >
           {isSubmitting
             ? "Processando..."
             : authSession.isAuthenticated

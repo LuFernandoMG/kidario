@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Calendar, Clock, Video, MapPin } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { BookingStatusPill } from "@/components/booking/BookingStatusPill";
-import { getStoredBookings } from "@/lib/bookingsStorage";
 import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
 import { getParentAgenda } from "@/lib/backendBookings";
 import { DEFAULT_TEACHER_AVATAR, resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type TabType = "proximas" | "passadas";
 
@@ -23,102 +23,24 @@ interface Booking {
   specialty: string;
 }
 
-const mockBookings: Booking[] = [
-  {
-    id: "1",
-    teacherName: "Ana Carolina Silva",
-    teacherAvatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face",
-    date: "Hoje",
-    time: "14:00",
-    status: "confirmada",
-    isOnline: true,
-    specialty: "Alfabetização",
-  },
-  {
-    id: "2",
-    teacherName: "Mariana Santos",
-    teacherAvatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100&h=100&fit=crop&crop=face",
-    date: "Amanhã",
-    time: "10:00",
-    status: "pendente",
-    isOnline: true,
-    specialty: "Matemática",
-  },
-];
-
-const pastBookings: Booking[] = [
-  {
-    id: "3",
-    teacherName: "Juliana Oliveira",
-    teacherAvatar: "https://images.unsplash.com/photo-1607990281513-2c110a25bd8c?w=100&h=100&fit=crop&crop=face",
-    date: "25 Jan",
-    time: "16:00",
-    status: "concluida",
-    isOnline: false,
-    specialty: "TDAH",
-  },
-  {
-    id: "4",
-    teacherName: "Ana Carolina Silva",
-    teacherAvatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face",
-    date: "20 Jan",
-    time: "14:00",
-    status: "concluida",
-    isOnline: true,
-    specialty: "Alfabetização",
-  },
-];
-
 export default function Agenda() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("proximas");
-  const [remoteBookings, setRemoteBookings] = useState<Booking[] | null>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
-
-  const storedBookings = useMemo(() => {
-    return getStoredBookings().map((booking) => ({
-      id: booking.id,
-      teacherName: booking.teacherName,
-      teacherAvatar: booking.teacherAvatar,
-      date: booking.dateLabel,
-      dateIso: booking.dateIso,
-      time: booking.time,
-      status: booking.status,
-      isOnline: booking.modality === "online",
-      specialty: booking.specialty,
-    }));
-  }, []);
-
-  const today = useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    return now;
-  }, []);
-
-  const upcomingStoredBookings = storedBookings.filter((booking) => {
-    if (!booking.dateIso) return true;
-    const parsedDate = new Date(`${booking.dateIso}T00:00:00`);
-    return parsedDate >= today;
-  });
-
-  const pastStoredBookings = storedBookings.filter((booking) => {
-    if (!booking.dateIso) return false;
-    const parsedDate = new Date(`${booking.dateIso}T00:00:00`);
-    return parsedDate < today;
-  });
-
-  const upcomingBookings = [...upcomingStoredBookings, ...mockBookings];
-  const historyBookings = [...pastStoredBookings, ...pastBookings];
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const authSession = getAuthSession();
     const accessToken = getSupabaseAccessToken();
     if (!authSession.isAuthenticated || !accessToken) {
-      setRemoteBookings(null);
+      navigate("/login?returnTo=%2Fagenda");
       return;
     }
 
     let isMounted = true;
     setIsLoadingRemote(true);
+    setLoadError("");
 
     const backendTab = activeTab === "proximas" ? "upcoming" : "past";
     getParentAgenda(accessToken, { tab: backendTab })
@@ -137,11 +59,14 @@ export default function Agenda() {
           isOnline: lesson.modality === "online",
           specialty: lesson.specialty || "Apoio pedagogico",
         }));
-        setRemoteBookings(mapped);
+        setBookings(mapped);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isMounted) return;
-        setRemoteBookings(null);
+        setBookings([]);
+        setLoadError(
+          error instanceof Error ? error.message : "Não foi possível carregar sua agenda.",
+        );
       })
       .finally(() => {
         if (!isMounted) return;
@@ -151,10 +76,7 @@ export default function Agenda() {
     return () => {
       isMounted = false;
     };
-  }, [activeTab]);
-
-  const bookings =
-    remoteBookings !== null ? remoteBookings : activeTab === "proximas" ? upcomingBookings : historyBookings;
+  }, [activeTab, navigate]);
 
   return (
     <AppShell>
@@ -203,10 +125,11 @@ export default function Agenda() {
 
         {/* Bookings List */}
         <div className="mt-6 space-y-3 pb-6">
-          {isLoadingRemote && (
-            <div className="card-kidario p-4 text-sm text-muted-foreground">Carregando agenda...</div>
-          )}
-          {bookings.length > 0 ? (
+          {isLoadingRemote ? (
+            <AgendaSkeleton />
+          ) : loadError ? (
+            <div className="card-kidario p-4 text-sm text-destructive">{loadError}</div>
+          ) : bookings.length > 0 ? (
             bookings.map((booking, index) => (
               <BookingCard key={booking.id} booking={booking} index={index} />
             ))
@@ -296,5 +219,34 @@ function BookingCard({ booking, index }: { booking: Booking; index: number }) {
         </div>
       </Link>
     </motion.div>
+  );
+}
+
+function AgendaSkeleton() {
+  return (
+    <>
+      <span className="sr-only">Carregando agenda...</span>
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="card-kidario p-4">
+          <div className="flex gap-3">
+            <Skeleton className="w-12 h-12 rounded-xl shrink-0" />
+            <div className="flex-1 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-14" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   );
 }
