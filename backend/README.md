@@ -85,8 +85,11 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
   - `POST /api/v1/auth/signup`
 - Profiles:
   - `GET /api/v1/profiles/me`
+  - `GET /api/v1/profiles/parent`
+  - `GET /api/v1/profiles/teacher`
   - `PATCH /api/v1/profiles/parent`
   - `PATCH /api/v1/profiles/teacher`
+  - `POST /api/v1/profiles/teacher/photo` (`multipart/form-data`, field `file`)
 - Marketplace:
   - `GET /api/v1/marketplace/teachers`
   - `GET /api/v1/marketplace/teachers/{teacher_profile_id}`
@@ -148,3 +151,18 @@ If you get SSL errors calling Supabase (JWKS or Auth endpoints like `/auth/v1/si
 - Upgrade deps to install `certifi`: `pip install -e ".[dev]"`
 - Optionally set `KIDARIO_SUPABASE_JWKS_CA_BUNDLE` to your corporate/local CA bundle path.
   - Example macOS with python.org installer: run `Install Certificates.command`.
+
+## Teacher Profile Photo Upload
+
+The recommended flow is server-side upload through:
+
+- `POST /api/v1/profiles/teacher/photo`
+
+Rules implemented:
+
+- Random object key (UUID-based), no user-provided path.
+- Validation for image MIME types (`jpg/png/webp`) and max size.
+- Upload to S3-compatible storage when S3 credentials are configured.
+- Fallback to Supabase Storage REST using `KIDARIO_SUPABASE_SERVICE_ROLE_KEY`.
+- Profile update in DB after upload; rollback attempt if DB update fails.
+- Read endpoints return a resolved image URL (signed when possible; public URL fallback).

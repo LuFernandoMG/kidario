@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Security, status
+from fastapi import APIRouter, Depends, File, HTTPException, Security, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -6,11 +6,22 @@ from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.db.session import get_db
-from app.schemas.profiles import MeResponse, ParentProfilePatch, StatusResponse, TeacherProfilePatch
+from app.schemas.profiles import (
+    MeResponse,
+    ParentProfileResponse,
+    ParentProfilePatch,
+    StatusResponse,
+    TeacherProfileResponse,
+    TeacherProfilePatch,
+    TeacherProfilePhotoUploadResponse,
+)
+from app.services.profile_photo_service import ProfilePhotoUploadError, upload_teacher_profile_photo
 from app.services.profile_service import (
     ProfileConflictError,
     ProfileNotFoundError,
     ProfileValidationError,
+    get_parent_profile,
+    get_teacher_profile,
     get_me,
     patch_parent_profile,
     patch_teacher_profile,
@@ -48,6 +59,38 @@ def get_my_profile(
     return MeResponse(**data)
 
 
+@router.get("/parent", response_model=ParentProfileResponse)
+def get_parent(
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> ParentProfileResponse:
+    try:
+        data = get_parent_profile(db, user)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ProfileConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return ParentProfileResponse(**data)
+
+
+@router.get("/teacher", response_model=TeacherProfileResponse)
+def get_teacher(
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> TeacherProfileResponse:
+    try:
+        data = get_teacher_profile(db, user)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ProfileConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return TeacherProfileResponse(**data)
+
+
 @router.patch("/parent", response_model=StatusResponse)
 def patch_parent(
     payload: ParentProfilePatch,
@@ -82,3 +125,31 @@ def patch_teacher(
     except SQLAlchemyError as exc:
         _raise_http_from_sql_error(exc)
     return StatusResponse(**data)
+
+
+@router.post("/teacher/photo", response_model=TeacherProfilePhotoUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_teacher_photo(
+    file: UploadFile = File(...),
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> TeacherProfilePhotoUploadResponse:
+    file_bytes = await file.read()
+    try:
+        with db.begin():
+            data = upload_teacher_profile_photo(
+                db,
+                get_settings(),
+                user,
+                file_name=file.filename,
+                content_type=file.content_type,
+                file_bytes=file_bytes,
+            )
+    except ProfilePhotoUploadError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except ProfileConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ProfileValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return TeacherProfilePhotoUploadResponse(**data)

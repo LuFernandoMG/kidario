@@ -4,6 +4,8 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
 class MarketplaceNotFoundError(Exception):
     pass
@@ -112,6 +114,7 @@ def _build_preview_slots(
 
 
 def list_marketplace_teachers(db: Session) -> dict:
+    settings = get_settings()
     rows = (
         db.execute(
             text(
@@ -187,7 +190,7 @@ def list_marketplace_teachers(db: Session) -> dict:
             {
                 "id": teacher_id,
                 "name": row["name"],
-                "avatar_url": row["avatar_url"],
+                "avatar_url": resolve_teacher_profile_photo_url(settings, row["avatar_url"]),
                 "rating": rating,
                 "review_count": review_count,
                 "price_per_class": float(row["hourly_rate"] or 0),
@@ -205,6 +208,7 @@ def list_marketplace_teachers(db: Session) -> dict:
 
 
 def get_marketplace_teacher_detail(db: Session, teacher_profile_id: UUID) -> dict:
+    settings = get_settings()
     row = (
         db.execute(
             text(
@@ -274,7 +278,7 @@ def get_marketplace_teacher_detail(db: Session, teacher_profile_id: UUID) -> dic
     return {
         "id": teacher_profile_id,
         "name": row["name"],
-        "avatar_url": row["avatar_url"],
+        "avatar_url": resolve_teacher_profile_photo_url(settings, row["avatar_url"]),
         "rating": rating,
         "review_count": review_count,
         "price_per_class": float(row["hourly_rate"] or 0),

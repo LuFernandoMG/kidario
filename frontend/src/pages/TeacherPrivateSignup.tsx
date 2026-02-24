@@ -21,8 +21,7 @@ import {
 } from "@/components/teacher/WeeklyAvailabilityCalendar";
 import { applyBackendSignupSession } from "@/lib/authSession";
 import { signUpWithBackend } from "@/lib/backendAuth";
-import { patchTeacherProfile } from "@/lib/backendProfiles";
-import { uploadTeacherProfilePhoto } from "@/lib/supabaseStorage";
+import { uploadTeacherProfilePhoto } from "@/lib/backendProfiles";
 
 interface AcademicFormation {
   degreeType: string;
@@ -467,15 +466,7 @@ export default function TeacherPrivateSignup() {
       }
 
       if (formData.profilePhoto) {
-        const profilePhotoFileName = await uploadTeacherProfilePhoto({
-          accessToken,
-          file: formData.profilePhoto,
-          email: formData.email,
-        });
-
-        await patchTeacherProfile(accessToken, {
-          profile_photo_file_name: profilePhotoFileName,
-        });
+        await uploadTeacherProfilePhoto(accessToken, formData.profilePhoto);
       }
 
       navigate("/explorar");

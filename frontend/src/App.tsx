@@ -19,6 +19,8 @@ import BookingDetail from "./pages/BookingDetail";
 import Agenda from "./pages/Agenda";
 import Progress from "./pages/Progress";
 import Profile from "./pages/Profile";
+import ParentProfileSettings from "./pages/ParentProfileSettings";
+import TeacherProfileSettings from "./pages/TeacherProfileSettings";
 import NotFound from "./pages/NotFound";
 import TeacherPrivateSignup from "./pages/TeacherPrivateSignup";
 import { TEACHER_PRIVATE_SIGNUP_PATH } from "./lib/privateRoutes";
@@ -51,6 +53,8 @@ const App = () => (
           <Route path="/agenda" element={<Agenda />} />
           <Route path="/progresso" element={<Progress />} />
           <Route path="/perfil" element={<Profile />} />
+          <Route path="/perfil/responsavel" element={<ParentProfileSettings />} />
+          <Route path="/perfil/professora" element={<TeacherProfileSettings />} />
           
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />

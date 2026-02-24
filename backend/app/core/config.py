@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = None
     supabase_jwks_ca_bundle: str | None = None
     supabase_http_timeout_seconds: float = 15.0
+    profile_photos_bucket: str = "teacher-profile-photos"
+    profile_photo_max_upload_bytes: int = 5_242_880
+    profile_photo_signed_url_ttl_seconds: int = 3600
+    storage_s3_endpoint_url: str | None = None
+    storage_s3_region: str = "us-east-1"
+    storage_s3_access_key_id: str | None = None
+    storage_s3_secret_access_key: str | None = None
 
     database_url: str
 

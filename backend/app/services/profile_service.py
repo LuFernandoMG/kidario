@@ -3,11 +3,13 @@ from uuid import UUID, uuid4
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.schemas.profiles import (
     ParentProfilePatch,
     TeacherProfilePatch,
 )
+from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
 
 class ProfileConflictError(Exception):
@@ -106,6 +108,181 @@ def get_me(db: Session, user: AuthUser) -> dict:
         "profile": profile,
         "parent_profile_exists": bool(parent_exists),
         "teacher_profile_exists": bool(teacher_exists),
+    }
+
+
+def get_parent_profile(db: Session, user: AuthUser) -> dict:
+    profile = _get_profile_row(db, user.user_id)
+    if not profile:
+        raise ProfileNotFoundError("Profile does not exist yet.")
+    if profile["role"] != "parent":
+        raise ProfileConflictError(f"User already registered as role '{profile['role']}'.")
+
+    parent = (
+        db.execute(
+            text(
+                """
+                select profile_id, phone, birth_date, address, bio
+                from parent_profiles
+                where profile_id = :profile_id
+                """
+            ),
+            {"profile_id": user.user_id},
+        )
+        .mappings()
+        .first()
+    )
+    if not parent:
+        raise ProfileNotFoundError("Parent profile does not exist yet.")
+
+    children = (
+        db.execute(
+            text(
+                """
+                select id, name, gender, age, current_grade, birth_month_year, school, focus_points
+                from parent_children
+                where profile_id = :profile_id
+                order by created_at asc
+                """
+            ),
+            {"profile_id": user.user_id},
+        )
+        .mappings()
+        .all()
+    )
+
+    return {
+        "profile": profile,
+        "phone": parent["phone"],
+        "birth_date": parent["birth_date"],
+        "address": parent["address"],
+        "bio": parent["bio"],
+        "children": [dict(child) for child in children],
+    }
+
+
+def get_teacher_profile(db: Session, user: AuthUser) -> dict:
+    settings = get_settings()
+    profile = _get_profile_row(db, user.user_id)
+    if not profile:
+        raise ProfileNotFoundError("Profile does not exist yet.")
+    if profile["role"] != "teacher":
+        raise ProfileConflictError(f"User already registered as role '{profile['role']}'.")
+
+    teacher = (
+        db.execute(
+            text(
+                """
+                select
+                  profile_id,
+                  phone,
+                  cpf,
+                  professional_registration,
+                  city,
+                  state,
+                  modality,
+                  mini_bio,
+                  hourly_rate,
+                  lesson_duration_minutes,
+                  profile_photo_file_name,
+                  request_experience_anonymity
+                from teacher_profiles
+                where profile_id = :profile_id
+                """
+            ),
+            {"profile_id": user.user_id},
+        )
+        .mappings()
+        .first()
+    )
+    if not teacher:
+        raise ProfileNotFoundError("Teacher profile does not exist yet.")
+
+    specialties_rows = (
+        db.execute(
+            text(
+                """
+                select specialty
+                from teacher_specialties
+                where profile_id = :profile_id
+                order by specialty asc
+                """
+            ),
+            {"profile_id": user.user_id},
+        )
+        .mappings()
+        .all()
+    )
+    formations_rows = (
+        db.execute(
+            text(
+                """
+                select id, degree_type, course_name, institution, completion_year
+                from teacher_formations
+                where profile_id = :profile_id
+                order by created_at asc
+                """
+            ),
+            {"profile_id": user.user_id},
+        )
+        .mappings()
+        .all()
+    )
+    experiences_rows = (
+        db.execute(
+            text(
+                """
+                select
+                  id,
+                  institution,
+                  role,
+                  responsibilities,
+                  period_from,
+                  period_to,
+                  current_position
+                from teacher_experiences
+                where profile_id = :profile_id
+                order by created_at asc
+                """
+            ),
+            {"profile_id": user.user_id},
+        )
+        .mappings()
+        .all()
+    )
+    availability_rows = (
+        db.execute(
+            text(
+                """
+                select id, day_of_week, start_time, end_time
+                from teacher_availability
+                where profile_id = :profile_id
+                order by day_of_week asc, start_time asc
+                """
+            ),
+            {"profile_id": user.user_id},
+        )
+        .mappings()
+        .all()
+    )
+
+    return {
+        "profile": profile,
+        "phone": teacher["phone"],
+        "cpf": teacher["cpf"],
+        "professional_registration": teacher["professional_registration"],
+        "city": teacher["city"],
+        "state": teacher["state"],
+        "modality": teacher["modality"],
+        "mini_bio": teacher["mini_bio"],
+        "hourly_rate": float(teacher["hourly_rate"]) if teacher["hourly_rate"] is not None else None,
+        "lesson_duration_minutes": teacher["lesson_duration_minutes"],
+        "profile_photo_file_name": resolve_teacher_profile_photo_url(settings, teacher["profile_photo_file_name"]),
+        "request_experience_anonymity": bool(teacher["request_experience_anonymity"]),
+        "specialties": [str(item["specialty"]) for item in specialties_rows],
+        "formations": [dict(item) for item in formations_rows],
+        "experiences": [dict(item) for item in experiences_rows],
+        "availability": [dict(item) for item in availability_rows],
     }
 
 
@@ -625,4 +802,3 @@ def set_teacher_activation(db: Session, profile_id: UUID, is_active_teacher: boo
         "profile_id": UUID(str(result["profile_id"])),
         "is_active_teacher": bool(result["is_active_teacher"]),
     }
-

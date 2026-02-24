@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.schemas.bookings import (
     BookingCancelPatch,
@@ -11,6 +12,7 @@ from app.schemas.bookings import (
     BookingCreateRequest,
     BookingReschedulePatch,
 )
+from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
 
 class BookingValidationError(Exception):
@@ -273,6 +275,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
 
 
 def get_parent_agenda(db: Session, user: AuthUser, tab: str, child_id: UUID | None) -> dict:
+    settings = get_settings()
     _ensure_parent_role(db, user.user_id)
 
     where_clauses = ["b.parent_profile_id = :parent_profile_id"]
@@ -331,6 +334,7 @@ def get_parent_agenda(db: Session, user: AuthUser, tab: str, child_id: UUID | No
     lessons = []
     for row in rows:
         lesson = dict(row)
+        lesson["teacher_avatar_url"] = resolve_teacher_profile_photo_url(settings, lesson.get("teacher_avatar_url"))
         lesson["date_label"] = _format_date_label(row["date_iso"])
         lessons.append(lesson)
     return {"lessons": lessons}
@@ -383,6 +387,7 @@ def get_teacher_agenda(db: Session, user: AuthUser, tab: str, status: str | None
 
 
 def get_booking_detail(db: Session, user: AuthUser, booking_id: UUID) -> dict:
+    settings = get_settings()
     booking = _get_booking_for_actor(db, booking_id, user.user_id)
 
     follow_up = (
@@ -414,7 +419,7 @@ def get_booking_detail(db: Session, user: AuthUser, booking_id: UUID) -> dict:
         "child_name": booking["child_name"],
         "teacher_id": booking["teacher_profile_id"],
         "teacher_name": teacher_name,
-        "teacher_avatar_url": booking["teacher_avatar_url"],
+        "teacher_avatar_url": resolve_teacher_profile_photo_url(settings, booking["teacher_avatar_url"]),
         "specialty": booking["specialty"],
         "date_iso": booking["date_iso"],
         "date_label": _format_date_label(booking["date_iso"]),

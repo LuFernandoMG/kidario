@@ -18,10 +18,78 @@ class MeResponse(BaseModel):
     teacher_profile_exists: bool
 
 
+class ParentChildView(BaseModel):
+    id: UUID
+    name: str
+    gender: str | None = None
+    age: int | None = None
+    current_grade: str | None = None
+    birth_month_year: str | None = None
+    school: str | None = None
+    focus_points: str | None = None
+
+
+class ParentProfileResponse(BaseModel):
+    profile: ProfileView
+    phone: str | None = None
+    birth_date: date | None = None
+    address: str | None = None
+    bio: str | None = None
+    children: list[ParentChildView] = Field(default_factory=list)
+
+
+class TeacherFormationView(BaseModel):
+    id: UUID
+    degree_type: str
+    course_name: str
+    institution: str
+    completion_year: str | None = None
+
+
+class TeacherExperienceView(BaseModel):
+    id: UUID
+    institution: str
+    role: str
+    responsibilities: str
+    period_from: str
+    period_to: str | None = None
+    current_position: bool
+
+
+class TeacherAvailabilityView(BaseModel):
+    id: UUID
+    day_of_week: int
+    start_time: str
+    end_time: str
+
+
+class TeacherProfileResponse(BaseModel):
+    profile: ProfileView
+    phone: str | None = None
+    cpf: str | None = None
+    professional_registration: str | None = None
+    city: str | None = None
+    state: str | None = None
+    modality: str | None = None
+    mini_bio: str | None = None
+    hourly_rate: float | None = None
+    lesson_duration_minutes: int | None = None
+    profile_photo_file_name: str | None = None
+    request_experience_anonymity: bool = False
+    specialties: list[str] = Field(default_factory=list)
+    formations: list[TeacherFormationView] = Field(default_factory=list)
+    experiences: list[TeacherExperienceView] = Field(default_factory=list)
+    availability: list[TeacherAvailabilityView] = Field(default_factory=list)
+
+
 class StatusResponse(BaseModel):
     status: str = "ok"
     profile_id: UUID
     role: str
+
+
+class TeacherProfilePhotoUploadResponse(StatusResponse):
+    profile_photo_file_name: str
 
 
 class ChildUpsert(BaseModel):
@@ -200,4 +268,3 @@ class TeacherActivationResponse(BaseModel):
     status: str = "ok"
     profile_id: UUID
     is_active_teacher: bool
-

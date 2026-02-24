@@ -1,6 +1,73 @@
 export type BackendUserRole = "parent" | "teacher";
 
+export interface BackendProfileView {
+  id: string;
+  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  role: BackendUserRole;
+}
+
+export interface BackendMeResponse {
+  profile: BackendProfileView;
+  parent_profile_exists: boolean;
+  teacher_profile_exists: boolean;
+}
+
+export interface BackendParentChildView {
+  id: string;
+  name: string;
+  gender?: string | null;
+  age?: number | null;
+  current_grade?: string | null;
+  birth_month_year?: string | null;
+  school?: string | null;
+  focus_points?: string | null;
+}
+
+export interface BackendParentProfileResponse {
+  profile: BackendProfileView;
+  phone?: string | null;
+  birth_date?: string | null;
+  address?: string | null;
+  bio?: string | null;
+  children: BackendParentChildView[];
+}
+
+export interface BackendTeacherProfileResponse {
+  profile: BackendProfileView;
+  phone?: string | null;
+  cpf?: string | null;
+  professional_registration?: string | null;
+  city?: string | null;
+  state?: string | null;
+  modality?: string | null;
+  mini_bio?: string | null;
+  hourly_rate?: number | null;
+  lesson_duration_minutes?: number | null;
+  profile_photo_file_name?: string | null;
+  request_experience_anonymity: boolean;
+  specialties: string[];
+  formations: {
+    id: string;
+    degree_type: string;
+    course_name: string;
+    institution: string;
+    completion_year?: string | null;
+  }[];
+  experiences: {
+    id: string;
+    institution: string;
+    role: string;
+    responsibilities: string;
+    period_from: string;
+    period_to?: string | null;
+    current_position: boolean;
+  }[];
+}
+
 export interface ParentChildUpsertPayload {
+  id?: string | null;
   name: string;
   gender?: string | null;
   age?: number | null;
@@ -24,6 +91,7 @@ export interface ParentProfilePatchPayload {
 }
 
 export interface TeacherFormationUpsertPayload {
+  id?: string | null;
   degree_type: string;
   course_name: string;
   institution: string;
@@ -31,6 +99,7 @@ export interface TeacherFormationUpsertPayload {
 }
 
 export interface TeacherExperienceUpsertPayload {
+  id?: string | null;
   institution: string;
   role: string;
   responsibilities: string;
@@ -81,6 +150,10 @@ interface StatusResponse {
   status: "ok";
   profile_id: string;
   role: BackendUserRole;
+}
+
+interface TeacherPhotoUploadResponse extends StatusResponse {
+  profile_photo_file_name: string;
 }
 
 function getBackendApiBaseUrl(): string {
@@ -159,4 +232,59 @@ export async function patchTeacherProfile(
     method: "PATCH",
     body: payload as Record<string, unknown>,
   });
+}
+
+export async function getMyProfile(accessToken: string): Promise<BackendMeResponse> {
+  return backendRequest<BackendMeResponse>({
+    path: "/profiles/me",
+    accessToken,
+    method: "GET",
+  });
+}
+
+export async function getParentProfile(accessToken: string): Promise<BackendParentProfileResponse> {
+  return backendRequest<BackendParentProfileResponse>({
+    path: "/profiles/parent",
+    accessToken,
+    method: "GET",
+  });
+}
+
+export async function getTeacherProfile(accessToken: string): Promise<BackendTeacherProfileResponse> {
+  return backendRequest<BackendTeacherProfileResponse>({
+    path: "/profiles/teacher",
+    accessToken,
+    method: "GET",
+  });
+}
+
+export async function uploadTeacherProfilePhoto(
+  accessToken: string,
+  file: File,
+): Promise<TeacherPhotoUploadResponse> {
+  const url = `${getBackendApiBaseUrl()}/profiles/teacher/photo`;
+  const body = new FormData();
+  body.append("file", file);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+      body,
+    });
+  } catch {
+    throw new Error("No fue posible conectar con el backend de Kidario.");
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const fallback = "No fue posible subir la foto de perfil.";
+    throw new Error(extractErrorMessage(payload, fallback));
+  }
+
+  return payload as TeacherPhotoUploadResponse;
 }
