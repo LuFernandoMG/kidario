@@ -1,13 +1,28 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Trash2, User, LogOut } from "lucide-react";
+import { Baby, LogOut, Mail, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getSupabaseAccessToken, signOutFromSupabase } from "@/lib/authSession";
 import { getParentProfile, patchParentProfile, type BackendParentChildView } from "@/lib/backendProfiles";
+import {
+  childGenderOptions,
+  childGradeOptions,
+  formatChildGenderLabel,
+  formatChildGradeLabel,
+  isKnownChildGrade,
+  normalizeChildGender,
+} from "@/lib/childProfile";
 
 interface ParentFormState {
   firstName: string;
@@ -39,14 +54,24 @@ function emptyChild(): BackendParentChildView {
   };
 }
 
+function normalizeChildForForm(child: BackendParentChildView): BackendParentChildView {
+  return {
+    ...child,
+    gender: normalizeChildGender(child.gender),
+  };
+}
+
 export default function ParentProfileSettings() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [email, setEmail] = useState("");
   const [form, setForm] = useState<ParentFormState>(emptyForm);
+  const [initialForm, setInitialForm] = useState<ParentFormState>(emptyForm);
   const [deletedChildIds, setDeletedChildIds] = useState<string[]>([]);
 
   const loadProfile = async () => {
@@ -61,6 +86,7 @@ export default function ParentProfileSettings() {
 
     try {
       const payload = await getParentProfile(accessToken);
+      const normalizedChildren = (payload.children || []).map(normalizeChildForForm);
       setEmail(payload.profile.email);
       setForm({
         firstName: payload.profile.first_name || "",
@@ -69,9 +95,20 @@ export default function ParentProfileSettings() {
         birthDate: payload.birth_date || "",
         address: payload.address || "",
         bio: payload.bio || "",
-        children: payload.children || [],
+        children: normalizedChildren,
+      });
+      setInitialForm({
+        firstName: payload.profile.first_name || "",
+        lastName: payload.profile.last_name || "",
+        phone: payload.phone || "",
+        birthDate: payload.birth_date || "",
+        address: payload.address || "",
+        bio: payload.bio || "",
+        children: normalizedChildren,
       });
       setDeletedChildIds([]);
+      setIsEditingProfile(false);
+      setEditingChildId(null);
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -91,28 +128,57 @@ export default function ParentProfileSettings() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const updateChild = (index: number, field: keyof BackendParentChildView, value: string) => {
+  const updateChild = <TField extends keyof BackendParentChildView>(
+    childId: string,
+    field: TField,
+    value: BackendParentChildView[TField],
+  ) => {
     setForm((prev) => ({
       ...prev,
-      children: prev.children.map((child, childIndex) =>
-        childIndex === index ? { ...child, [field]: value } : child,
+      children: prev.children.map((child) =>
+        child.id === childId ? { ...child, [field]: value } : child,
       ),
     }));
   };
 
   const addChild = () => {
-    setForm((prev) => ({ ...prev, children: [...prev.children, emptyChild()] }));
+    const child = emptyChild();
+    setForm((prev) => ({ ...prev, children: [...prev.children, child] }));
+    setEditingChildId(child.id);
   };
 
-  const removeChild = (index: number) => {
-    const targetChild = form.children[index];
+  const removeChild = (childId: string) => {
+    const targetChild = form.children.find((child) => child.id === childId);
     if (targetChild?.id && !targetChild.id.startsWith("tmp-")) {
       setDeletedChildIds((current) => [...current, targetChild.id]);
     }
     setForm((prev) => ({
       ...prev,
-      children: prev.children.filter((_, childIndex) => childIndex !== index),
+      children: prev.children.filter((child) => child.id !== childId),
     }));
+    if (editingChildId === childId) {
+      setEditingChildId(null);
+    }
+  };
+
+  const handleStartProfileEdit = () => {
+    setError("");
+    setNotice("");
+    setInitialForm(form);
+    setIsEditingProfile(true);
+  };
+
+  const handleCancelProfileEdit = () => {
+    setForm((prev) => ({
+      ...prev,
+      firstName: initialForm.firstName,
+      lastName: initialForm.lastName,
+      phone: initialForm.phone,
+      birthDate: initialForm.birthDate,
+      address: initialForm.address,
+      bio: initialForm.bio,
+    }));
+    setIsEditingProfile(false);
   };
 
   const handleSave = async () => {
@@ -155,7 +221,7 @@ export default function ParentProfileSettings() {
             school: child.school?.trim() || null,
             focus_points: child.focus_points?.trim() || null,
             birth_month_year: child.birth_month_year || null,
-            gender: child.gender || null,
+            gender: normalizeChildGender(child.gender),
             age: child.age ?? null,
           })),
           delete_ids: deletedChildIds,
@@ -182,7 +248,7 @@ export default function ParentProfileSettings() {
       <div className="px-4 pt-6 pb-6 space-y-5">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="font-display text-2xl font-bold text-foreground">Perfil do responsável</h1>
-          <p className="text-muted-foreground mt-1">Edite seus dados e os dados das crianças.</p>
+          <p className="text-muted-foreground mt-1">Veja e atualize seus dados e das crianças.</p>
         </motion.div>
 
         {isLoading ? (
@@ -190,39 +256,72 @@ export default function ParentProfileSettings() {
         ) : (
           <>
             <section className="card-kidario p-4 space-y-3">
-              <div className="text-sm text-muted-foreground">{email}</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  placeholder="Nome"
-                  value={form.firstName}
-                  onChange={(event) => setField("firstName", event.target.value)}
-                />
-                <Input
-                  placeholder="Sobrenome"
-                  value={form.lastName}
-                  onChange={(event) => setField("lastName", event.target.value)}
-                />
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-lg font-semibold text-foreground">Dados do responsável</h2>
+                {!isEditingProfile ? (
+                  <KidarioButton size="sm" variant="outline" onClick={handleStartProfileEdit}>
+                    <Pencil className="w-4 h-4" />
+                    Editar dados
+                  </KidarioButton>
+                ) : (
+                  <KidarioButton size="sm" variant="ghost" onClick={handleCancelProfileEdit}>
+                    <X className="w-4 h-4" />
+                    Cancelar
+                  </KidarioButton>
+                )}
               </div>
-              <Input
-                placeholder="Telefone"
-                value={form.phone}
-                onChange={(event) => setField("phone", event.target.value)}
-              />
-              <Input
-                type="date"
-                value={form.birthDate}
-                onChange={(event) => setField("birthDate", event.target.value)}
-              />
-              <Input
-                placeholder="Endereço"
-                value={form.address}
-                onChange={(event) => setField("address", event.target.value)}
-              />
-              <Textarea
-                placeholder="Bio"
-                value={form.bio}
-                onChange={(event) => setField("bio", event.target.value)}
-              />
+
+              <div className="inline-flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm text-muted-foreground">
+                <Mail className="w-4 h-4" />
+                <span className="font-medium">E-mail</span>
+                <span>{email}</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Nome">
+                  <Input
+                    value={form.firstName}
+                    onChange={(event) => setField("firstName", event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </Field>
+                <Field label="Sobrenome">
+                  <Input
+                    value={form.lastName}
+                    onChange={(event) => setField("lastName", event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </Field>
+              </div>
+              <Field label="Telefone">
+                <Input
+                  value={form.phone}
+                  onChange={(event) => setField("phone", event.target.value)}
+                  disabled={!isEditingProfile}
+                />
+              </Field>
+              <Field label="Data de nascimento">
+                <Input
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(event) => setField("birthDate", event.target.value)}
+                  disabled={!isEditingProfile}
+                />
+              </Field>
+              <Field label="Endereço">
+                <Input
+                  value={form.address}
+                  onChange={(event) => setField("address", event.target.value)}
+                  disabled={!isEditingProfile}
+                />
+              </Field>
+              <Field label="Bio">
+                <Textarea
+                  value={form.bio}
+                  onChange={(event) => setField("bio", event.target.value)}
+                  disabled={!isEditingProfile}
+                />
+              </Field>
             </section>
 
             <section className="card-kidario p-4 space-y-3">
@@ -233,50 +332,156 @@ export default function ParentProfileSettings() {
                   Adicionar
                 </KidarioButton>
               </div>
-              {form.children.map((child, index) => (
-                <div key={child.id} className="rounded-xl border border-border p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                      <User className="w-4 h-4" />
-                      Criança {index + 1}
+              {form.children.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhuma criança cadastrada.</p>
+              )}
+
+              {form.children.map((child) => {
+                const isEditingChild = editingChildId === child.id;
+                const ChildIcon = getChildIconByGender();
+                const genderValue = normalizeChildGender(child.gender);
+                const gradeValue = child.current_grade || "";
+
+                return (
+                  <div key={child.id} className="rounded-xl border border-border p-3 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                          <ChildIcon className="w-5 h-5 text-primary" />
+                        </span>
+                        <div>
+                          <p className="font-medium text-foreground">{child.name || "Sem nome"}</p>
+                          <p className="text-xs text-muted-foreground">{formatChildGenderLabel(child.gender)}</p>
+                        </div>
+                      </div>
+                      <KidarioButton
+                        size="sm"
+                        variant={isEditingChild ? "ghost" : "outline"}
+                        onClick={() => setEditingChildId(isEditingChild ? null : child.id)}
+                      >
+                        {isEditingChild ? "Fechar" : "Editar"}
+                      </KidarioButton>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeChild(index)}
-                      className="text-destructive hover:text-destructive/80"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Field label="Nome">
+                        {isEditingChild ? (
+                          <Input
+                            value={child.name || ""}
+                            onChange={(event) => updateChild(child.id, "name", event.target.value)}
+                          />
+                        ) : (
+                          <StaticFieldValue value={child.name || "Não informado"} />
+                        )}
+                      </Field>
+                      <Field label="Gênero">
+                        {isEditingChild ? (
+                          <Select
+                            value={genderValue || undefined}
+                            onValueChange={(value) => updateChild(child.id, "gender", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o gênero" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {childGenderOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <StaticFieldValue value={formatChildGenderLabel(child.gender)} />
+                        )}
+                      </Field>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <Field label="Idade">
+                        {isEditingChild ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={child.age != null ? String(child.age) : ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              updateChild(child.id, "age", value ? Number(value) : null);
+                            }}
+                          />
+                        ) : (
+                          <StaticFieldValue value={child.age != null ? `${child.age} anos` : "Não informada"} />
+                        )}
+                      </Field>
+                      <Field label="Série/Curso">
+                        {isEditingChild ? (
+                          <Select
+                            value={gradeValue || undefined}
+                            onValueChange={(value) => updateChild(child.id, "current_grade", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione a série/curso" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {gradeValue && !isKnownChildGrade(gradeValue) && (
+                                <SelectItem value={gradeValue}>{gradeValue}</SelectItem>
+                              )}
+                              {childGradeOptions.map((grade) => (
+                                <SelectItem key={grade.value} value={grade.value}>
+                                  {grade.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <StaticFieldValue value={formatChildGradeLabel(child.current_grade)} />
+                        )}
+                      </Field>
+                      <Field label="Escola">
+                        {isEditingChild ? (
+                          <Input
+                            value={child.school || ""}
+                            onChange={(event) => updateChild(child.id, "school", event.target.value)}
+                          />
+                        ) : (
+                          <StaticFieldValue value={child.school || "Não informada"} />
+                        )}
+                      </Field>
+                    </div>
+
+                    <Field label="Pontos de atenção">
+                      {isEditingChild ? (
+                        <Textarea
+                          value={child.focus_points || ""}
+                          onChange={(event) => updateChild(child.id, "focus_points", event.target.value)}
+                        />
+                      ) : (
+                        <StaticFieldValue value={child.focus_points || "Não informado"} multiline />
+                      )}
+                    </Field>
+
+                    {isEditingChild && (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => removeChild(child.id)}
+                          className="inline-flex items-center gap-1 text-sm text-destructive hover:text-destructive/80"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Excluir criança
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <Input
-                    placeholder="Nome"
-                    value={child.name || ""}
-                    onChange={(event) => updateChild(index, "name", event.target.value)}
-                  />
-                  <Input
-                    placeholder="Série atual"
-                    value={child.current_grade || ""}
-                    onChange={(event) => updateChild(index, "current_grade", event.target.value)}
-                  />
-                  <Input
-                    placeholder="Escola"
-                    value={child.school || ""}
-                    onChange={(event) => updateChild(index, "school", event.target.value)}
-                  />
-                  <Textarea
-                    placeholder="Pontos de atenção"
-                    value={child.focus_points || ""}
-                    onChange={(event) => updateChild(index, "focus_points", event.target.value)}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </section>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
             {notice && <p className="text-sm text-success">{notice}</p>}
 
             <KidarioButton size="lg" variant="hero" fullWidth onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Salvando..." : "Salvar perfil"}
+              {isSaving ? "Salvando..." : "Salvar alterações"}
             </KidarioButton>
 
             <KidarioButton
@@ -293,5 +498,30 @@ export default function ParentProfileSettings() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function getChildIconByGender() {
+  return Baby;
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-sm font-medium text-foreground">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function StaticFieldValue({ value, multiline = false }: { value: string; multiline?: boolean }) {
+  return (
+    <div
+      className={`rounded-lg border border-border bg-background p-2 text-sm text-foreground ${
+        multiline ? "whitespace-pre-wrap" : ""
+      }`}
+    >
+      {value}
+    </div>
   );
 }

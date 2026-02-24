@@ -57,7 +57,7 @@ Notas:
 - `id uuid primary key`
 - `profile_id uuid not null references parent_profiles(profile_id) on delete cascade`
 - `name text not null`
-- `gender text`
+- `gender text` (`girl` | `boy` | `other` | `prefer not to disclose`)
 - `age smallint`
 - `current_grade text`
 - `birth_month_year text` formato `YYYY-MM`
@@ -217,7 +217,7 @@ Request body (parent):
       "upsert": [
         {
           "name": "Lucas",
-          "gender": "masculino",
+          "gender": "boy",
           "age": 8,
           "current_grade": "3-ano-fundamental",
           "birth_month_year": "2017-04",
@@ -321,7 +321,7 @@ Request body:
       {
         "id": "optional-uuid-existing-child",
         "name": "Lucas",
-        "gender": "masculino",
+        "gender": "boy",
         "age": 8,
         "current_grade": "3-ano-fundamental",
         "birth_month_year": "2017-04",

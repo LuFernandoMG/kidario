@@ -16,10 +16,11 @@ import { SignupStepCarousel, type SignupStep } from "@/components/forms/SignupSt
 import { applyBackendSignupSession } from "@/lib/authSession";
 import { signUpWithBackend } from "@/lib/backendAuth";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
+import { childGenderOptions, childGradeOptions, normalizeChildGender, type ChildGender } from "@/lib/childProfile";
 
 interface ChildFormData {
   name: string;
-  gender: string;
+  gender: ChildGender | "";
   age: string;
   currentGrade: string;
   birthMonthYear: string;
@@ -53,24 +54,6 @@ const signupSteps: SignupStep[] = [
     title: "Registro de filhos",
     subtitle: "Cadastro de um ou mais filhos",
   },
-];
-
-const brazilianGradeOptions = [
-  { value: "creche", label: "Creche" },
-  { value: "pre-escola", label: "Pre-escola" },
-  { value: "1-ano-fundamental", label: "1º ano - Ensino Fundamental" },
-  { value: "2-ano-fundamental", label: "2º ano - Ensino Fundamental" },
-  { value: "3-ano-fundamental", label: "3º ano - Ensino Fundamental" },
-  { value: "4-ano-fundamental", label: "4º ano - Ensino Fundamental" },
-  { value: "5-ano-fundamental", label: "5º ano - Ensino Fundamental" },
-  { value: "6-ano-fundamental", label: "6º ano - Ensino Fundamental" },
-  { value: "7-ano-fundamental", label: "7º ano - Ensino Fundamental" },
-  { value: "8-ano-fundamental", label: "8º ano - Ensino Fundamental" },
-  { value: "9-ano-fundamental", label: "9º ano - Ensino Fundamental" },
-  { value: "1-serie-medio", label: "1ª serie - Ensino Medio" },
-  { value: "2-serie-medio", label: "2ª serie - Ensino Medio" },
-  { value: "3-serie-medio", label: "3ª serie - Ensino Medio" },
-  { value: "eja", label: "EJA (Educacao de Jovens e Adultos)" },
 ];
 
 const createEmptyChild = (): ChildFormData => ({
@@ -233,7 +216,7 @@ export default function Signup() {
         children_ops: {
           upsert: formData.children.map((child) => ({
             name: child.name,
-            gender: child.gender,
+            gender: normalizeChildGender(child.gender),
             age: Number(child.age),
             current_grade: child.currentGrade,
             birth_month_year: child.birthMonthYear,
@@ -261,7 +244,7 @@ export default function Signup() {
           bio: formData.bio,
           children: formData.children.map((child) => ({
             name: child.name,
-            gender: child.gender,
+            gender: normalizeChildGender(child.gender),
             age: Number(child.age),
             current_grade: child.currentGrade,
             birth_month_year: child.birthMonthYear,
@@ -514,15 +497,19 @@ export default function Signup() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Genero</label>
-                  <Select value={child.gender} onValueChange={(value) => updateChild(index, "gender", value)}>
+                  <Select
+                    value={child.gender}
+                    onValueChange={(value) => updateChild(index, "gender", value as ChildGender)}
+                  >
                     <SelectTrigger className="h-12 rounded-xl bg-muted/50">
                       <SelectValue placeholder="Selecione o genero" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="feminino">Menina</SelectItem>
-                      <SelectItem value="masculino">Menino</SelectItem>
-                      <SelectItem value="outro">Outro</SelectItem>
-                      <SelectItem value="nao_informar">Prefiro nao informar</SelectItem>
+                      {childGenderOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FieldError message={errors[`children.${index}.gender`]} />
@@ -553,7 +540,7 @@ export default function Signup() {
                         <SelectValue placeholder="Selecione o curso atual" />
                       </SelectTrigger>
                       <SelectContent>
-                        {brazilianGradeOptions.map((grade) => (
+                        {childGradeOptions.map((grade) => (
                           <SelectItem key={grade.value} value={grade.value}>
                             {grade.label}
                           </SelectItem>

@@ -1,3 +1,5 @@
+import type { ChildGender } from "@/lib/childProfile";
+
 export type BackendUserRole = "parent" | "teacher";
 
 export interface BackendProfileView {
@@ -17,7 +19,7 @@ export interface BackendMeResponse {
 export interface BackendParentChildView {
   id: string;
   name: string;
-  gender?: string | null;
+  gender?: ChildGender | null;
   age?: number | null;
   current_grade?: string | null;
   birth_month_year?: string | null;
@@ -69,7 +71,7 @@ export interface BackendTeacherProfileResponse {
 export interface ParentChildUpsertPayload {
   id?: string | null;
   name: string;
-  gender?: string | null;
+  gender?: ChildGender | null;
   age?: number | null;
   current_grade?: string | null;
   birth_month_year?: string | null;

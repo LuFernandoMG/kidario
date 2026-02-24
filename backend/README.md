@@ -113,6 +113,7 @@ Apply SQL scripts in order (Supabase SQL Editor):
 - `sql/002_rls_profiles.sql`
 - `sql/004_init_bookings.sql`
 - `sql/005_rls_bookings.sql`
+- `sql/006_normalize_parent_children_gender.sql`
 - `sql/003_rls_validation.sql` (optional smoke test)
 
 `002` enables RLS with owner-based policies for `authenticated` users and keeps
