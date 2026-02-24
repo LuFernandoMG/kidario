@@ -1,54 +1,209 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, Calendar, Award, ChevronRight } from "lucide-react";
+import { Calendar, FileText, Sparkles } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
+import { getSupabaseAccessToken } from "@/lib/authSession";
+import { getParentProfile, type BackendParentChildView } from "@/lib/backendProfiles";
+import { getBookingDetail, getParentAgenda } from "@/lib/backendBookings";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-interface ProgressMetric {
-  name: string;
-  value: number;
-  color: "mint" | "lavender" | "coral";
+interface ProgressEntry {
+  id: string;
+  childId: string;
+  childName: string;
+  teacherName: string;
+  dateLabel: string;
+  dateIso: string;
+  summary: string;
+  nextSteps: string;
+  tags: string[];
+  attentionPoints: string[];
+  followUpUpdatedAt: string;
 }
 
-const metrics: ProgressMetric[] = [
-  { name: "Atenção", value: 75, color: "mint" },
-  { name: "Linguagem", value: 85, color: "lavender" },
-  { name: "Coordenação", value: 60, color: "coral" },
-];
+const ALL_CHILDREN_ID = "__all_children__";
 
-const recentNotes = [
-  {
-    id: "1",
-    date: "25 Jan",
-    teacher: "Ana Carolina",
-    summary: "Ótimo progresso na leitura! Conseguiu ler 3 palavras novas.",
-    tags: ["Leitura", "Progresso"],
-  },
-  {
-    id: "2",
-    date: "20 Jan",
-    teacher: "Ana Carolina",
-    summary: "Trabalhamos concentração com jogos. Duração de foco aumentou.",
-    tags: ["Atenção", "Jogos"],
-  },
-];
+function formatFollowUpDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "Atualização recente";
+  return `Atualizado em ${date.toLocaleDateString("pt-BR")}`;
+}
 
 export default function Progress() {
+  const navigate = useNavigate();
+  const [children, setChildren] = useState<BackendParentChildView[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>(ALL_CHILDREN_ID);
+  const [progressEntries, setProgressEntries] = useState<ProgressEntry[]>([]);
+  const [isLoadingChildren, setIsLoadingChildren] = useState(true);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+  const [error, setError] = useState("");
+
+  const childrenRequestRef = useRef(0);
+  const progressRequestRef = useRef(0);
+
+  useEffect(() => {
+    const accessToken = getSupabaseAccessToken();
+    if (!accessToken) {
+      navigate("/login?returnTo=%2Fprogresso");
+      return;
+    }
+
+    const requestId = ++childrenRequestRef.current;
+    setIsLoadingChildren(true);
+    setError("");
+
+    getParentProfile(accessToken)
+      .then((payload) => {
+        if (requestId !== childrenRequestRef.current) return;
+
+        const fetchedChildren = payload.children || [];
+        setChildren(fetchedChildren);
+        setSelectedChildId((current) => {
+          if (current !== ALL_CHILDREN_ID && fetchedChildren.some((child) => child.id === current)) {
+            return current;
+          }
+          if (fetchedChildren.length === 1) return fetchedChildren[0].id;
+          return ALL_CHILDREN_ID;
+        });
+      })
+      .catch((loadError) => {
+        if (requestId !== childrenRequestRef.current) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Não foi possível carregar os dados de progresso.",
+        );
+      })
+      .finally(() => {
+        if (requestId !== childrenRequestRef.current) return;
+        setIsLoadingChildren(false);
+      });
+  }, [navigate]);
+
+  useEffect(() => {
+    const accessToken = getSupabaseAccessToken();
+    if (!accessToken || isLoadingChildren) return;
+
+    if (children.length === 0) {
+      setProgressEntries([]);
+      setIsLoadingProgress(false);
+      return;
+    }
+
+    const requestId = ++progressRequestRef.current;
+    setIsLoadingProgress(true);
+    setError("");
+
+    const childIdFilter = selectedChildId === ALL_CHILDREN_ID ? undefined : selectedChildId;
+    getParentAgenda(accessToken, { tab: "past", childId: childIdFilter })
+      .then(async (agendaResponse) => {
+        if (requestId !== progressRequestRef.current) return;
+
+        const concludedLessons = agendaResponse.lessons
+          .filter((lesson) => lesson.status === "concluida")
+          .slice(0, 12);
+
+        if (concludedLessons.length === 0) {
+          setProgressEntries([]);
+          return;
+        }
+
+        const details = await Promise.allSettled(
+          concludedLessons.map((lesson) => getBookingDetail(accessToken, lesson.id)),
+        );
+        if (requestId !== progressRequestRef.current) return;
+
+        const entries: ProgressEntry[] = details.flatMap((detailResult, index) => {
+          if (detailResult.status !== "fulfilled") return [];
+
+          const detail = detailResult.value;
+          if (!detail.latest_follow_up) return [];
+
+          return [
+            {
+              id: detail.id,
+              childId: detail.child_id,
+              childName: detail.child_name,
+              teacherName: detail.teacher_name,
+              dateLabel: detail.date_label,
+              dateIso: detail.date_iso,
+              summary: detail.latest_follow_up.summary,
+              nextSteps: detail.latest_follow_up.next_steps,
+              tags: detail.latest_follow_up.tags || [],
+              attentionPoints: detail.latest_follow_up.attention_points || [],
+              followUpUpdatedAt: detail.latest_follow_up.updated_at,
+            },
+          ];
+        });
+
+        entries.sort((a, b) => b.followUpUpdatedAt.localeCompare(a.followUpUpdatedAt));
+        setProgressEntries(entries);
+      })
+      .catch((loadError) => {
+        if (requestId !== progressRequestRef.current) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Não foi possível carregar o progresso das crianças.",
+        );
+      })
+      .finally(() => {
+        if (requestId !== progressRequestRef.current) return;
+        setIsLoadingProgress(false);
+      });
+  }, [children, isLoadingChildren, selectedChildId]);
+
+  const selectedChildName = useMemo(() => {
+    if (selectedChildId === ALL_CHILDREN_ID) return "Todos os filhos";
+    return children.find((child) => child.id === selectedChildId)?.name || "Filho";
+  }, [children, selectedChildId]);
+
+  const latestFollowUpDate = progressEntries[0]?.followUpUpdatedAt;
+  const totalAttentionPoints = progressEntries.reduce(
+    (total, entry) => total + entry.attentionPoints.length,
+    0,
+  );
+
   return (
     <AppShell>
       <div className="px-4 pt-6 pb-6">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <h1 className="font-display text-2xl font-bold text-foreground">
-            Progresso
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Acompanhe a evolução do seu filho
-          </p>
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="font-display text-2xl font-bold text-foreground">Progresso</h1>
+              <p className="text-muted-foreground mt-1">Acompanhe a evolução nas aulas.</p>
+            </div>
+            <div className="w-[200px] shrink-0">
+              <Select
+                value={selectedChildId}
+                onValueChange={setSelectedChildId}
+                disabled={isLoadingChildren || children.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar filho" />
+                </SelectTrigger>
+                <SelectContent>
+                  {children.length > 1 && (
+                    <SelectItem value={ALL_CHILDREN_ID}>Todos os filhos</SelectItem>
+                  )}
+                  {children.map((child) => (
+                    <SelectItem key={child.id} value={child.id}>
+                      {child.name || "Sem nome"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </motion.div>
 
-        {/* Summary Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -57,164 +212,123 @@ export default function Progress() {
         >
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <TrendingUp className="w-7 h-7 text-primary" />
+              <Sparkles className="w-7 h-7 text-primary" />
             </div>
             <div>
-              <h2 className="font-display text-xl font-bold text-foreground">
-                Muito bem!
-              </h2>
+              <h2 className="font-display text-xl font-bold text-foreground">{selectedChildName}</h2>
               <p className="text-muted-foreground text-sm">
-                4 aulas este mês • Progresso constante
+                {progressEntries.length} devolutiva(s) registrada(s)
               </p>
+              {latestFollowUpDate && (
+                <p className="text-muted-foreground text-xs mt-1">{formatFollowUpDate(latestFollowUpDate)}</p>
+              )}
             </div>
           </div>
         </motion.div>
 
-        {/* Metrics */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="mt-8"
-        >
-          <h2 className="section-title">Áreas de desenvolvimento</h2>
-          <div className="space-y-4">
-            {metrics.map((metric, index) => (
-              <MetricRow key={metric.name} metric={metric} index={index} />
-            ))}
-          </div>
-        </motion.section>
-
-        {/* Recent Notes */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="mt-8"
         >
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="section-title mb-0">Notas recentes</h2>
-            <button className="text-sm text-primary font-medium hover:underline">
-              Ver todas
-            </button>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h2 className="section-title mb-0">Registros de acompanhamento</h2>
+            <span className="text-xs text-muted-foreground">
+              {totalAttentionPoints} ponto(s) de atenção
+            </span>
           </div>
-          <div className="space-y-3">
-            {recentNotes.map((note) => (
-              <div key={note.id} className="card-kidario p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4" />
-                      {note.date}
-                      <span>•</span>
-                      <span>{note.teacher}</span>
-                    </div>
-                    <p className="text-foreground mt-2">{note.summary}</p>
-                    <div className="flex gap-1.5 mt-2">
-                      {note.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-0.5 bg-muted rounded-full text-xs text-muted-foreground"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.section>
 
-        {/* Achievements */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="mt-8"
-        >
-          <h2 className="section-title">Conquistas</h2>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-            <AchievementBadge
-              icon="📖"
-              title="Primeira leitura"
-              unlocked
-            />
-            <AchievementBadge
-              icon="🧮"
-              title="Matemático"
-              unlocked
-            />
-            <AchievementBadge
-              icon="✍️"
-              title="Escritor"
-              unlocked={false}
-            />
-            <AchievementBadge
-              icon="🎯"
-              title="Focado"
-              unlocked={false}
-            />
-          </div>
+          {isLoadingChildren || isLoadingProgress ? (
+            <div className="card-kidario p-4 text-sm text-muted-foreground">Carregando progresso...</div>
+          ) : error ? (
+            <div className="card-kidario p-4 text-sm text-destructive">{error}</div>
+          ) : children.length === 0 ? (
+            <div className="card-kidario p-4 text-sm text-muted-foreground">
+              Cadastre pelo menos um filho para acompanhar o progresso.
+            </div>
+          ) : progressEntries.length === 0 ? (
+            <div className="card-kidario p-4 text-sm text-muted-foreground">
+              Ainda não há devolutivas concluídas para este filtro.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {progressEntries.map((entry, index) => (
+                <ProgressEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  index={index}
+                  showChildName={selectedChildId === ALL_CHILDREN_ID}
+                />
+              ))}
+            </div>
+          )}
         </motion.section>
       </div>
     </AppShell>
   );
 }
 
-function MetricRow({ metric, index }: { metric: ProgressMetric; index: number }) {
-  const colorClasses = {
-    mint: "bg-primary",
-    lavender: "bg-secondary",
-    coral: "bg-accent",
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: 0.2 + index * 0.05 }}
-      className="space-y-2"
-    >
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-medium text-foreground">{metric.name}</span>
-        <span className="text-muted-foreground">{metric.value}%</span>
-      </div>
-      <div className="h-2 bg-muted rounded-full overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${metric.value}%` }}
-          transition={{ delay: 0.4 + index * 0.1, duration: 0.8, ease: "easeOut" }}
-          className={`h-full rounded-full ${colorClasses[metric.color]}`}
-        />
-      </div>
-    </motion.div>
-  );
-}
-
-function AchievementBadge({
-  icon,
-  title,
-  unlocked,
+function ProgressEntryCard({
+  entry,
+  index,
+  showChildName,
 }: {
-  icon: string;
-  title: string;
-  unlocked: boolean;
+  entry: ProgressEntry;
+  index: number;
+  showChildName: boolean;
 }) {
   return (
-    <div
-      className={`shrink-0 w-24 p-4 rounded-2xl text-center transition-all ${
-        unlocked
-          ? "card-kidario"
-          : "bg-muted/50 border border-dashed border-border opacity-50"
-      }`}
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 + index * 0.05 }}
+      className="card-kidario p-4 space-y-3"
     >
-      <span className="text-3xl">{icon}</span>
-      <p className="text-xs font-medium text-foreground mt-2 leading-tight">
-        {title}
+      <div className="flex items-start gap-2">
+        <FileText className="w-4 h-4 text-primary mt-1" />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+            <Calendar className="w-4 h-4" />
+            <span>{entry.dateLabel}</span>
+            <span>•</span>
+            <span>{entry.teacherName}</span>
+            {showChildName && (
+              <>
+                <span>•</span>
+                <span>{entry.childName}</span>
+              </>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">{formatFollowUpDate(entry.followUpUpdatedAt)}</p>
+        </div>
+      </div>
+
+      <p className="text-sm text-foreground leading-relaxed">{entry.summary}</p>
+      <p className="text-sm text-foreground leading-relaxed">
+        <span className="font-medium">Próximos passos:</span> {entry.nextSteps}
       </p>
-    </div>
+
+      <div className="flex flex-wrap gap-2">
+        {entry.tags.map((tag) => (
+          <span key={tag} className="px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground">
+            {tag}
+          </span>
+        ))}
+      </div>
+
+      {entry.attentionPoints.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/5 p-3">
+          <p className="text-sm font-medium text-foreground">Pontos de atenção</p>
+          <ul className="space-y-1">
+            {entry.attentionPoints.map((point, pointIndex) => (
+              <li key={`${point}-${pointIndex}`} className="text-sm text-muted-foreground">
+                • {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </motion.div>
   );
 }
