@@ -30,6 +30,7 @@ Current automated test:
 - `tests/test_auth_api.py` (contratos HTTP de `POST /auth/signup`)
 - `tests/test_profiles_api.py` (contratos HTTP de `/profiles/me`, `PATCH /profiles/parent`, `PATCH /profiles/teacher`, y conflicto de rol)
 - `tests/test_bookings_api.py` (contratos HTTP de creación/agenda/detalle/cancelación de bookings)
+- `tests/test_teacher_control_api.py` (contratos HTTP de control center Teacher y listado de chats)
 - `tests/test_marketplace_api.py` (contratos HTTP del marketplace de profesoras)
 
 ## Run tests (manual API checks)
@@ -99,9 +100,19 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
   - `GET /api/v1/bookings/teacher/agenda`
   - `GET /api/v1/bookings/{booking_id}`
   - `PATCH /api/v1/bookings/{booking_id}/reschedule`
+  - `PATCH /api/v1/bookings/{booking_id}/teacher/decision`
+  - `PATCH /api/v1/bookings/{booking_id}/teacher/reschedule`
   - `PATCH /api/v1/bookings/{booking_id}/cancel`
   - `PATCH /api/v1/bookings/{booking_id}/complete`
   - `GET /api/v1/teachers/{teacher_profile_id}/availability/slots`
+- Chat:
+  - `GET /api/v1/chat/threads`
+  - `POST /api/v1/chat/threads/from-booking/{booking_id}`
+  - `GET /api/v1/chat/threads/{thread_id}`
+  - `GET /api/v1/chat/threads/{thread_id}/messages`
+  - `POST /api/v1/chat/threads/{thread_id}/messages`
+- Teacher domain:
+  - `GET /api/v1/teacher/control-center/overview`
 - Admin:
   - `PATCH /api/v1/admin/teachers/{profile_id}/activation`
 

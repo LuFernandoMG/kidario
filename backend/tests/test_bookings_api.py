@@ -11,7 +11,7 @@ os.environ.setdefault(
     "postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
 )
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_teacher_user, get_current_user
 from app.api.v1.endpoints import bookings as bookings_endpoints
 from app.core.security import AuthUser
 from app.db.session import get_db
@@ -34,11 +34,13 @@ class _DummySession:
 
 @pytest.fixture
 def client() -> TestClient:
-    app.dependency_overrides[get_current_user] = lambda: AuthUser(
+    current_user = AuthUser(
         user_id="3472def4-1d03-4350-b2c2-20c7fa27d430",
         email="hello@luisfernando.io",
         role="authenticated",
     )
+    app.dependency_overrides[get_current_user] = lambda: current_user
+    app.dependency_overrides[get_current_teacher_user] = lambda: current_user
     app.dependency_overrides[get_db] = lambda: _DummySession()
 
     with TestClient(app) as test_client:
@@ -140,3 +142,60 @@ def test_patch_booking_cancel_conflict_returns_409(
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Booking cannot be cancelled in the current status."
+
+
+def test_patch_teacher_booking_decision_returns_ok(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_teacher_decide_booking(db, user, booking_id, payload):
+        return {
+            "status": "ok",
+            "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "booking_status": "confirmada",
+            "updated_at_iso": "2026-02-25T10:00:00Z",
+            "cancellation_reason": None,
+        }
+
+    monkeypatch.setattr(bookings_endpoints, "teacher_decide_booking", _fake_teacher_decide_booking)
+
+    response = client.patch(
+        "/api/v1/bookings/3472def4-1d03-4350-b2c2-20c7fa27d430/teacher/decision",
+        json={"action": "accept"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["booking_status"] == "confirmada"
+
+
+def test_patch_teacher_booking_reschedule_returns_ok(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_teacher_reschedule_booking(db, user, booking_id, payload):
+        return {
+            "status": "ok",
+            "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "date_iso": "2026-03-03",
+            "time": "16:00",
+            "booking_status": "confirmada",
+            "updated_at_iso": "2026-02-25T10:00:00Z",
+        }
+
+    monkeypatch.setattr(bookings_endpoints, "teacher_reschedule_booking", _fake_teacher_reschedule_booking)
+
+    response = client.patch(
+        "/api/v1/bookings/3472def4-1d03-4350-b2c2-20c7fa27d430/teacher/reschedule",
+        json={
+            "new_date_iso": "2026-03-03",
+            "new_time": "16:00",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["date_iso"] == "2026-03-03"
+    assert body["time"] == "16:00"

@@ -1,5 +1,7 @@
-import type { ParentProfilePatchPayload, TeacherProfilePatchPayload } from "@/lib/backendProfiles";
+import type { TeacherProfilePatchPayload } from "@/domains/teacher/api/backendTeacherProfiles";
+import type { ParentProfilePatchPayload } from "@/domains/parent/api/backendParentProfiles";
 import { extractErrorMessage, getBackendApiBaseUrl } from "@/lib/backendApi";
+import { buildRequestIdHeader } from "@/lib/observability";
 
 export interface AuthSignupRequestPayload {
   email: string;
@@ -33,6 +35,7 @@ export async function signUpWithBackend(payload: AuthSignupRequestPayload): Prom
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        ...buildRequestIdHeader(),
       },
       body: JSON.stringify(payload),
     });

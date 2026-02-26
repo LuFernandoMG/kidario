@@ -32,6 +32,10 @@ class ChatThreadResponse(BaseModel):
     thread: ChatThreadView
 
 
+class ChatThreadsResponse(BaseModel):
+    threads: list[ChatThreadView]
+
+
 class ChatMessageView(BaseModel):
     id: UUID
     thread_id: UUID

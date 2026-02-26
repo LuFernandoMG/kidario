@@ -6,6 +6,7 @@ import { KidarioButton } from "@/components/ui/KidarioButton";
 import { getSupabaseAccessToken, signInWithEmailPassword } from "@/lib/authSession";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 import { syncPendingProfileIfNeeded } from "@/lib/pendingProfileSync";
+import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
 
 export default function Login() {
   const [searchParams] = useSearchParams();
@@ -60,7 +61,12 @@ export default function Login() {
         return;
       }
 
-      if (session.role === "parent" || session.role === "teacher") {
+      if (session.role === "teacher") {
+        navigate(TEACHER_CONTROL_CENTER_PATH);
+        return;
+      }
+
+      if (session.role === "parent") {
         navigate("/explorar");
         return;
       }

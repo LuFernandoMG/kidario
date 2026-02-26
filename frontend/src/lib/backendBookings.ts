@@ -1,4 +1,5 @@
 import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
+import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
@@ -132,6 +133,7 @@ async function backendRequest<TResponse>(params: {
       headers: {
         Authorization: `Bearer ${bearerToken}`,
         Accept: "application/json",
+        ...buildRequestIdHeader(),
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,

@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 // Pages
 import Welcome from "./pages/Welcome";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
+import Signup from "./domains/parent/pages/ParentSignupPage";
 import RecoverPassword from "./pages/RecoverPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Explore from "./pages/Explore";
@@ -19,14 +19,34 @@ import BookingDetail from "./pages/BookingDetail";
 import Chat from "./pages/Chat";
 import Agenda from "./pages/Agenda";
 import Progress from "./pages/Progress";
-import Profile from "./pages/Profile";
-import ParentProfileSettings from "./pages/ParentProfileSettings";
-import TeacherProfileSettings from "./pages/TeacherProfileSettings";
+import Profile from "./domains/profile/pages/ProfileRedirectPage";
+import ParentProfileSettings from "./domains/parent/pages/ParentProfileSettingsPage";
+import TeacherProfileSettings from "./domains/teacher/pages/TeacherProfileSettingsPage";
 import NotFound from "./pages/NotFound";
-import TeacherPrivateSignup from "./pages/TeacherPrivateSignup";
+import TeacherPrivateSignup from "./domains/teacher/pages/TeacherPrivateSignupPage";
 import { TEACHER_PRIVATE_SIGNUP_PATH } from "./lib/privateRoutes";
+import { RequireRoleRoute } from "@/components/auth/RequireRoleRoute";
+import TeacherControlCenterPage from "@/domains/teacher/pages/TeacherControlCenterPage";
+import TeacherAgendaPage from "@/domains/teacher/pages/TeacherAgendaPage";
+import TeacherStudentsPage from "@/domains/teacher/pages/TeacherStudentsPage";
+import TeacherPlanningPage from "@/domains/teacher/pages/TeacherPlanningPage";
+import TeacherFinancePage from "@/domains/teacher/pages/TeacherFinancePage";
+import {
+  TEACHER_AGENDA_PATH,
+  TEACHER_CONTROL_CENTER_PATH,
+  TEACHER_FINANCE_PATH,
+  TEACHER_PLANNING_PATH,
+  TEACHER_STUDENTS_PATH,
+} from "@/domains/teacher/lib/teacherRoutes";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -50,13 +70,91 @@ const App = () => (
           <Route path="/agendar/:id" element={<BookingScheduler />} />
           <Route path="/checkout/:id" element={<Checkout />} />
           <Route path="/confirmacao-reserva/:bookingId" element={<BookingConfirmation />} />
-          <Route path="/aula/:bookingId" element={<BookingDetail />} />
+          <Route
+            path="/aula/:bookingId"
+            element={(
+              <RequireRoleRoute allowedRoles={["parent"]}>
+                <BookingDetail />
+              </RequireRoleRoute>
+            )}
+          />
           <Route path="/chat/:threadId" element={<Chat />} />
-          <Route path="/agenda" element={<Agenda />} />
-          <Route path="/progresso" element={<Progress />} />
+          <Route
+            path="/agenda"
+            element={(
+              <RequireRoleRoute allowedRoles={["parent"]}>
+                <Agenda />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route
+            path="/progresso"
+            element={(
+              <RequireRoleRoute allowedRoles={["parent"]}>
+                <Progress />
+              </RequireRoleRoute>
+            )}
+          />
           <Route path="/perfil" element={<Profile />} />
-          <Route path="/perfil/responsavel" element={<ParentProfileSettings />} />
-          <Route path="/perfil/professora" element={<TeacherProfileSettings />} />
+          <Route
+            path="/perfil/responsavel"
+            element={(
+              <RequireRoleRoute allowedRoles={["parent"]}>
+                <ParentProfileSettings />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route
+            path="/perfil/professora"
+            element={(
+              <RequireRoleRoute allowedRoles={["teacher"]}>
+                <TeacherProfileSettings />
+              </RequireRoleRoute>
+            )}
+          />
+
+          {/* Teacher Control Center */}
+          <Route
+            path={TEACHER_CONTROL_CENTER_PATH}
+            element={(
+              <RequireRoleRoute allowedRoles={["teacher"]}>
+                <TeacherControlCenterPage />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route
+            path={TEACHER_AGENDA_PATH}
+            element={(
+              <RequireRoleRoute allowedRoles={["teacher"]}>
+                <TeacherAgendaPage />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route
+            path={TEACHER_STUDENTS_PATH}
+            element={(
+              <RequireRoleRoute allowedRoles={["teacher"]}>
+                <TeacherStudentsPage />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route
+            path={TEACHER_PLANNING_PATH}
+            element={(
+              <RequireRoleRoute allowedRoles={["teacher"]}>
+                <TeacherPlanningPage />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route
+            path={TEACHER_FINANCE_PATH}
+            element={(
+              <RequireRoleRoute allowedRoles={["teacher"]}>
+                <TeacherFinancePage />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route path="/professora/centro" element={<Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />} />
           
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />

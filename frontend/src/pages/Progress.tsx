@@ -3,8 +3,11 @@ import { motion } from "framer-motion";
 import { Calendar, FileText, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
+import {
+  getParentProfile,
+  type BackendParentChildView,
+} from "@/domains/parent/api/backendParentProfiles";
 import { getSupabaseAccessToken } from "@/lib/authSession";
-import { getParentProfile, type BackendParentChildView } from "@/lib/backendProfiles";
 import { getBookingDetail, getParentAgenda } from "@/lib/backendBookings";
 import {
   Select,

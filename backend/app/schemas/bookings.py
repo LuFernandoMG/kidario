@@ -148,6 +148,21 @@ class BookingRescheduleResponse(BaseModel):
     updated_at_iso: datetime
 
 
+class TeacherBookingDecisionPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["accept", "reject"]
+    reason: str | None = None
+
+
+class TeacherBookingDecisionResponse(BaseModel):
+    status: str = "ok"
+    booking_id: UUID
+    booking_status: BookingStatus
+    updated_at_iso: datetime
+    cancellation_reason: str | None = None
+
+
 class BookingCancelPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

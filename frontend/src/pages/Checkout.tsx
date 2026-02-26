@@ -15,7 +15,10 @@ import { createBooking } from "@/lib/backendBookings";
 import { useToast } from "@/hooks/use-toast";
 import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
 import { type Teacher } from "@/components/marketplace/TeacherCard";
-import { getParentProfile, type BackendParentChildView } from "@/lib/backendProfiles";
+import {
+  getParentProfile,
+  type BackendParentChildView,
+} from "@/domains/parent/api/backendParentProfiles";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type PaymentMethod = "cartao" | "pix";

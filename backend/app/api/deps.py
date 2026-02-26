@@ -1,8 +1,11 @@
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import AuthUser, InvalidTokenError, get_jwt_verifier
+from app.db.session import get_db
 
 bearer_scheme = HTTPBearer(
     auto_error=False,
@@ -56,5 +59,38 @@ def get_current_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin permission required.",
+        )
+    return user
+
+
+def _get_profile_role(db: Session, profile_id: str) -> str | None:
+    return db.execute(
+        text("select role from profiles where id = :profile_id"),
+        {"profile_id": profile_id},
+    ).scalar()
+
+
+def get_current_teacher_user(
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> AuthUser:
+    role = _get_profile_role(db, user.user_id)
+    if role != "teacher":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Teacher permission required.",
+        )
+    return user
+
+
+def get_current_parent_user(
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> AuthUser:
+    role = _get_profile_role(db, user.user_id)
+    if role != "parent":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Parent permission required.",
         )
     return user

@@ -13,6 +13,7 @@ from app.schemas.chat import (
     ChatMessageCreateResponse,
     ChatMessagesResponse,
     ChatThreadGetOrCreateResponse,
+    ChatThreadsResponse,
     ChatThreadResponse,
 )
 from app.services.chat_service import (
@@ -20,6 +21,7 @@ from app.services.chat_service import (
     ChatPermissionError,
     ChatValidationError,
     get_or_create_thread_from_booking,
+    list_threads,
     get_thread,
     get_thread_messages,
     post_thread_message,
@@ -84,6 +86,24 @@ def get_chat_thread(
     except SQLAlchemyError as exc:
         _raise_http_from_sql_error(exc)
     return ChatThreadResponse(**data)
+
+
+@router.get("/chat/threads", response_model=ChatThreadsResponse)
+def get_chat_threads(
+    limit: int = Query(default=30, ge=1, le=200),
+    booking_status: str | None = Query(default=None, alias="status"),
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChatThreadsResponse:
+    try:
+        data = list_threads(db, user, limit=limit, booking_status=booking_status)
+    except ChatPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ChatValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return ChatThreadsResponse(**data)
 
 
 @router.get("/chat/threads/{thread_id}/messages", response_model=ChatMessagesResponse)

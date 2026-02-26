@@ -13,7 +13,10 @@ import { type Teacher } from "@/components/marketplace/TeacherCard";
 import { getSupabaseAccessToken } from "@/lib/authSession";
 import { getTeacherAvailabilitySlots } from "@/lib/backendBookings";
 import { getMarketplaceTeacherDetail } from "@/lib/backendMarketplace";
-import { getParentProfile, type BackendParentChildView } from "@/lib/backendProfiles";
+import {
+  getParentProfile,
+  type BackendParentChildView,
+} from "@/domains/parent/api/backendParentProfiles";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const durationOptions = [45, 60, 90];

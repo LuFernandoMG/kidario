@@ -12,7 +12,7 @@ vi.mock("@/lib/authSession", () => ({
   getSupabaseAccessToken: () => mockGetSupabaseAccessToken(),
 }));
 
-vi.mock("@/lib/backendProfiles", () => ({
+vi.mock("@/domains/parent/api/backendParentProfiles", () => ({
   getParentProfile: (...args: unknown[]) => mockGetParentProfile(...args),
 }));
 

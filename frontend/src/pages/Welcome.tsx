@@ -6,6 +6,7 @@ import {
   getAuthSession,
   getRecoveryTokensFromUrlHash,
 } from "@/lib/authSession";
+import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
 
 export default function Welcome() {
   const recoveryTokens = getRecoveryTokensFromUrlHash();
@@ -22,6 +23,9 @@ export default function Welcome() {
 
   const authSession = getAuthSession();
   if (authSession.isAuthenticated) {
+    if (authSession.role === "teacher") {
+      return <Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />;
+    }
     return <Navigate to="/explorar" replace />;
   }
 

@@ -178,6 +178,58 @@ def get_thread(db: Session, user: AuthUser, thread_id: UUID) -> dict:
     return {"thread": _map_thread_row(thread)}
 
 
+def list_threads(db: Session, user: AuthUser, limit: int, booking_status: str | None = None) -> dict:
+    if limit < 1 or limit > 200:
+        raise ChatValidationError("limit must be between 1 and 200.")
+
+    where_clauses = ["(t.parent_profile_id = :actor_profile_id or t.teacher_profile_id = :actor_profile_id)"]
+    params: dict[str, object] = {
+        "actor_profile_id": user.user_id,
+        "limit": limit,
+    }
+
+    if booking_status:
+        where_clauses.append("b.status = :booking_status")
+        params["booking_status"] = booking_status
+
+    rows = (
+        db.execute(
+            text(
+                f"""
+                select
+                  t.id,
+                  t.booking_id,
+                  t.parent_profile_id,
+                  t.teacher_profile_id,
+                  t.child_id,
+                  b.status as booking_status,
+                  t.created_at,
+                  t.updated_at,
+                  t.last_message_at,
+                  pc.name as child_name,
+                  pp_parent.first_name as parent_first_name,
+                  pp_parent.last_name as parent_last_name,
+                  pp_teacher.first_name as teacher_first_name,
+                  pp_teacher.last_name as teacher_last_name
+                from chat_threads t
+                join bookings b on b.id = t.booking_id
+                join parent_children pc on pc.id = t.child_id
+                join profiles pp_parent on pp_parent.id = t.parent_profile_id
+                join profiles pp_teacher on pp_teacher.id = t.teacher_profile_id
+                where {' and '.join(where_clauses)}
+                order by coalesce(t.last_message_at, t.updated_at) desc
+                limit :limit
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
+
+    return {"threads": [_map_thread_row(dict(row)) for row in rows]}
+
+
 def get_thread_messages(db: Session, user: AuthUser, thread_id: UUID, limit: int) -> dict:
     if limit < 1 or limit > 200:
         raise ChatValidationError("limit must be between 1 and 200.")

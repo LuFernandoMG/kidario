@@ -1,10 +1,12 @@
 import type { UserRole } from "@/lib/authSession";
 import {
   patchParentProfile,
-  patchTeacherProfile,
   type ParentProfilePatchPayload,
+} from "@/domains/parent/api/backendParentProfiles";
+import {
+  patchTeacherProfile,
   type TeacherProfilePatchPayload,
-} from "@/lib/backendProfiles";
+} from "@/domains/teacher/api/backendTeacherProfiles";
 
 const PENDING_PROFILE_SYNC_KEY = "kidario_pending_profile_sync_v1";
 

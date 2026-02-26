@@ -11,6 +11,7 @@ from app.schemas.bookings import (
     BookingCompletePatch,
     BookingCreateRequest,
     BookingReschedulePatch,
+    TeacherBookingDecisionPatch,
 )
 from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
@@ -474,6 +475,125 @@ def reschedule_booking(db: Session, user: AuthUser, booking_id: UUID, payload: B
 
     if str(booking["parent_profile_id"]) != user.user_id:
         raise BookingPermissionError("Only the parent owner can reschedule the booking.")
+    if booking["status"] not in ("pendente", "confirmada"):
+        raise BookingConflictError("Booking cannot be rescheduled in the current status.")
+
+    _ensure_slot_is_available(
+        db,
+        UUID(str(booking["teacher_profile_id"])),
+        payload.new_date_iso,
+        payload.new_time,
+        excluding_booking_id=booking_id,
+    )
+
+    updated = (
+        db.execute(
+            text(
+                """
+                update bookings
+                set
+                  date_iso = :date_iso,
+                  time = :time,
+                  updated_at = now()
+                where id = :booking_id
+                returning id, date_iso, time, status, updated_at
+                """
+            ),
+            {"booking_id": str(booking_id), "date_iso": payload.new_date_iso, "time": payload.new_time},
+        )
+        .mappings()
+        .first()
+    )
+    if not updated:
+        raise BookingNotFoundError("Booking not found.")
+
+    return {
+        "status": "ok",
+        "booking_id": updated["id"],
+        "date_iso": updated["date_iso"],
+        "time": updated["time"],
+        "booking_status": updated["status"],
+        "updated_at_iso": updated["updated_at"],
+    }
+
+
+def teacher_decide_booking(
+    db: Session,
+    user: AuthUser,
+    booking_id: UUID,
+    payload: TeacherBookingDecisionPatch,
+) -> dict:
+    booking = _get_booking_for_actor(db, booking_id, user.user_id)
+
+    if str(booking["teacher_profile_id"]) != user.user_id:
+        raise BookingPermissionError("Only the teacher owner can decide this booking.")
+
+    current_status = str(booking["status"])
+    if payload.action == "accept":
+        if current_status != "pendente":
+            raise BookingConflictError("Only pending bookings can be accepted.")
+
+        updated = (
+            db.execute(
+                text(
+                    """
+                    update bookings
+                    set status = 'confirmada', updated_at = now()
+                    where id = :booking_id
+                    returning id, status, updated_at, cancellation_reason
+                    """
+                ),
+                {"booking_id": str(booking_id)},
+            )
+            .mappings()
+            .first()
+        )
+    else:
+        if current_status not in ("pendente", "confirmada"):
+            raise BookingConflictError("Only pending or confirmed bookings can be rejected.")
+
+        reason = (payload.reason or "").strip() or "Reserva recusada pela professora."
+        updated = (
+            db.execute(
+                text(
+                    """
+                    update bookings
+                    set
+                      status = 'cancelada',
+                      cancellation_reason = :reason,
+                      updated_at = now()
+                    where id = :booking_id
+                    returning id, status, updated_at, cancellation_reason
+                    """
+                ),
+                {"booking_id": str(booking_id), "reason": reason},
+            )
+            .mappings()
+            .first()
+        )
+
+    if not updated:
+        raise BookingNotFoundError("Booking not found.")
+
+    return {
+        "status": "ok",
+        "booking_id": updated["id"],
+        "booking_status": updated["status"],
+        "updated_at_iso": updated["updated_at"],
+        "cancellation_reason": updated["cancellation_reason"],
+    }
+
+
+def teacher_reschedule_booking(
+    db: Session,
+    user: AuthUser,
+    booking_id: UUID,
+    payload: BookingReschedulePatch,
+) -> dict:
+    booking = _get_booking_for_actor(db, booking_id, user.user_id)
+
+    if str(booking["teacher_profile_id"]) != user.user_id:
+        raise BookingPermissionError("Only the teacher owner can reschedule the booking.")
     if booking["status"] not in ("pendente", "confirmada"):
         raise BookingConflictError("Booking cannot be rescheduled in the current status.")
 

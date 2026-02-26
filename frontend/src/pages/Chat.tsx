@@ -14,6 +14,7 @@ import {
   sendChatMessage,
 } from "@/lib/backendChat";
 import { useToast } from "@/hooks/use-toast";
+import { TEACHER_AGENDA_PATH } from "@/domains/teacher/lib/teacherRoutes";
 
 const POLLING_INTERVAL_MS = 5000;
 
@@ -24,6 +25,7 @@ export default function Chat() {
 
   const authSession = getAuthSession();
   const accessToken = getSupabaseAccessToken();
+  const agendaPath = authSession.role === "teacher" ? TEACHER_AGENDA_PATH : "/agenda";
 
   const [thread, setThread] = useState<ChatThreadView | null>(null);
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
@@ -147,7 +149,7 @@ export default function Chat() {
         ) : error ? (
           <div className="card-kidario p-6 text-center space-y-3">
             <p className="text-foreground font-medium">{error}</p>
-            <Link to="/agenda" className="text-primary text-sm font-medium hover:underline">
+            <Link to={agendaPath} className="text-primary text-sm font-medium hover:underline">
               Voltar para agenda
             </Link>
           </div>

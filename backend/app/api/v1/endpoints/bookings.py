@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_teacher_user, get_current_user
 from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.db.session import get_db
@@ -20,6 +20,8 @@ from app.schemas.bookings import (
     BookingDetailResponse,
     BookingReschedulePatch,
     BookingRescheduleResponse,
+    TeacherBookingDecisionPatch,
+    TeacherBookingDecisionResponse,
     ParentAgendaResponse,
     TeacherAgendaResponse,
     TeacherAvailabilitySlotsResponse,
@@ -37,6 +39,8 @@ from app.services.booking_service import (
     get_teacher_agenda,
     get_teacher_availability_slots,
     reschedule_booking,
+    teacher_decide_booking,
+    teacher_reschedule_booking,
 )
 
 router = APIRouter(tags=["bookings"])
@@ -99,7 +103,7 @@ def get_parent_agenda_endpoint(
 def get_teacher_agenda_endpoint(
     tab: Literal["upcoming", "past"] = Query(default="upcoming"),
     booking_status: str | None = Query(default=None, alias="status"),
-    user: AuthUser = Security(get_current_user),
+    user: AuthUser = Security(get_current_teacher_user),
     db: Session = Depends(get_db),
 ) -> TeacherAgendaResponse:
     try:
@@ -140,6 +144,52 @@ def patch_booking_reschedule(
     try:
         with db.begin():
             data = reschedule_booking(db, user, booking_id, payload)
+    except BookingNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except BookingPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except BookingValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except BookingConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return BookingRescheduleResponse(**data)
+
+
+@router.patch("/bookings/{booking_id}/teacher/decision", response_model=TeacherBookingDecisionResponse)
+def patch_teacher_booking_decision(
+    booking_id: UUID,
+    payload: TeacherBookingDecisionPatch,
+    user: AuthUser = Security(get_current_teacher_user),
+    db: Session = Depends(get_db),
+) -> TeacherBookingDecisionResponse:
+    try:
+        with db.begin():
+            data = teacher_decide_booking(db, user, booking_id, payload)
+    except BookingNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except BookingPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except BookingValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except BookingConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return TeacherBookingDecisionResponse(**data)
+
+
+@router.patch("/bookings/{booking_id}/teacher/reschedule", response_model=BookingRescheduleResponse)
+def patch_teacher_booking_reschedule(
+    booking_id: UUID,
+    payload: BookingReschedulePatch,
+    user: AuthUser = Security(get_current_teacher_user),
+    db: Session = Depends(get_db),
+) -> BookingRescheduleResponse:
+    try:
+        with db.begin():
+            data = teacher_reschedule_booking(db, user, booking_id, payload)
     except BookingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except BookingPermissionError as exc:
