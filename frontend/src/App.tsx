@@ -31,6 +31,7 @@ import TeacherAgendaPage from "@/domains/teacher/pages/TeacherAgendaPage";
 import TeacherStudentsPage from "@/domains/teacher/pages/TeacherStudentsPage";
 import TeacherPlanningPage from "@/domains/teacher/pages/TeacherPlanningPage";
 import TeacherFinancePage from "@/domains/teacher/pages/TeacherFinancePage";
+import { getAuthSession } from "@/lib/authSession";
 import {
   TEACHER_AGENDA_PATH,
   TEACHER_CONTROL_CENTER_PATH,
@@ -47,6 +48,11 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function RoleAwareAgendaRoute() {
+  const authSession = getAuthSession();
+  return authSession.role === "teacher" ? <TeacherAgendaPage /> : <Agenda />;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -66,6 +72,12 @@ const App = () => (
           <Route path={TEACHER_PRIVATE_SIGNUP_PATH} element={<TeacherPrivateSignup />} />
           {/* Parent Flow */}
           <Route path="/explorar" element={<Explore />} />
+          <Route path="/professora/centro" element={<Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />} />
+          <Route path="/professora/inicio" element={<Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />} />
+          <Route path="/professora/agenda" element={<Navigate to={TEACHER_AGENDA_PATH} replace />} />
+          <Route path="/professora/alunos" element={<Navigate to={TEACHER_STUDENTS_PATH} replace />} />
+          <Route path="/professora/planejamento" element={<Navigate to={TEACHER_PLANNING_PATH} replace />} />
+          <Route path="/professora/financeiro" element={<Navigate to={TEACHER_FINANCE_PATH} replace />} />
           <Route path="/professora/:id" element={<TeacherProfile />} />
           <Route path="/agendar/:id" element={<BookingScheduler />} />
           <Route path="/checkout/:id" element={<Checkout />} />
@@ -82,8 +94,8 @@ const App = () => (
           <Route
             path="/agenda"
             element={(
-              <RequireRoleRoute allowedRoles={["parent"]}>
-                <Agenda />
+              <RequireRoleRoute allowedRoles={["parent", "teacher"]}>
+                <RoleAwareAgendaRoute />
               </RequireRoleRoute>
             )}
           />
@@ -123,14 +135,6 @@ const App = () => (
             )}
           />
           <Route
-            path={TEACHER_AGENDA_PATH}
-            element={(
-              <RequireRoleRoute allowedRoles={["teacher"]}>
-                <TeacherAgendaPage />
-              </RequireRoleRoute>
-            )}
-          />
-          <Route
             path={TEACHER_STUDENTS_PATH}
             element={(
               <RequireRoleRoute allowedRoles={["teacher"]}>
@@ -154,8 +158,6 @@ const App = () => (
               </RequireRoleRoute>
             )}
           />
-          <Route path="/professora/centro" element={<Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />} />
-          
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
