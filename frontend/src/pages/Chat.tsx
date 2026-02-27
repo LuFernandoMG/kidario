@@ -40,7 +40,9 @@ export default function Chat() {
     if (!accessToken) return "";
     return decodeJwtSub(accessToken);
   }, [accessToken]);
-  const isReadOnly = thread?.booking_status === "cancelada" || thread?.booking_status === "concluida";
+  const isReadOnly = Boolean(
+    thread ? (thread.is_read_only ?? thread.booking_status === "cancelada") : false,
+  );
 
   useEffect(() => {
     bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -70,8 +72,9 @@ export default function Chat() {
         if (!isMounted) return;
         setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar o chat.");
       } finally {
-        if (!isMounted) return;
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -162,7 +165,7 @@ export default function Chat() {
               <p className="text-foreground font-medium">{thread?.child_name || "-"}</p>
               {isReadOnly && (
                 <p className="text-xs text-warning mt-3">
-                  Este chat está em modo somente leitura para esta aula.
+                  Este chat está em modo somente leitura porque a reserva foi cancelada.
                 </p>
               )}
             </section>

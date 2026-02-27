@@ -219,7 +219,7 @@ export default function Checkout() {
     }
 
     const bookingId = getBookingId();
-    const bookingStatus = paymentMethod === "cartao" ? "confirmada" : "pendente";
+    const bookingStatus = "pendente";
 
     setTimeout(() => {
       appendStoredBooking({

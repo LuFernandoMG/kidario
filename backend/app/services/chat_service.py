@@ -58,6 +58,7 @@ def _get_booking_with_participants(db: Session, booking_id: UUID) -> dict:
 
 
 def _map_thread_row(row: dict) -> dict:
+    is_read_only = row["booking_status"] == "cancelada" and not bool(row.get("has_active_booking"))
     return {
         "id": row["id"],
         "booking_id": row["booking_id"],
@@ -65,6 +66,7 @@ def _map_thread_row(row: dict) -> dict:
         "teacher_profile_id": row["teacher_profile_id"],
         "child_id": row["child_id"],
         "booking_status": row["booking_status"],
+        "is_read_only": is_read_only,
         "parent_name": _full_name(row.get("parent_first_name"), row.get("parent_last_name")),
         "teacher_name": _full_name(row.get("teacher_first_name"), row.get("teacher_last_name")),
         "child_name": row.get("child_name") or "Criança",
@@ -96,6 +98,14 @@ def _get_thread_with_participants(db: Session, thread_id: UUID) -> dict:
                   t.teacher_profile_id,
                   t.child_id,
                   b.status as booking_status,
+                  exists (
+                    select 1
+                    from bookings b_active
+                    where b_active.parent_profile_id = t.parent_profile_id
+                      and b_active.teacher_profile_id = t.teacher_profile_id
+                      and b_active.child_id = t.child_id
+                      and b_active.status in ('pendente', 'confirmada')
+                  ) as has_active_booking,
                   t.created_at,
                   t.updated_at,
                   t.last_message_at,
@@ -139,25 +149,78 @@ def get_or_create_thread_from_booking(db: Session, user: AuthUser, booking_id: U
         db.execute(
             text(
                 """
-                insert into chat_threads
-                  (booking_id, parent_profile_id, teacher_profile_id, child_id)
-                values
-                  (:booking_id, :parent_profile_id, :teacher_profile_id, :child_id)
-                on conflict (booking_id)
-                do update set booking_id = excluded.booking_id
-                returning id
+                select id
+                from chat_threads
+                where booking_id = :booking_id
+                limit 1
                 """
             ),
-            {
-                "booking_id": str(booking_id),
-                "parent_profile_id": str(booking["parent_profile_id"]),
-                "teacher_profile_id": str(booking["teacher_profile_id"]),
-                "child_id": str(booking["child_id"]),
-            },
+            {"booking_id": str(booking_id)},
         )
         .mappings()
         .first()
     )
+    if not thread_row:
+        existing_trio_thread = (
+            db.execute(
+                text(
+                    """
+                    select id
+                    from chat_threads
+                    where parent_profile_id = :parent_profile_id
+                      and teacher_profile_id = :teacher_profile_id
+                      and child_id = :child_id
+                    order by coalesce(last_message_at, updated_at) desc, created_at asc
+                    limit 1
+                    """
+                ),
+                {
+                    "parent_profile_id": str(booking["parent_profile_id"]),
+                    "teacher_profile_id": str(booking["teacher_profile_id"]),
+                    "child_id": str(booking["child_id"]),
+                },
+            )
+            .mappings()
+            .first()
+        )
+        if existing_trio_thread:
+            thread_row = (
+                db.execute(
+                    text(
+                        """
+                        update chat_threads
+                        set booking_id = :booking_id, updated_at = now()
+                        where id = :thread_id
+                        returning id
+                        """
+                    ),
+                    {"booking_id": str(booking_id), "thread_id": str(existing_trio_thread["id"])},
+                )
+                .mappings()
+                .first()
+            )
+        else:
+            thread_row = (
+                db.execute(
+                    text(
+                        """
+                        insert into chat_threads
+                          (booking_id, parent_profile_id, teacher_profile_id, child_id)
+                        values
+                          (:booking_id, :parent_profile_id, :teacher_profile_id, :child_id)
+                        returning id
+                        """
+                    ),
+                    {
+                        "booking_id": str(booking_id),
+                        "parent_profile_id": str(booking["parent_profile_id"]),
+                        "teacher_profile_id": str(booking["teacher_profile_id"]),
+                        "child_id": str(booking["child_id"]),
+                    },
+                )
+                .mappings()
+                .first()
+            )
     if not thread_row:
         raise ChatValidationError("Could not create chat thread.")
 
@@ -196,28 +259,45 @@ def list_threads(db: Session, user: AuthUser, limit: int, booking_status: str | 
         db.execute(
             text(
                 f"""
-                select
-                  t.id,
-                  t.booking_id,
-                  t.parent_profile_id,
-                  t.teacher_profile_id,
-                  t.child_id,
-                  b.status as booking_status,
-                  t.created_at,
-                  t.updated_at,
-                  t.last_message_at,
-                  pc.name as child_name,
-                  pp_parent.first_name as parent_first_name,
-                  pp_parent.last_name as parent_last_name,
-                  pp_teacher.first_name as teacher_first_name,
-                  pp_teacher.last_name as teacher_last_name
-                from chat_threads t
-                join bookings b on b.id = t.booking_id
-                join parent_children pc on pc.id = t.child_id
-                join profiles pp_parent on pp_parent.id = t.parent_profile_id
-                join profiles pp_teacher on pp_teacher.id = t.teacher_profile_id
-                where {' and '.join(where_clauses)}
-                order by coalesce(t.last_message_at, t.updated_at) desc
+                select *
+                from (
+                  select distinct on (t.parent_profile_id, t.teacher_profile_id, t.child_id)
+                    t.id,
+                    t.booking_id,
+                    t.parent_profile_id,
+                    t.teacher_profile_id,
+                    t.child_id,
+                    b.status as booking_status,
+                    exists (
+                      select 1
+                      from bookings b_active
+                      where b_active.parent_profile_id = t.parent_profile_id
+                        and b_active.teacher_profile_id = t.teacher_profile_id
+                        and b_active.child_id = t.child_id
+                        and b_active.status in ('pendente', 'confirmada')
+                    ) as has_active_booking,
+                    t.created_at,
+                    t.updated_at,
+                    t.last_message_at,
+                    pc.name as child_name,
+                    pp_parent.first_name as parent_first_name,
+                    pp_parent.last_name as parent_last_name,
+                    pp_teacher.first_name as teacher_first_name,
+                    pp_teacher.last_name as teacher_last_name
+                  from chat_threads t
+                  join bookings b on b.id = t.booking_id
+                  join parent_children pc on pc.id = t.child_id
+                  join profiles pp_parent on pp_parent.id = t.parent_profile_id
+                  join profiles pp_teacher on pp_teacher.id = t.teacher_profile_id
+                  where {' and '.join(where_clauses)}
+                  order by
+                    t.parent_profile_id,
+                    t.teacher_profile_id,
+                    t.child_id,
+                    coalesce(t.last_message_at, t.updated_at) desc,
+                    t.created_at asc
+                ) dedup_threads
+                order by coalesce(dedup_threads.last_message_at, dedup_threads.updated_at) desc
                 limit :limit
                 """
             ),
@@ -270,8 +350,9 @@ def post_thread_message(db: Session, user: AuthUser, thread_id: UUID, payload: C
         str(thread["teacher_profile_id"]),
     )
 
-    if thread["booking_status"] in ("cancelada", "concluida"):
-        raise ChatValidationError("Este chat está em modo somente leitura para esta aula.")
+    is_read_only = thread["booking_status"] == "cancelada" and not bool(thread.get("has_active_booking"))
+    if is_read_only:
+        raise ChatValidationError("Este chat está em modo somente leitura para esta aula cancelada.")
 
     normalized_body = payload.body.strip()
     if not normalized_body:

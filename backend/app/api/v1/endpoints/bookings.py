@@ -1,4 +1,5 @@
 from datetime import date
+from collections.abc import Callable
 from typing import Literal
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from app.schemas.bookings import (
     BookingDetailResponse,
     BookingReschedulePatch,
     BookingRescheduleResponse,
+    TeacherFollowUpContextResponse,
     TeacherBookingDecisionPatch,
     TeacherBookingDecisionResponse,
     ParentAgendaResponse,
@@ -38,6 +40,7 @@ from app.services.booking_service import (
     get_parent_agenda,
     get_teacher_agenda,
     get_teacher_availability_slots,
+    get_teacher_follow_up_context,
     reschedule_booking,
     teacher_decide_booking,
     teacher_reschedule_booking,
@@ -61,6 +64,20 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail) from exc
 
 
+def _run_write_transaction(db: Session, operation: Callable[[], dict]) -> dict:
+    if db.in_transaction():
+        try:
+            data = operation()
+            db.commit()
+            return data
+        except Exception:
+            db.rollback()
+            raise
+
+    with db.begin():
+        return operation()
+
+
 @router.post("/bookings", response_model=BookingCreateResponse, status_code=status.HTTP_201_CREATED)
 def post_booking(
     payload: BookingCreateRequest,
@@ -68,8 +85,7 @@ def post_booking(
     db: Session = Depends(get_db),
 ) -> BookingCreateResponse:
     try:
-        with db.begin():
-            data = create_booking(db, user, payload)
+        data = _run_write_transaction(db, lambda: create_booking(db, user, payload))
     except BookingPermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except BookingValidationError as exc:
@@ -142,8 +158,7 @@ def patch_booking_reschedule(
     db: Session = Depends(get_db),
 ) -> BookingRescheduleResponse:
     try:
-        with db.begin():
-            data = reschedule_booking(db, user, booking_id, payload)
+        data = _run_write_transaction(db, lambda: reschedule_booking(db, user, booking_id, payload))
     except BookingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except BookingPermissionError as exc:
@@ -165,8 +180,7 @@ def patch_teacher_booking_decision(
     db: Session = Depends(get_db),
 ) -> TeacherBookingDecisionResponse:
     try:
-        with db.begin():
-            data = teacher_decide_booking(db, user, booking_id, payload)
+        data = _run_write_transaction(db, lambda: teacher_decide_booking(db, user, booking_id, payload))
     except BookingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except BookingPermissionError as exc:
@@ -188,8 +202,7 @@ def patch_teacher_booking_reschedule(
     db: Session = Depends(get_db),
 ) -> BookingRescheduleResponse:
     try:
-        with db.begin():
-            data = teacher_reschedule_booking(db, user, booking_id, payload)
+        data = _run_write_transaction(db, lambda: teacher_reschedule_booking(db, user, booking_id, payload))
     except BookingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except BookingPermissionError as exc:
@@ -211,8 +224,7 @@ def patch_booking_cancel(
     db: Session = Depends(get_db),
 ) -> BookingCancelResponse:
     try:
-        with db.begin():
-            data = cancel_booking(db, user, booking_id, payload)
+        data = _run_write_transaction(db, lambda: cancel_booking(db, user, booking_id, payload))
     except BookingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except BookingPermissionError as exc:
@@ -234,8 +246,7 @@ def patch_booking_complete(
     db: Session = Depends(get_db),
 ) -> BookingCompleteResponse:
     try:
-        with db.begin():
-            data = complete_booking(db, user, booking_id, payload)
+        data = _run_write_transaction(db, lambda: complete_booking(db, user, booking_id, payload))
     except BookingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except BookingPermissionError as exc:
@@ -247,6 +258,28 @@ def patch_booking_complete(
     except SQLAlchemyError as exc:
         _raise_http_from_sql_error(exc)
     return BookingCompleteResponse(**data)
+
+
+@router.get(
+    "/bookings/{booking_id}/teacher/follow-up-context",
+    response_model=TeacherFollowUpContextResponse,
+)
+def get_teacher_follow_up_context_endpoint(
+    booking_id: UUID,
+    user: AuthUser = Security(get_current_teacher_user),
+    db: Session = Depends(get_db),
+) -> TeacherFollowUpContextResponse:
+    try:
+        data = get_teacher_follow_up_context(db, user, booking_id)
+    except BookingNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except BookingPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except BookingValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return TeacherFollowUpContextResponse(**data)
 
 
 @router.get(

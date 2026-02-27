@@ -54,7 +54,7 @@ def test_post_booking_returns_created(client: TestClient, monkeypatch: pytest.Mo
         return {
             "status": "ok",
             "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
-            "booking_status": "confirmada",
+            "booking_status": "pendente",
             "payment_status": "pago",
         }
 
@@ -74,7 +74,7 @@ def test_post_booking_returns_created(client: TestClient, monkeypatch: pytest.Mo
 
     assert response.status_code == 201
     assert response.json()["status"] == "ok"
-    assert response.json()["booking_status"] == "confirmada"
+    assert response.json()["booking_status"] == "pendente"
 
 
 def test_get_parent_agenda_returns_lessons(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -199,3 +199,46 @@ def test_patch_teacher_booking_reschedule_returns_ok(
     assert body["status"] == "ok"
     assert body["date_iso"] == "2026-03-03"
     assert body["time"] == "16:00"
+
+
+def test_get_teacher_follow_up_context_returns_ok(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_get_teacher_follow_up_context(db, user, booking_id):
+        return {
+            "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "child_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            "child_name": "Luca",
+            "child_age": 8,
+            "date_iso": "2026-03-03",
+            "date_label": "03/03/2026",
+            "time": "16:00",
+            "duration_minutes": 60,
+            "modality": "online",
+            "status": "confirmada",
+            "completed_lessons_with_child": 1,
+            "class_objectives": [
+                {
+                    "objective": "Reforçar consciência fonológica",
+                    "achieved": False,
+                    "fullfilment_level": 0,
+                }
+            ],
+            "parent_focus_points": [],
+            "activity_plan_source": "fallback",
+            "activity_plan": [
+                "Revisão ativa do objetivo principal",
+                "Atividade prática com dificuldade progressiva",
+            ],
+        }
+
+    monkeypatch.setattr(bookings_endpoints, "get_teacher_follow_up_context", _fake_get_teacher_follow_up_context)
+
+    response = client.get("/api/v1/bookings/3472def4-1d03-4350-b2c2-20c7fa27d430/teacher/follow-up-context")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["booking_id"] == "3472def4-1d03-4350-b2c2-20c7fa27d430"
+    assert body["completed_lessons_with_child"] == 1
+    assert len(body["class_objectives"]) == 1

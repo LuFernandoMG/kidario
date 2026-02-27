@@ -71,6 +71,31 @@ def test_get_teacher_control_center_overview_returns_ok(
                     "modality": "online",
                     "status": "pendente",
                     "chat_thread_id": None,
+                    "has_unread_messages": False,
+                    "completed_lessons_with_child": 0,
+                    "objectives": [
+                        {
+                            "objective": "Diagnóstico",
+                            "achieved": False,
+                            "fullfilment_level": 0,
+                        },
+                        {
+                            "objective": "Validar pontos de melhoria compartilhados pela família",
+                            "achieved": False,
+                            "fullfilment_level": 0,
+                        },
+                        {
+                            "objective": "Definir próximos passos pedagógicos após a avaliação inicial",
+                            "achieved": False,
+                            "fullfilment_level": 0,
+                        },
+                    ],
+                    "parent_focus_points": ["Leitura", "Atenção"],
+                    "activity_plan_source": "fallback",
+                    "activity_plan": [
+                        "Observação guiada para validar o diagnóstico inicial.",
+                        "Atividade curta de sondagem para mapear repertório.",
+                    ],
                     "actions": {
                         "can_accept": True,
                         "can_reject": True,
@@ -128,6 +153,7 @@ def test_get_chat_threads_returns_ok(
                     "teacher_profile_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
                     "child_id": UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
                     "booking_status": "confirmada",
+                    "is_read_only": False,
                     "parent_name": "Parent Name",
                     "teacher_name": "Teacher Name",
                     "child_name": "Luca",

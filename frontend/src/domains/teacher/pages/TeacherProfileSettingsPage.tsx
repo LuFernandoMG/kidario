@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Camera, LogOut, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +16,10 @@ import {
 } from "@/components/ui/select";
 import { getSupabaseAccessToken, signOutFromSupabase } from "@/lib/authSession";
 import { resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
+import {
+  WeeklyAvailabilityCalendar,
+  type WeeklyAvailabilitySlot,
+} from "@/components/teacher/WeeklyAvailabilityCalendar";
 import {
   getTeacherProfile,
   patchTeacherProfile,
@@ -55,6 +59,7 @@ interface TeacherFormState {
   profilePhotoFileName: string;
   formations: FormationForm[];
   experiences: ExperienceForm[];
+  weeklyAvailability: (WeeklyAvailabilitySlot & { id?: string })[];
 }
 
 const emptyForm: TeacherFormState = {
@@ -72,6 +77,7 @@ const emptyForm: TeacherFormState = {
   profilePhotoFileName: "",
   formations: [],
   experiences: [],
+  weeklyAvailability: [],
 };
 
 const durationOptions = [
@@ -98,6 +104,36 @@ const degreeTypes = [
   { value: "curso-livre", label: "Curso livre / certificacao" },
 ];
 
+const dayLabelByValue = {
+  segunda: "Segunda",
+  terca: "Terça",
+  quarta: "Quarta",
+  quinta: "Quinta",
+  sexta: "Sexta",
+  sabado: "Sábado",
+  domingo: "Domingo",
+} as const;
+
+const dayValueByNumber = {
+  0: "segunda",
+  1: "terca",
+  2: "quarta",
+  3: "quinta",
+  4: "sexta",
+  5: "sabado",
+  6: "domingo",
+} as const;
+
+const dayNumberByValue = {
+  segunda: 0,
+  terca: 1,
+  quarta: 2,
+  quinta: 3,
+  sexta: 4,
+  sabado: 5,
+  domingo: 6,
+} as const;
+
 function emptyFormation(): FormationForm {
   return {
     degreeType: "",
@@ -116,6 +152,18 @@ function emptyExperience(): ExperienceForm {
     periodTo: "",
     currentPosition: false,
   };
+}
+
+function getAvailabilityKey(dayOfWeek: string, startTime: string) {
+  return `${dayOfWeek}|${startTime}`;
+}
+
+function mapDayNumberToValue(dayOfWeek: number): WeeklyAvailabilitySlot["dayOfWeek"] {
+  return dayValueByNumber[dayOfWeek as keyof typeof dayValueByNumber] ?? "segunda";
+}
+
+function mapDayValueToNumber(dayOfWeek: string): number {
+  return dayNumberByValue[dayOfWeek as keyof typeof dayNumberByValue] ?? 0;
 }
 
 export default function TeacherProfileSettings() {
@@ -138,7 +186,7 @@ export default function TeacherProfileSettings() {
     [form.profilePhotoFileName],
   );
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     const accessToken = getSupabaseAccessToken();
     if (!accessToken) {
       navigate("/login?returnTo=%2Fperfil%2Fprofessora");
@@ -180,6 +228,12 @@ export default function TeacherProfileSettings() {
           periodTo: experience.period_to || "",
           currentPosition: experience.current_position,
         })),
+        weeklyAvailability: (payload.availability || []).map((slot) => ({
+          id: slot.id,
+          dayOfWeek: mapDayNumberToValue(slot.day_of_week),
+          startTime: slot.start_time,
+          endTime: slot.end_time,
+        })),
       };
       setEmail(payload.profile.email);
       setForm(nextForm);
@@ -194,11 +248,11 @@ export default function TeacherProfileSettings() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     void loadProfile();
-  }, [navigate]);
+  }, [loadProfile]);
 
   const setField = (
     field: Exclude<keyof TeacherFormState, "formations" | "experiences">,
@@ -294,12 +348,25 @@ export default function TeacherProfileSettings() {
       setError("Preencha nome e sobrenome.");
       return;
     }
+    if (form.weeklyAvailability.length < 1) {
+      setError("Defina pelo menos um horário de disponibilidade semanal.");
+      return;
+    }
 
     setIsSaving(true);
     setError("");
     setNotice("");
 
     try {
+      const currentAvailabilityIds = new Set(
+        form.weeklyAvailability
+          .map((slot) => slot.id)
+          .filter((id): id is string => Boolean(id)),
+      );
+      const availabilityDeleteIds = initialSnapshot.weeklyAvailability
+        .map((slot) => slot.id)
+        .filter((id): id is string => Boolean(id) && !currentAvailabilityIds.has(id));
+
       await patchTeacherProfile(accessToken, {
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
@@ -335,6 +402,15 @@ export default function TeacherProfileSettings() {
             current_position: experience.currentPosition,
           })),
           delete_ids: deletedExperienceIds,
+        },
+        availability_ops: {
+          upsert: form.weeklyAvailability.map((slot) => ({
+            id: slot.id,
+            day_of_week: mapDayValueToNumber(slot.dayOfWeek),
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+          })),
+          delete_ids: availabilityDeleteIds,
         },
       });
       setNotice("Perfil da professora atualizado com sucesso.");
@@ -422,6 +498,57 @@ export default function TeacherProfileSettings() {
                   </KidarioButton>
                 </div>
               </div>
+            </section>
+
+            <section className="card-kidario p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-lg font-semibold text-foreground">Disponibilidade semanal</h2>
+              </div>
+              {form.weeklyAvailability.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum horário selecionado.
+                </p>
+              )}
+              {!isEditing && form.weeklyAvailability.length > 0 && (
+                <div className="rounded-xl border border-border p-3">
+                  <ul className="space-y-1">
+                    {form.weeklyAvailability
+                      .slice()
+                      .sort((a, b) => getAvailabilityKey(a.dayOfWeek, a.startTime).localeCompare(getAvailabilityKey(b.dayOfWeek, b.startTime)))
+                      .map((slot, index) => (
+                        <li key={`${slot.dayOfWeek}-${slot.startTime}-${index}`} className="text-sm text-foreground">
+                          {dayLabelByValue[slot.dayOfWeek as keyof typeof dayLabelByValue]} · {slot.startTime} - {slot.endTime}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+              {isEditing && (
+                <WeeklyAvailabilityCalendar
+                  value={form.weeklyAvailability.map((slot) => ({
+                    dayOfWeek: slot.dayOfWeek,
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                  }))}
+                  onChange={(nextSlots) =>
+                    setForm((previous) => {
+                      const previousByKey = new Map(
+                        previous.weeklyAvailability.map((slot) => [getAvailabilityKey(slot.dayOfWeek, slot.startTime), slot]),
+                      );
+                      return {
+                        ...previous,
+                        weeklyAvailability: nextSlots.map((slot) => ({
+                          id: previousByKey.get(getAvailabilityKey(slot.dayOfWeek, slot.startTime))?.id,
+                          dayOfWeek: slot.dayOfWeek,
+                          startTime: slot.startTime,
+                          endTime: slot.endTime,
+                        })),
+                      };
+                    })
+                  }
+                  slotDurationMinutes={Number(form.lessonDurationMinutes) || 60}
+                />
+              )}
             </section>
 
             <section className="card-kidario p-4 space-y-3">

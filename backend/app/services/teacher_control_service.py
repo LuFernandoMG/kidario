@@ -1,15 +1,21 @@
 from datetime import UTC, date, datetime, timedelta
+import re
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.schemas.teacher_control import TeacherControlCenterOverviewResponse
 from app.services.booking_service import (
     BookingNotFoundError,
     BookingValidationError,
     get_teacher_availability_slots,
+)
+from app.services.teacher_activity_planner_service import (
+    TeacherActivityPlanInput,
+    generate_teacher_activity_plan,
 )
 
 
@@ -40,6 +46,139 @@ def _resolve_progress_status(completed_lessons: int, latest_follow_up_summary: s
     return "atencao"
 
 
+def _can_teacher_complete_booking(*, status: str, date_iso: date, time_value: str, duration_minutes: int) -> bool:
+    if status == "concluida":
+        return True
+    if status != "confirmada":
+        return False
+
+    hour, minute = time_value.split(":", maxsplit=1)
+    lesson_start = datetime(
+        year=date_iso.year,
+        month=date_iso.month,
+        day=date_iso.day,
+        hour=int(hour),
+        minute=int(minute),
+    )
+    lesson_end = lesson_start + timedelta(minutes=int(duration_minutes or 0))
+    return lesson_end <= datetime.now()
+
+
+def _normalize_objectives(raw_value: object) -> list[dict]:
+    if raw_value is None:
+        return []
+
+    if isinstance(raw_value, str):
+        values: list[object] = [raw_value]
+    elif isinstance(raw_value, (list, tuple, set)):
+        values = list(raw_value)
+    else:
+        values = [raw_value]
+
+    normalized: list[dict] = []
+    for value in values:
+        if isinstance(value, str):
+            objective_text = value.strip()
+            if not objective_text:
+                continue
+            normalized.append(
+                {
+                    "objective": objective_text,
+                    "achieved": False,
+                    "fullfilment_level": 0,
+                }
+            )
+            continue
+
+        if not isinstance(value, dict):
+            continue
+
+        objective_text = str(value.get("objective", "")).strip()
+        if not objective_text:
+            continue
+
+        fullfilment_level_raw = value.get("fullfilment_level", value.get("fulfilment_level"))
+        fullfilment_level: int
+        if isinstance(fullfilment_level_raw, int) and 0 <= fullfilment_level_raw <= 5:
+            fullfilment_level = fullfilment_level_raw
+        else:
+            fullfilment_level = 0
+
+        normalized.append(
+            {
+                "objective": objective_text,
+                "achieved": bool(value.get("achieved", False)),
+                "fullfilment_level": fullfilment_level,
+            }
+        )
+
+    return normalized
+
+
+def _parse_focus_points(raw_focus_points: str | None) -> list[str]:
+    if not raw_focus_points:
+        return []
+    normalized = raw_focus_points.strip()
+    if not normalized:
+        return []
+
+    if "\n" in normalized or ";" in normalized or "•" in normalized:
+        chunks = re.split(r"[\n;•]+", normalized)
+    elif "," in normalized:
+        chunks = normalized.split(",")
+    else:
+        chunks = [normalized]
+
+    output: list[str] = []
+    for chunk in chunks:
+        cleaned = chunk.strip(" -\t")
+        if cleaned:
+            output.append(cleaned)
+    return output
+
+
+def _build_lesson_objectives(
+    *,
+    is_first_lesson_with_child: bool,
+    latest_follow_up_next_objectives: object,
+    latest_follow_up_objectives: object,
+) -> list[dict]:
+    if is_first_lesson_with_child:
+        return [
+            {
+                "objective": "Diagnóstico",
+                "achieved": False,
+                "fullfilment_level": 0,
+            },
+        ]
+
+    normalized_follow_up_objectives = _normalize_objectives(latest_follow_up_next_objectives)
+    if normalized_follow_up_objectives:
+        return normalized_follow_up_objectives
+
+    normalized_follow_up_objectives = _normalize_objectives(latest_follow_up_objectives)
+    if normalized_follow_up_objectives:
+        return normalized_follow_up_objectives
+
+    return [
+        {
+            "objective": "Consolidar habilidades trabalhadas na aula anterior",
+            "achieved": False,
+            "fullfilment_level": 0,
+        },
+        {
+            "objective": "Aprofundar objetivo principal do ciclo atual",
+            "achieved": False,
+            "fullfilment_level": 0,
+        },
+        {
+            "objective": "Definir meta clara para o próximo encontro",
+            "achieved": False,
+            "fullfilment_level": 0,
+        },
+    ]
+
+
 def get_teacher_control_center_overview(
     db: Session,
     user: AuthUser,
@@ -49,6 +188,7 @@ def get_teacher_control_center_overview(
     limit_students: int = 8,
 ) -> dict:
     _ensure_teacher_role(db, user.user_id)
+    settings = get_settings()
 
     today = date.today()
     window_end = today + timedelta(days=14)
@@ -84,15 +224,67 @@ def get_teacher_control_center_overview(
                   b.child_id,
                   b.parent_profile_id,
                   pc.name as child_name,
+                  pc.age as child_age,
+                  pc.focus_points as child_focus_points,
                   b.date_iso,
                   b.time,
                   b.duration_minutes,
                   b.modality,
                   b.status,
-                  ct.id as chat_thread_id
+                  ct.id as chat_thread_id,
+                  coalesce(completed_counter.completed_lessons_with_child, 0) as completed_lessons_with_child,
+                  latest_follow_up.summary as latest_follow_up_summary,
+                  latest_follow_up.next_objectives as latest_follow_up_next_objectives,
+                  latest_follow_up.objectives as latest_follow_up_objectives,
+                  last_message.sender_profile_id as last_message_sender_profile_id
                 from bookings b
                 join parent_children pc on pc.id = b.child_id
-                left join chat_threads ct on ct.booking_id = b.id
+                left join lateral (
+                  select
+                    t.id
+                  from chat_threads t
+                  where t.parent_profile_id = b.parent_profile_id
+                    and t.teacher_profile_id = b.teacher_profile_id
+                    and t.child_id = b.child_id
+                  order by coalesce(t.last_message_at, t.updated_at) desc, t.created_at asc
+                  limit 1
+                ) ct on true
+                left join lateral (
+                  select
+                    count(*)::int as completed_lessons_with_child
+                  from bookings b_completed
+                  where b_completed.teacher_profile_id = b.teacher_profile_id
+                    and b_completed.child_id = b.child_id
+                    and b_completed.status = 'concluida'
+                    and (
+                      b_completed.date_iso < b.date_iso
+                      or (b_completed.date_iso = b.date_iso and b_completed.time < b.time)
+                    )
+                ) completed_counter on true
+                left join lateral (
+                  select
+                    bf.summary,
+                    bf.next_objectives,
+                    bf.objectives
+                  from booking_follow_ups bf
+                  join bookings b_follow_up on b_follow_up.id = bf.booking_id
+                  where bf.teacher_profile_id = b.teacher_profile_id
+                    and bf.child_id = b.child_id
+                    and (
+                      b_follow_up.date_iso < b.date_iso
+                      or (b_follow_up.date_iso = b.date_iso and b_follow_up.time < b.time)
+                    )
+                  order by b_follow_up.date_iso desc, b_follow_up.time desc, bf.updated_at desc
+                  limit 1
+                ) latest_follow_up on true
+                left join lateral (
+                  select
+                    cm.sender_profile_id
+                  from chat_messages cm
+                  where cm.thread_id = ct.id
+                  order by cm.created_at desc
+                  limit 1
+                ) last_message on true
                 where b.teacher_profile_id = :teacher_profile_id
                   and b.date_iso >= current_date
                 order by b.date_iso asc, b.time asc
@@ -111,6 +303,33 @@ def get_teacher_control_center_overview(
     agenda_payload = []
     for row in agenda_rows:
         status = str(row["status"])
+        completed_lessons_with_child = int(row.get("completed_lessons_with_child") or 0)
+        is_first_lesson_with_child = completed_lessons_with_child == 0
+        parent_focus_points = (
+            _parse_focus_points(row.get("child_focus_points")) if is_first_lesson_with_child else []
+        )
+        objectives = _build_lesson_objectives(
+            is_first_lesson_with_child=is_first_lesson_with_child,
+            latest_follow_up_next_objectives=row.get("latest_follow_up_next_objectives"),
+            latest_follow_up_objectives=row.get("latest_follow_up_objectives"),
+        )
+        activity_plan = generate_teacher_activity_plan(
+            TeacherActivityPlanInput(
+                child_name=str(row.get("child_name") or "Aluno"),
+                child_age=int(row["child_age"]) if row.get("child_age") is not None else None,
+                completed_lessons_with_child=completed_lessons_with_child,
+                objectives=[item["objective"] for item in objectives],
+                parent_focus_points=parent_focus_points,
+                latest_follow_up_summary=row.get("latest_follow_up_summary"),
+            ),
+            settings=settings,
+        )
+        has_unread_messages = (
+            bool(row.get("chat_thread_id"))
+            and row.get("last_message_sender_profile_id") is not None
+            and str(row["last_message_sender_profile_id"]) == str(row["parent_profile_id"])
+        )
+
         agenda_payload.append(
             {
                 "id": row["id"],
@@ -124,12 +343,23 @@ def get_teacher_control_center_overview(
                 "modality": row["modality"],
                 "status": status,
                 "chat_thread_id": row["chat_thread_id"],
+                "has_unread_messages": has_unread_messages,
+                "completed_lessons_with_child": completed_lessons_with_child,
+                "objectives": objectives,
+                "parent_focus_points": parent_focus_points,
+                "activity_plan_source": activity_plan["source"],
+                "activity_plan": activity_plan["activities"],
                 "actions": {
                     "can_accept": status == "pendente",
                     "can_reject": status in ("pendente", "confirmada"),
                     "can_reschedule": status in ("pendente", "confirmada"),
                     "can_open_chat": True,
-                    "can_complete": status == "confirmada",
+                    "can_complete": _can_teacher_complete_booking(
+                        status=status,
+                        date_iso=row["date_iso"],
+                        time_value=str(row["time"]),
+                        duration_minutes=int(row["duration_minutes"]),
+                    ),
                 },
             }
         )
@@ -138,24 +368,33 @@ def get_teacher_control_center_overview(
         db.execute(
             text(
                 """
-                select
-                  ct.id as thread_id,
-                  ct.booking_id,
-                  b.status as booking_status,
-                  pc.name as child_name,
-                  b.date_iso as lesson_date_iso,
-                  b.time as lesson_time,
-                  p_parent.first_name as parent_first_name,
-                  p_parent.last_name as parent_last_name,
-                  ct.last_message_at,
-                  ct.updated_at
-                from chat_threads ct
-                join bookings b on b.id = ct.booking_id
-                join parent_children pc on pc.id = ct.child_id
-                join profiles p_parent on p_parent.id = ct.parent_profile_id
-                where ct.teacher_profile_id = :teacher_profile_id
-                  and b.date_iso >= current_date - interval '30 days'
-                order by coalesce(ct.last_message_at, ct.updated_at) desc
+                select *
+                from (
+                  select distinct on (ct.parent_profile_id, ct.teacher_profile_id, ct.child_id)
+                    ct.id as thread_id,
+                    ct.booking_id,
+                    b.status as booking_status,
+                    pc.name as child_name,
+                    b.date_iso as lesson_date_iso,
+                    b.time as lesson_time,
+                    p_parent.first_name as parent_first_name,
+                    p_parent.last_name as parent_last_name,
+                    ct.last_message_at,
+                    ct.updated_at
+                  from chat_threads ct
+                  join bookings b on b.id = ct.booking_id
+                  join parent_children pc on pc.id = ct.child_id
+                  join profiles p_parent on p_parent.id = ct.parent_profile_id
+                  where ct.teacher_profile_id = :teacher_profile_id
+                    and b.date_iso >= current_date - interval '30 days'
+                  order by
+                    ct.parent_profile_id,
+                    ct.teacher_profile_id,
+                    ct.child_id,
+                    coalesce(ct.last_message_at, ct.updated_at) desc,
+                    ct.created_at asc
+                ) dedup_threads
+                order by coalesce(dedup_threads.last_message_at, dedup_threads.updated_at) desc
                 limit :limit_chats
                 """
             ),

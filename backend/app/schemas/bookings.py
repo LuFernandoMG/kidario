@@ -90,10 +90,18 @@ class TeacherAgendaResponse(BaseModel):
     lessons: list[TeacherAgendaLesson]
 
 
+class BookingObjectiveItem(BaseModel):
+    objective: str
+    achieved: bool = False
+    fullfilment_level: int = Field(default=0, ge=0, le=5)
+
+
 class BookingLatestFollowUp(BaseModel):
     updated_at: datetime
     summary: str
     next_steps: str
+    objectives: list[BookingObjectiveItem] = Field(default_factory=list)
+    next_objectives: list[BookingObjectiveItem] = Field(default_factory=list)
     tags: list[str]
     attention_points: list[str] = Field(default_factory=list)
 
@@ -182,6 +190,8 @@ class BookingFollowUpPayload(BaseModel):
 
     summary: str
     next_steps: str
+    objectives: list[BookingObjectiveItem] = Field(default_factory=list)
+    next_objectives: list[BookingObjectiveItem] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     attention_points: list[str] = Field(default_factory=list)
 
@@ -197,6 +207,24 @@ class BookingCompleteResponse(BaseModel):
     booking_id: UUID
     booking_status: BookingStatus
     latest_follow_up: BookingLatestFollowUp
+
+
+class TeacherFollowUpContextResponse(BaseModel):
+    booking_id: UUID
+    child_id: UUID
+    child_name: str
+    child_age: int | None = None
+    date_iso: date
+    date_label: str
+    time: str
+    duration_minutes: int
+    modality: BookingModality
+    status: BookingStatus
+    completed_lessons_with_child: int
+    class_objectives: list[BookingObjectiveItem] = Field(default_factory=list)
+    parent_focus_points: list[str] = Field(default_factory=list)
+    activity_plan_source: Literal["llm", "fallback"]
+    activity_plan: list[str] = Field(default_factory=list)
 
 
 class TeacherAvailabilityDaySlots(BaseModel):

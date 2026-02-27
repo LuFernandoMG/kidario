@@ -33,6 +33,8 @@ create table if not exists booking_follow_ups (
   child_id uuid not null references parent_children(id) on delete restrict,
   summary text not null,
   next_steps text not null,
+  objectives jsonb not null default '[]'::jsonb,
+  next_objectives jsonb not null default '[]'::jsonb,
   tags text[] not null default '{}',
   attention_points text[] not null default '{}',
   created_at timestamptz not null default now(),

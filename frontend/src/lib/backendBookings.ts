@@ -3,6 +3,13 @@ import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
+export type ObjectiveFulfilmentLevel = 0 | 1 | 2 | 3 | 4 | 5;
+
+export interface LessonObjectiveItem {
+  objective: string;
+  achieved: boolean;
+  fullfilment_level: ObjectiveFulfilmentLevel;
+}
 
 export interface CreateBookingPayload {
   parent_profile_id?: string;
@@ -48,8 +55,28 @@ export interface BookingDetailFollowUp {
   updated_at: string;
   summary: string;
   next_steps: string;
+  objectives: LessonObjectiveItem[];
+  next_objectives: LessonObjectiveItem[];
   tags: string[];
   attention_points: string[];
+}
+
+export interface TeacherFollowUpContextResponse {
+  booking_id: string;
+  child_id: string;
+  child_name: string;
+  child_age?: number | null;
+  date_iso: string;
+  date_label: string;
+  time: string;
+  duration_minutes: number;
+  modality: BookingModality;
+  status: BookingStatus;
+  completed_lessons_with_child: number;
+  class_objectives: LessonObjectiveItem[];
+  parent_focus_points: string[];
+  activity_plan_source: "llm" | "fallback";
+  activity_plan: string[];
 }
 
 export interface BookingDetailResponse {
@@ -188,6 +215,43 @@ export async function getBookingDetail(
   return backendRequest<BookingDetailResponse>({
     path: `/bookings/${bookingId}`,
     accessToken,
+  });
+}
+
+export async function getTeacherFollowUpContext(
+  accessToken: string,
+  bookingId: string,
+): Promise<TeacherFollowUpContextResponse> {
+  return backendRequest<TeacherFollowUpContextResponse>({
+    path: `/bookings/${bookingId}/teacher/follow-up-context`,
+    accessToken,
+  });
+}
+
+export async function completeBooking(
+  accessToken: string,
+  bookingId: string,
+  payload: {
+    follow_up: {
+      summary: string;
+      next_steps: string;
+      objectives: LessonObjectiveItem[];
+      next_objectives: LessonObjectiveItem[];
+      tags: string[];
+      attention_points: string[];
+    };
+  },
+) {
+  return backendRequest<{
+    status: "ok";
+    booking_id: string;
+    booking_status: BookingStatus;
+    latest_follow_up: BookingDetailFollowUp;
+  }>({
+    path: `/bookings/${bookingId}/complete`,
+    accessToken,
+    method: "PATCH",
+    body: payload as Record<string, unknown>,
   });
 }
 

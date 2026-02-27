@@ -4,6 +4,13 @@ import { buildRequestIdHeader } from "@/lib/observability";
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
 export type TeacherProgressStatus = "sem_dados" | "atencao" | "consistente";
+export type ObjectiveFulfilmentLevel = 0 | 1 | 2 | 3 | 4 | 5;
+
+export interface LessonObjectiveItem {
+  objective: string;
+  achieved: boolean;
+  fullfilment_level: ObjectiveFulfilmentLevel;
+}
 
 export interface TeacherAgendaControlLesson {
   id: string;
@@ -17,6 +24,12 @@ export interface TeacherAgendaControlLesson {
   modality: BookingModality;
   status: BookingStatus;
   chat_thread_id?: string | null;
+  has_unread_messages: boolean;
+  completed_lessons_with_child: number;
+  objectives: LessonObjectiveItem[];
+  parent_focus_points: string[];
+  activity_plan_source: "llm" | "fallback";
+  activity_plan: string[];
   actions: {
     can_accept: boolean;
     can_reject: boolean;

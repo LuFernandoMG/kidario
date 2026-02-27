@@ -1,15 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Calendar, CheckCircle2, MessageCircle, XCircle } from "lucide-react";
 import { format } from "date-fns";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
-import { KidarioButton } from "@/components/ui/KidarioButton";
 import { useToast } from "@/hooks/use-toast";
 import { getOrCreateChatThreadFromBooking } from "@/lib/backendChat";
 import { getSupabaseAccessToken } from "@/lib/authSession";
 import { TEACHER_PLANNING_PATH } from "@/domains/teacher/lib/teacherRoutes";
+import { TeacherAgendaLessonCard } from "@/domains/teacher/components/TeacherAgendaLessonCard";
 import {
   useTeacherBookingDecisionMutation,
   useTeacherBookingRescheduleMutation,
@@ -21,32 +20,15 @@ interface RescheduleState {
   time: string;
 }
 
-type AgendaFilter = "todas" | "pendentes" | "confirmadas";
+type AgendaFilter = "todas" | "pendentes" | "confirmadas" | "concluidas" | "canceladas";
 
 const agendaFilters: { value: AgendaFilter; label: string }[] = [
   { value: "todas", label: "Todas" },
   { value: "pendentes", label: "Pendentes" },
   { value: "confirmadas", label: "Confirmadas" },
+  { value: "concluidas", label: "Concluídas" },
+  { value: "canceladas", label: "Canceladas" },
 ];
-
-const statusLabelByBooking = {
-  pendente: "Pendente",
-  confirmada: "Confirmada",
-  cancelada: "Cancelada",
-  concluida: "Concluída",
-} as const;
-
-const statusClassNameByBooking = {
-  pendente: "bg-warning/10 text-warning",
-  confirmada: "bg-success/10 text-success",
-  cancelada: "bg-destructive/10 text-destructive",
-  concluida: "bg-primary/10 text-primary",
-} as const;
-
-const modalityLabelByLesson = {
-  online: "Online",
-  presencial: "Presencial",
-} as const;
 
 export default function TeacherAgendaPage() {
   const navigate = useNavigate();
@@ -64,16 +46,38 @@ export default function TeacherAgendaPage() {
   const rescheduleMutation = useTeacherBookingRescheduleMutation();
 
   const lessons = useMemo(() => overviewQuery.data?.agenda ?? [], [overviewQuery.data?.agenda]);
+  const sortedLessons = useMemo(() => {
+    return [...lessons].sort((a, b) => {
+      const aIsConcluded = a.status === "concluida" ? 1 : 0;
+      const bIsConcluded = b.status === "concluida" ? 1 : 0;
+      if (aIsConcluded !== bIsConcluded) return aIsConcluded - bIsConcluded;
+
+      const aTime = new Date(`${a.date_iso}T${a.time}:00`).getTime();
+      const bTime = new Date(`${b.date_iso}T${b.time}:00`).getTime();
+      return aTime - bTime;
+    });
+  }, [lessons]);
 
   const filteredLessons = useMemo(() => {
     if (activeFilter === "pendentes") {
-      return lessons.filter((lesson) => lesson.status === "pendente");
+      return sortedLessons.filter((lesson) => lesson.status === "pendente");
     }
     if (activeFilter === "confirmadas") {
-      return lessons.filter((lesson) => lesson.status === "confirmada");
+      return sortedLessons.filter((lesson) => lesson.status === "confirmada");
     }
-    return lessons;
-  }, [activeFilter, lessons]);
+    if (activeFilter === "concluidas") {
+      return sortedLessons.filter((lesson) => lesson.status === "concluida");
+    }
+    if (activeFilter === "canceladas") {
+      return sortedLessons.filter((lesson) => lesson.status === "cancelada");
+    }
+    return sortedLessons;
+  }, [activeFilter, sortedLessons]);
+
+  const upcomingCount = useMemo(
+    () => lessons.filter((lesson) => lesson.status === "pendente" || lesson.status === "confirmada").length,
+    [lessons],
+  );
 
   const pendingCount = useMemo(
     () => lessons.filter((lesson) => lesson.status === "pendente").length,
@@ -85,7 +89,11 @@ export default function TeacherAgendaPage() {
     [lessons],
   );
 
+  const isMutating = decisionMutation.isPending || rescheduleMutation.isPending;
+  const todayIso = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+
   const onAccept = async (bookingId: string) => {
+    if (isMutating) return;
     try {
       await decisionMutation.mutateAsync({
         bookingId,
@@ -101,6 +109,7 @@ export default function TeacherAgendaPage() {
   };
 
   const onReject = async (bookingId: string) => {
+    if (isMutating) return;
     const reason = window.prompt("Motivo da recusa (opcional):")?.trim() || undefined;
     try {
       await decisionMutation.mutateAsync({
@@ -117,6 +126,7 @@ export default function TeacherAgendaPage() {
   };
 
   const onSaveReschedule = async (bookingId: string) => {
+    if (isMutating) return;
     const payload = rescheduleState[bookingId];
     if (!payload?.dateIso || !payload.time) {
       toast({ title: "Dados incompletos", description: "Informe data e horário para reagendar." });
@@ -166,7 +176,39 @@ export default function TeacherAgendaPage() {
     }
   };
 
-  const isMutating = decisionMutation.isPending || rescheduleMutation.isPending;
+  const onToggleReschedule = (lessonId: string, defaults: { dateIso: string; time: string }) => {
+    if (isMutating) return;
+    setEditingBookingId((current) => (current === lessonId ? null : lessonId));
+    setRescheduleState((current) => ({
+      ...current,
+      [lessonId]: {
+        dateIso: current[lessonId]?.dateIso || defaults.dateIso,
+        time: current[lessonId]?.time || defaults.time,
+      },
+    }));
+  };
+
+  const onRescheduleDateChange = (bookingId: string, dateIso: string, fallbackTime: string) => {
+    setRescheduleState((current) => ({
+      ...current,
+      [bookingId]: {
+        ...current[bookingId],
+        dateIso,
+        time: current[bookingId]?.time || fallbackTime,
+      },
+    }));
+  };
+
+  const onRescheduleTimeChange = (bookingId: string, time: string, fallbackDateIso: string) => {
+    setRescheduleState((current) => ({
+      ...current,
+      [bookingId]: {
+        ...current[bookingId],
+        time,
+        dateIso: current[bookingId]?.dateIso || fallbackDateIso,
+      },
+    }));
+  };
 
   return (
     <AppShell>
@@ -183,13 +225,13 @@ export default function TeacherAgendaPage() {
         ) : (
           <>
             <section className="grid grid-cols-3 gap-3">
-              <SummaryCard title="Próximas" value={lessons.length} />
+              <SummaryCard title="Próximas" value={upcomingCount} />
               <SummaryCard title="Pendentes" value={pendingCount} />
               <SummaryCard title="Confirmadas" value={confirmedCount} />
             </section>
 
-            <section className="card-kidario p-3">
-              <div className="flex flex-wrap gap-2">
+            <section className="card-kidario overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-3">
+              <div className="flex flex-row gap-2">
                 {agendaFilters.map((filter) => (
                   <button
                     key={filter.value}
@@ -222,7 +264,7 @@ export default function TeacherAgendaPage() {
                   ? "Sem reservas pendentes de decisão."
                   : activeFilter === "confirmadas"
                     ? "Sem reservas confirmadas no momento."
-                    : "Não há aulas próximas para gestão."}
+                    : "No tienes clases próximamente."}
               </div>
             ) : (
               filteredLessons.map((lesson) => {
@@ -231,124 +273,28 @@ export default function TeacherAgendaPage() {
                 const currentTime = rescheduleState[lesson.id]?.time ?? lesson.time;
 
                 return (
-                  <div key={lesson.id} className="card-kidario p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{lesson.child_name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          <Calendar className="inline w-3.5 h-3.5 mr-1" />
-                          {lesson.date_label} às {lesson.time}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {modalityLabelByLesson[lesson.modality]} • {lesson.duration_minutes} minutos
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusClassNameByBooking[lesson.status]}`}
-                      >
-                        {statusLabelByBooking[lesson.status]}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <KidarioButton
-                        size="sm"
-                        variant="outline"
-                        disabled={isMutating || !lesson.actions.can_accept}
-                        onClick={() => void onAccept(lesson.id)}
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Aceitar
-                      </KidarioButton>
-                      <KidarioButton
-                        size="sm"
-                        variant="outline"
-                        disabled={isMutating || !lesson.actions.can_reject}
-                        onClick={() => void onReject(lesson.id)}
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Recusar
-                      </KidarioButton>
-                      <KidarioButton
-                        size="sm"
-                        variant="outline"
-                        disabled={!lesson.actions.can_reschedule}
-                        onClick={() => {
-                          setEditingBookingId((current) => (current === lesson.id ? null : lesson.id));
-                          setRescheduleState((current) => ({
-                            ...current,
-                            [lesson.id]: {
-                              dateIso: current[lesson.id]?.dateIso || lesson.date_iso,
-                              time: current[lesson.id]?.time || lesson.time,
-                            },
-                          }));
-                        }}
-                      >
-                        Reagendar
-                      </KidarioButton>
-                      <KidarioButton
-                        size="sm"
-                        variant="outline"
-                        disabled={!lesson.actions.can_open_chat}
-                        onClick={() => void onOpenChat({ bookingId: lesson.id, threadId: lesson.chat_thread_id })}
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                        Chat
-                      </KidarioButton>
-                    </div>
-
-                    {isEditing && (
-                      <div className="rounded-xl border border-border/70 p-3 space-y-3">
-                        <p className="text-xs text-muted-foreground">Novo horário da aula</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="date"
-                            className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
-                            value={currentDate}
-                            min={format(new Date(), "yyyy-MM-dd")}
-                            onChange={(event) =>
-                              setRescheduleState((current) => ({
-                                ...current,
-                                [lesson.id]: {
-                                  ...current[lesson.id],
-                                  dateIso: event.target.value,
-                                  time: current[lesson.id]?.time || lesson.time,
-                                },
-                              }))
-                            }
-                          />
-                          <input
-                            type="time"
-                            className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
-                            value={currentTime}
-                            onChange={(event) =>
-                              setRescheduleState((current) => ({
-                                ...current,
-                                [lesson.id]: {
-                                  ...current[lesson.id],
-                                  time: event.target.value,
-                                  dateIso: current[lesson.id]?.dateIso || lesson.date_iso,
-                                },
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <KidarioButton
-                            size="sm"
-                            variant="hero"
-                            disabled={isMutating}
-                            onClick={() => void onSaveReschedule(lesson.id)}
-                          >
-                            Confirmar reagendamento
-                          </KidarioButton>
-                          <KidarioButton size="sm" variant="ghost" onClick={() => setEditingBookingId(null)}>
-                            Cancelar
-                          </KidarioButton>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <TeacherAgendaLessonCard
+                    key={lesson.id}
+                    lesson={lesson}
+                    isEditing={isEditing}
+                    currentDate={currentDate}
+                    currentTime={currentTime}
+                    minDateIso={todayIso}
+                    onOpenChat={(params) => void onOpenChat(params)}
+                    onAccept={(bookingId) => void onAccept(bookingId)}
+                    onReject={(bookingId) => void onReject(bookingId)}
+                    onToggleReschedule={(bookingId) =>
+                      onToggleReschedule(bookingId, { dateIso: lesson.date_iso, time: lesson.time })
+                    }
+                    onRescheduleDateChange={(bookingId, dateIso) =>
+                      onRescheduleDateChange(bookingId, dateIso, lesson.time)
+                    }
+                    onRescheduleTimeChange={(bookingId, time) =>
+                      onRescheduleTimeChange(bookingId, time, lesson.date_iso)
+                    }
+                    onSaveReschedule={(bookingId) => void onSaveReschedule(bookingId)}
+                    onCancelReschedule={() => setEditingBookingId(null)}
+                  />
                 );
               })
             )}

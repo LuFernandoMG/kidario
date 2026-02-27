@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+import json
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import text
@@ -12,6 +13,10 @@ from app.schemas.bookings import (
     BookingCreateRequest,
     BookingReschedulePatch,
     TeacherBookingDecisionPatch,
+)
+from app.services.teacher_activity_planner_service import (
+    TeacherActivityPlanInput,
+    generate_teacher_activity_plan,
 )
 from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
@@ -45,6 +50,108 @@ def _minutes_to_time(total_minutes: int) -> str:
     hours = total_minutes // 60
     minutes = total_minutes % 60
     return f"{hours:02d}:{minutes:02d}"
+
+
+def _normalize_objectives(raw_objectives: object) -> list[dict]:
+    if raw_objectives is None:
+        return []
+
+    parsed_raw = raw_objectives
+    if isinstance(raw_objectives, str):
+        normalized = raw_objectives.strip()
+        if not normalized:
+            return []
+        try:
+            parsed_raw = json.loads(normalized)
+        except json.JSONDecodeError:
+            parsed_raw = [normalized]
+
+    if not isinstance(parsed_raw, (list, tuple)):
+        parsed_raw = [parsed_raw]
+
+    normalized_objectives: list[dict] = []
+    for raw_item in parsed_raw:
+        if isinstance(raw_item, str):
+            objective_text = raw_item.strip()
+            if not objective_text:
+                continue
+            normalized_objectives.append(
+                {
+                    "objective": objective_text,
+                    "achieved": False,
+                    "fullfilment_level": 0,
+                }
+            )
+            continue
+
+        if not isinstance(raw_item, dict):
+            continue
+
+        objective_text = str(raw_item.get("objective", "")).strip()
+        if not objective_text:
+            continue
+
+        fullfilment_level_raw = raw_item.get("fullfilment_level", raw_item.get("fulfilment_level"))
+        fullfilment_level: int
+        if isinstance(fullfilment_level_raw, int) and 0 <= fullfilment_level_raw <= 5:
+            fullfilment_level = fullfilment_level_raw
+        else:
+            fullfilment_level = 0
+
+        normalized_objectives.append(
+            {
+                "objective": objective_text,
+                "achieved": bool(raw_item.get("achieved", False)),
+                "fullfilment_level": fullfilment_level,
+            }
+        )
+
+    return normalized_objectives
+
+
+def _booking_start_datetime(date_iso: date, time_value: str) -> datetime:
+    hours_part, minutes_part = time_value.split(":", maxsplit=1)
+    return datetime(
+        year=date_iso.year,
+        month=date_iso.month,
+        day=date_iso.day,
+        hour=int(hours_part),
+        minute=int(minutes_part),
+    )
+
+
+def _can_teacher_complete_booking(*, booking_status: str, date_iso: date, time_value: str, duration_minutes: int) -> bool:
+    if booking_status == "concluida":
+        return True
+    if booking_status != "confirmada":
+        return False
+
+    lesson_end = _booking_start_datetime(date_iso, time_value) + timedelta(minutes=int(duration_minutes or 0))
+    return lesson_end <= datetime.now()
+
+
+def _parse_focus_points(raw_focus_points: str | None) -> list[str]:
+    if not raw_focus_points:
+        return []
+
+    normalized = raw_focus_points.strip()
+    if not normalized:
+        return []
+
+    separators = ["\n", ";", ",", "•"]
+    points = [normalized]
+    for separator in separators:
+        next_points: list[str] = []
+        for point in points:
+            next_points.extend(point.split(separator))
+        points = next_points
+
+    output: list[str] = []
+    for point in points:
+        cleaned = point.strip(" -\t")
+        if cleaned:
+            output.append(cleaned)
+    return output
 
 
 def _ensure_parent_role(db: Session, profile_id: str) -> None:
@@ -229,7 +336,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
     hourly_rate_value = float(teacher_hourly_rate or 0)
     price_total = round(hourly_rate_value * (payload.duration_minutes / 60), 2)
     payment_status = "pago" if payload.payment_method == "cartao" else "pendente"
-    booking_status = "confirmada" if payload.payment_method == "cartao" else "pendente"
+    booking_status = "pendente"
 
     row = (
         db.execute(
@@ -416,7 +523,7 @@ def get_booking_detail(db: Session, user: AuthUser, booking_id: UUID) -> dict:
         db.execute(
             text(
                 """
-                select updated_at, summary, next_steps, tags, attention_points
+                select updated_at, summary, next_steps, objectives, next_objectives, tags, attention_points
                 from booking_follow_ups
                 where booking_id = :booking_id
                 """
@@ -456,7 +563,15 @@ def get_booking_detail(db: Session, user: AuthUser, booking_id: UUID) -> dict:
         "actions": {
             "can_reschedule": bool(is_parent_owner and can_reschedule_or_cancel),
             "can_cancel": bool(is_parent_owner and can_reschedule_or_cancel),
-            "can_complete": bool(is_teacher_owner and booking["status"] == "confirmada"),
+            "can_complete": bool(
+                is_teacher_owner
+                and _can_teacher_complete_booking(
+                    booking_status=str(booking["status"]),
+                    date_iso=booking["date_iso"],
+                    time_value=str(booking["time"]),
+                    duration_minutes=int(booking["duration_minutes"]),
+                )
+            ),
         },
     }
     if follow_up:
@@ -464,6 +579,8 @@ def get_booking_detail(db: Session, user: AuthUser, booking_id: UUID) -> dict:
             "updated_at": follow_up["updated_at"],
             "summary": follow_up["summary"],
             "next_steps": follow_up["next_steps"],
+            "objectives": _normalize_objectives(follow_up.get("objectives")),
+            "next_objectives": _normalize_objectives(follow_up.get("next_objectives")),
             "tags": list(follow_up["tags"] or []),
             "attention_points": list(follow_up["attention_points"] or []),
         }
@@ -679,25 +796,57 @@ def complete_booking(db: Session, user: AuthUser, booking_id: UUID, payload: Boo
 
     if str(booking["teacher_profile_id"]) != user.user_id:
         raise BookingPermissionError("Only the teacher owner can complete the booking.")
-    if booking["status"] != "confirmada":
-        raise BookingConflictError("Only confirmed bookings can be completed.")
+    if booking["status"] not in ("confirmada", "concluida"):
+        raise BookingConflictError("Only confirmed or concluded bookings can register follow-up.")
+    if (
+        booking["status"] == "confirmada"
+        and not _can_teacher_complete_booking(
+            booking_status=str(booking["status"]),
+            date_iso=booking["date_iso"],
+            time_value=str(booking["time"]),
+            duration_minutes=int(booking["duration_minutes"]),
+        )
+    ):
+        raise BookingConflictError("Lesson follow-up can only be completed after class end time.")
 
     follow_up = (
         db.execute(
             text(
                 """
                 insert into booking_follow_ups
-                  (booking_id, teacher_profile_id, child_id, summary, next_steps, tags, attention_points)
+                  (
+                    booking_id,
+                    teacher_profile_id,
+                    child_id,
+                    summary,
+                    next_steps,
+                    objectives,
+                    next_objectives,
+                    tags,
+                    attention_points
+                  )
                 values
-                  (:booking_id, :teacher_profile_id, :child_id, :summary, :next_steps, :tags, :attention_points)
+                  (
+                    :booking_id,
+                    :teacher_profile_id,
+                    :child_id,
+                    :summary,
+                    :next_steps,
+                    cast(:objectives as jsonb),
+                    cast(:next_objectives as jsonb),
+                    :tags,
+                    :attention_points
+                  )
                 on conflict (booking_id) do update
                 set
                   summary = excluded.summary,
                   next_steps = excluded.next_steps,
+                  objectives = excluded.objectives,
+                  next_objectives = excluded.next_objectives,
                   tags = excluded.tags,
                   attention_points = excluded.attention_points,
                   updated_at = now()
-                returning updated_at, summary, next_steps, tags, attention_points
+                returning updated_at, summary, next_steps, objectives, next_objectives, tags, attention_points
                 """
             ),
             {
@@ -706,6 +855,12 @@ def complete_booking(db: Session, user: AuthUser, booking_id: UUID, payload: Boo
                 "child_id": str(booking["child_id"]),
                 "summary": payload.follow_up.summary,
                 "next_steps": payload.follow_up.next_steps,
+                "objectives": json.dumps(
+                    [objective.model_dump() for objective in payload.follow_up.objectives]
+                ),
+                "next_objectives": json.dumps(
+                    [objective.model_dump() for objective in payload.follow_up.next_objectives]
+                ),
                 "tags": payload.follow_up.tags,
                 "attention_points": payload.follow_up.attention_points,
             },
@@ -721,7 +876,9 @@ def complete_booking(db: Session, user: AuthUser, booking_id: UUID, payload: Boo
             text(
                 """
                 update bookings
-                set status = 'concluida', updated_at = now()
+                set
+                  status = case when status = 'confirmada' then 'concluida' else status end,
+                  updated_at = now()
                 where id = :booking_id
                 returning id, status
                 """
@@ -742,9 +899,162 @@ def complete_booking(db: Session, user: AuthUser, booking_id: UUID, payload: Boo
             "updated_at": follow_up["updated_at"],
             "summary": follow_up["summary"],
             "next_steps": follow_up["next_steps"],
+            "objectives": _normalize_objectives(follow_up.get("objectives")),
+            "next_objectives": _normalize_objectives(follow_up.get("next_objectives")),
             "tags": list(follow_up["tags"] or []),
             "attention_points": list(follow_up["attention_points"] or []),
         },
+    }
+
+
+def get_teacher_follow_up_context(db: Session, user: AuthUser, booking_id: UUID) -> dict:
+    _ensure_teacher_role(db, user.user_id)
+
+    booking_row = (
+        db.execute(
+            text(
+                """
+                select
+                  b.id,
+                  b.teacher_profile_id,
+                  b.child_id,
+                  b.date_iso,
+                  b.time,
+                  b.duration_minutes,
+                  b.modality,
+                  b.status,
+                  pc.name as child_name,
+                  pc.age as child_age,
+                  pc.focus_points as child_focus_points
+                from bookings b
+                join parent_children pc on pc.id = b.child_id
+                where b.id = :booking_id
+                """
+            ),
+            {"booking_id": str(booking_id)},
+        )
+        .mappings()
+        .first()
+    )
+    if not booking_row:
+        raise BookingNotFoundError("Booking not found.")
+    if str(booking_row["teacher_profile_id"]) != user.user_id:
+        raise BookingPermissionError("Only the teacher owner can access follow-up context.")
+
+    completed_lessons_with_child = db.execute(
+        text(
+            """
+            select count(*)
+            from bookings b
+            where b.teacher_profile_id = :teacher_profile_id
+              and b.child_id = :child_id
+              and b.status = 'concluida'
+              and (
+                b.date_iso < :target_date
+                or (b.date_iso = :target_date and b.time < :target_time)
+              )
+            """
+        ),
+        {
+            "teacher_profile_id": user.user_id,
+            "child_id": str(booking_row["child_id"]),
+            "target_date": booking_row["date_iso"],
+            "target_time": booking_row["time"],
+        },
+    ).scalar()
+    completed_lessons_with_child = int(completed_lessons_with_child or 0)
+    is_first_lesson_with_child = completed_lessons_with_child == 0
+
+    latest_previous_follow_up = (
+        db.execute(
+            text(
+                """
+                select
+                  bf.summary,
+                  bf.objectives,
+                  bf.next_objectives
+                from booking_follow_ups bf
+                join bookings b_follow_up on b_follow_up.id = bf.booking_id
+                where bf.teacher_profile_id = :teacher_profile_id
+                  and bf.child_id = :child_id
+                  and (
+                    b_follow_up.date_iso < :target_date
+                    or (b_follow_up.date_iso = :target_date and b_follow_up.time < :target_time)
+                  )
+                order by b_follow_up.date_iso desc, b_follow_up.time desc, bf.updated_at desc
+                limit 1
+                """
+            ),
+            {
+                "teacher_profile_id": user.user_id,
+                "child_id": str(booking_row["child_id"]),
+                "target_date": booking_row["date_iso"],
+                "target_time": booking_row["time"],
+            },
+        )
+        .mappings()
+        .first()
+    )
+
+    if is_first_lesson_with_child:
+        class_objectives = [
+            {
+                "objective": "Diagnóstico",
+                "achieved": False,
+                "fullfilment_level": 0,
+            },
+        ]
+    else:
+        previous_next_objectives = _normalize_objectives(
+            latest_previous_follow_up.get("next_objectives") if latest_previous_follow_up else None
+        )
+        previous_objectives = _normalize_objectives(
+            latest_previous_follow_up.get("objectives") if latest_previous_follow_up else None
+        )
+        class_objectives = previous_next_objectives or previous_objectives
+        if not class_objectives:
+            class_objectives = [
+                {
+                    "objective": "Consolidar objetivo pedagógico principal do ciclo atual",
+                    "achieved": False,
+                    "fullfilment_level": 0,
+                }
+            ]
+
+    parent_focus_points = (
+        _parse_focus_points(booking_row.get("child_focus_points"))
+        if is_first_lesson_with_child
+        else []
+    )
+    activity_plan = generate_teacher_activity_plan(
+        TeacherActivityPlanInput(
+            child_name=str(booking_row.get("child_name") or "Aluno"),
+            child_age=int(booking_row["child_age"]) if booking_row.get("child_age") is not None else None,
+            completed_lessons_with_child=completed_lessons_with_child,
+            objectives=[objective["objective"] for objective in class_objectives],
+            parent_focus_points=parent_focus_points,
+            latest_follow_up_summary=(
+                latest_previous_follow_up.get("summary") if latest_previous_follow_up else None
+            ),
+        )
+    )
+
+    return {
+        "booking_id": booking_row["id"],
+        "child_id": booking_row["child_id"],
+        "child_name": booking_row["child_name"] or "Aluno",
+        "child_age": booking_row["child_age"],
+        "date_iso": booking_row["date_iso"],
+        "date_label": _format_date_label(booking_row["date_iso"]),
+        "time": booking_row["time"],
+        "duration_minutes": booking_row["duration_minutes"],
+        "modality": booking_row["modality"],
+        "status": booking_row["status"],
+        "completed_lessons_with_child": completed_lessons_with_child,
+        "class_objectives": class_objectives,
+        "parent_focus_points": parent_focus_points,
+        "activity_plan_source": activity_plan["source"],
+        "activity_plan": activity_plan["activities"],
     }
 
 

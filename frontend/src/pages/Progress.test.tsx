@@ -72,6 +72,20 @@ describe("Progress page", () => {
         updated_at: "2026-02-21T10:00:00Z",
         summary: "Evolucao consistente em leitura.",
         next_steps: "Manter pratica diaria.",
+        objectives: [
+          {
+            objective: "Consolidar leitura guiada",
+            achieved: true,
+            fullfilment_level: 4,
+          },
+        ],
+        next_objectives: [
+          {
+            objective: "Ampliar vocabulário de leitura",
+            achieved: false,
+            fullfilment_level: 0,
+          },
+        ],
         tags: ["Leitura"],
         attention_points: [],
       },

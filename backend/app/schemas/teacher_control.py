@@ -15,6 +15,12 @@ class TeacherAgendaActionFlags(BaseModel):
     can_complete: bool
 
 
+class TeacherLessonObjective(BaseModel):
+    objective: str
+    achieved: bool = False
+    fullfilment_level: Literal[0, 1, 2, 3, 4, 5] = 0
+
+
 class TeacherAgendaControlLesson(BaseModel):
     id: UUID
     child_id: UUID
@@ -27,6 +33,12 @@ class TeacherAgendaControlLesson(BaseModel):
     modality: BookingModality
     status: BookingStatus
     chat_thread_id: UUID | None = None
+    has_unread_messages: bool = False
+    completed_lessons_with_child: int
+    objectives: list[TeacherLessonObjective]
+    parent_focus_points: list[str]
+    activity_plan_source: Literal["llm", "fallback"]
+    activity_plan: list[str]
     actions: TeacherAgendaActionFlags
 
 

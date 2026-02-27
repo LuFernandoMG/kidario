@@ -15,6 +15,7 @@ class ChatThreadView(BaseModel):
     teacher_profile_id: UUID
     child_id: UUID
     booking_status: BookingStatus
+    is_read_only: bool
     parent_name: str
     teacher_name: str
     child_name: str

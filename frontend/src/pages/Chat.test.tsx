@@ -25,9 +25,13 @@ describe("Chat page", () => {
     mockGetAuthSession.mockReturnValue({ isAuthenticated: true, role: "parent" });
     mockGetSupabaseAccessToken.mockReturnValue("header.eyJzdWIiOiJwYXJlbnQtMSJ9.signature");
     mockGetChatMessages.mockResolvedValue({ messages: [] });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
-  it("shows readonly mode for canceled/concluded booking thread", async () => {
+  it("shows readonly mode for canceled booking thread", async () => {
     mockGetChatThread.mockResolvedValue({
       thread: {
         id: "thread-1",
@@ -35,7 +39,8 @@ describe("Chat page", () => {
         parent_profile_id: "parent-1",
         teacher_profile_id: "teacher-1",
         child_id: "child-1",
-        booking_status: "concluida",
+        booking_status: "cancelada",
+        is_read_only: true,
         parent_name: "Parent",
         teacher_name: "Teacher",
         child_name: "Child",
@@ -53,7 +58,38 @@ describe("Chat page", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/somente leitura/i)).toBeInTheDocument();
+    expect(await screen.findByText(/este chat está em modo somente leitura/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /chat em somente leitura/i })).toBeDisabled();
+  });
+
+  it("keeps chat writable when canceled thread has another active booking", async () => {
+    mockGetChatThread.mockResolvedValue({
+      thread: {
+        id: "thread-1",
+        booking_id: "booking-1",
+        parent_profile_id: "parent-1",
+        teacher_profile_id: "teacher-1",
+        child_id: "child-1",
+        booking_status: "cancelada",
+        is_read_only: false,
+        parent_name: "Parent",
+        teacher_name: "Teacher",
+        child_name: "Child",
+        created_at: "2026-02-20T10:00:00Z",
+        updated_at: "2026-02-20T10:00:00Z",
+        last_message_at: null,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/thread-1"]}>
+        <Routes>
+          <Route path="/chat/:threadId" element={<Chat />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("button", { name: /enviar mensagem/i })).toBeInTheDocument();
+    expect(screen.queryByText(/somente leitura/i)).not.toBeInTheDocument();
   });
 });

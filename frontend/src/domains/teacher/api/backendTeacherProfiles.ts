@@ -40,6 +40,12 @@ export interface BackendTeacherProfileResponse {
     period_to?: string | null;
     current_position: boolean;
   }[];
+  availability: {
+    id: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+  }[];
 }
 
 export interface TeacherFormationUpsertPayload {
@@ -61,6 +67,7 @@ export interface TeacherExperienceUpsertPayload {
 }
 
 export interface TeacherAvailabilityUpsertPayload {
+  id?: string | null;
   day_of_week: number;
   start_time: string;
   end_time: string;

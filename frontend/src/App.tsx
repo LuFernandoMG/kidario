@@ -31,11 +31,13 @@ import TeacherAgendaPage from "@/domains/teacher/pages/TeacherAgendaPage";
 import TeacherStudentsPage from "@/domains/teacher/pages/TeacherStudentsPage";
 import TeacherPlanningPage from "@/domains/teacher/pages/TeacherPlanningPage";
 import TeacherFinancePage from "@/domains/teacher/pages/TeacherFinancePage";
+import TeacherLessonClosurePage from "@/domains/teacher/pages/TeacherLessonClosurePage";
 import { getAuthSession } from "@/lib/authSession";
 import {
   TEACHER_AGENDA_PATH,
   TEACHER_CONTROL_CENTER_PATH,
   TEACHER_FINANCE_PATH,
+  TEACHER_LESSON_CLOSURE_PATH,
   TEACHER_PLANNING_PATH,
   TEACHER_STUDENTS_PATH,
 } from "@/domains/teacher/lib/teacherRoutes";
@@ -155,6 +157,14 @@ const App = () => (
             element={(
               <RequireRoleRoute allowedRoles={["teacher"]}>
                 <TeacherFinancePage />
+              </RequireRoleRoute>
+            )}
+          />
+          <Route
+            path={TEACHER_LESSON_CLOSURE_PATH}
+            element={(
+              <RequireRoleRoute allowedRoles={["teacher"]}>
+                <TeacherLessonClosurePage />
               </RequireRoleRoute>
             )}
           />

@@ -8,6 +8,7 @@ export interface ChatThreadView {
   teacher_profile_id: string;
   child_id: string;
   booking_status: "pendente" | "confirmada" | "cancelada" | "concluida";
+  is_read_only: boolean;
   parent_name: string;
   teacher_name: string;
   child_name: string;
