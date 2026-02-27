@@ -23,7 +23,7 @@ export default function TeacherPlanningPage() {
 
   return (
     <AppShell>
-      <TopBar title="Planejamento de Aulas" />
+      <TopBar title="Planejamento de Disponibilidade" />
       <div className="px-4 pt-4 pb-8 space-y-3">
         {overviewQuery.isLoading ? (
           <div className="card-kidario p-4 text-sm text-muted-foreground">Carregando planejamento...</div>
