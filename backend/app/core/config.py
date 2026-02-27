@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     teacher_activity_llm_model: str = "gpt-4o-mini"
     teacher_activity_llm_base_url: str = "https://api.openai.com/v1"
     teacher_activity_llm_timeout_seconds: float = 8.0
+    teacher_activity_llm_ca_bundle: str | None = None
 
     @field_validator("api_v1_prefix")
     @classmethod

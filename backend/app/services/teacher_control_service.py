@@ -5,7 +5,6 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.schemas.teacher_control import TeacherControlCenterOverviewResponse
 from app.services.booking_service import (
@@ -13,10 +12,7 @@ from app.services.booking_service import (
     BookingValidationError,
     get_teacher_availability_slots,
 )
-from app.services.teacher_activity_planner_service import (
-    TeacherActivityPlanInput,
-    generate_teacher_activity_plan,
-)
+from app.services.teacher_activity_planner_service import get_cached_teacher_activity_plan_for_booking
 
 
 class TeacherControlPermissionError(Exception):
@@ -186,10 +182,9 @@ def get_teacher_control_center_overview(
     limit_agenda: int = 8,
     limit_chats: int = 8,
     limit_students: int = 8,
+    include_history: bool = False,
 ) -> dict:
     _ensure_teacher_role(db, user.user_id)
-    settings = get_settings()
-
     today = date.today()
     window_end = today + timedelta(days=14)
     teacher_uuid = UUID(user.user_id)
@@ -286,7 +281,7 @@ def get_teacher_control_center_overview(
                   limit 1
                 ) last_message on true
                 where b.teacher_profile_id = :teacher_profile_id
-                  and b.date_iso >= current_date
+                  and (:include_history = true or b.date_iso >= current_date)
                 order by b.date_iso asc, b.time asc
                 limit :limit_agenda
                 """
@@ -294,6 +289,7 @@ def get_teacher_control_center_overview(
             {
                 "teacher_profile_id": user.user_id,
                 "limit_agenda": limit_agenda,
+                "include_history": include_history,
             },
         )
         .mappings()
@@ -313,17 +309,11 @@ def get_teacher_control_center_overview(
             latest_follow_up_next_objectives=row.get("latest_follow_up_next_objectives"),
             latest_follow_up_objectives=row.get("latest_follow_up_objectives"),
         )
-        activity_plan = generate_teacher_activity_plan(
-            TeacherActivityPlanInput(
-                child_name=str(row.get("child_name") or "Aluno"),
-                child_age=int(row["child_age"]) if row.get("child_age") is not None else None,
-                completed_lessons_with_child=completed_lessons_with_child,
-                objectives=[item["objective"] for item in objectives],
-                parent_focus_points=parent_focus_points,
-                latest_follow_up_summary=row.get("latest_follow_up_summary"),
-            ),
-            settings=settings,
+        cached_activity_plan = get_cached_teacher_activity_plan_for_booking(
+            db=db,
+            booking_id=str(row["id"]),
         )
+        activity_plan = cached_activity_plan or {"source": "fallback", "activities": []}
         has_unread_messages = (
             bool(row.get("chat_thread_id"))
             and row.get("last_message_sender_profile_id") is not None

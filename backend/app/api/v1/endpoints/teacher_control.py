@@ -32,9 +32,10 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
 
 @router.get("/control-center/overview", response_model=TeacherControlCenterOverviewResponse)
 def get_control_center_overview(
-    limit_agenda: int = Query(default=8, ge=1, le=30),
+    limit_agenda: int = Query(default=8, ge=1, le=200),
     limit_chats: int = Query(default=8, ge=1, le=30),
     limit_students: int = Query(default=8, ge=1, le=30),
+    include_history: bool = Query(default=False),
     user: AuthUser = Security(get_current_teacher_user),
     db: Session = Depends(get_db),
 ) -> TeacherControlCenterOverviewResponse:
@@ -45,6 +46,7 @@ def get_control_center_overview(
             limit_agenda=limit_agenda,
             limit_chats=limit_chats,
             limit_students=limit_students,
+            include_history=include_history,
         )
     except TeacherControlPermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc

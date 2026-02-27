@@ -16,7 +16,8 @@ from app.schemas.bookings import (
 )
 from app.services.teacher_activity_planner_service import (
     TeacherActivityPlanInput,
-    generate_teacher_activity_plan,
+    get_cached_teacher_activity_plan_for_booking,
+    get_or_create_teacher_activity_plan_for_booking,
 )
 from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
@@ -665,6 +666,8 @@ def teacher_decide_booking(
             .mappings()
             .first()
         )
+        if updated:
+            ensure_teacher_activity_plan_for_booking(db, user, booking_id)
     else:
         if current_status not in ("pendente", "confirmada"):
             raise BookingConflictError("Only pending or confirmed bookings can be rejected.")
@@ -907,7 +910,7 @@ def complete_booking(db: Session, user: AuthUser, booking_id: UUID, payload: Boo
     }
 
 
-def get_teacher_follow_up_context(db: Session, user: AuthUser, booking_id: UUID) -> dict:
+def _load_teacher_follow_up_context_data(db: Session, user: AuthUser, booking_id: UUID) -> dict:
     _ensure_teacher_role(db, user.user_id)
 
     booking_row = (
@@ -1026,18 +1029,57 @@ def get_teacher_follow_up_context(db: Session, user: AuthUser, booking_id: UUID)
         if is_first_lesson_with_child
         else []
     )
-    activity_plan = generate_teacher_activity_plan(
-        TeacherActivityPlanInput(
-            child_name=str(booking_row.get("child_name") or "Aluno"),
-            child_age=int(booking_row["child_age"]) if booking_row.get("child_age") is not None else None,
-            completed_lessons_with_child=completed_lessons_with_child,
-            objectives=[objective["objective"] for objective in class_objectives],
-            parent_focus_points=parent_focus_points,
-            latest_follow_up_summary=(
-                latest_previous_follow_up.get("summary") if latest_previous_follow_up else None
-            ),
-        )
+
+    planner_input = TeacherActivityPlanInput(
+        child_name=str(booking_row.get("child_name") or "Aluno"),
+        child_age=int(booking_row["child_age"]) if booking_row.get("child_age") is not None else None,
+        completed_lessons_with_child=completed_lessons_with_child,
+        objectives=[objective["objective"] for objective in class_objectives],
+        parent_focus_points=parent_focus_points,
+        latest_follow_up_summary=(
+            latest_previous_follow_up.get("summary") if latest_previous_follow_up else None
+        ),
     )
+
+    return {
+        "booking_row": dict(booking_row),
+        "completed_lessons_with_child": completed_lessons_with_child,
+        "class_objectives": class_objectives,
+        "parent_focus_points": parent_focus_points,
+        "planner_input": planner_input,
+    }
+
+
+def ensure_teacher_activity_plan_for_booking(db: Session, user: AuthUser, booking_id: UUID) -> dict:
+    context_data = _load_teacher_follow_up_context_data(db, user, booking_id)
+    booking_row = context_data["booking_row"]
+    activity_plan = get_or_create_teacher_activity_plan_for_booking(
+        db=db,
+        booking_id=str(booking_row["id"]),
+        teacher_profile_id=str(user.user_id),
+        child_id=str(booking_row["child_id"]),
+        planner_input=context_data["planner_input"],
+    )
+
+    return {
+        "booking_id": booking_row["id"],
+        "activity_plan_source": activity_plan["source"],
+        "activity_plan": activity_plan["activities"],
+    }
+
+
+def get_teacher_follow_up_context(db: Session, user: AuthUser, booking_id: UUID) -> dict:
+    context_data = _load_teacher_follow_up_context_data(db, user, booking_id)
+    booking_row = context_data["booking_row"]
+    completed_lessons_with_child = context_data["completed_lessons_with_child"]
+    class_objectives = context_data["class_objectives"]
+    parent_focus_points = context_data["parent_focus_points"]
+
+    cached_activity_plan = get_cached_teacher_activity_plan_for_booking(
+        db=db,
+        booking_id=str(booking_row["id"]),
+    )
+    activity_plan = cached_activity_plan or {"source": "fallback", "activities": []}
 
     return {
         "booking_id": booking_row["id"],

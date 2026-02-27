@@ -463,7 +463,7 @@ export default function TeacherProfileSettings() {
     <AppShell>
       <div className="px-4 pt-6 pb-6 space-y-5">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="font-display text-2xl font-bold text-foreground">Perfil da professora</h1>
+          <h1 className="font-display text-2xl font-bold text-foreground">Perfil</h1>
           <p className="text-muted-foreground mt-1">Veja e atualize seus dados profissionais.</p>
         </motion.div>
 

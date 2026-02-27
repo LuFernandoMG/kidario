@@ -181,12 +181,20 @@ export async function getTeacherControlCenterOverview(
     limitAgenda?: number;
     limitChats?: number;
     limitStudents?: number;
+    includeHistory?: boolean;
   } = {},
 ): Promise<TeacherControlCenterOverviewResponse> {
+  const normalizeAgendaLimit = (value: number | undefined) => {
+    const raw = Number.isFinite(value) ? Number(value) : 8;
+    return Math.min(200, Math.max(1, raw));
+  };
   const query = new URLSearchParams();
-  query.set("limit_agenda", String(normalizeLimit(params.limitAgenda, 8)));
+  query.set("limit_agenda", String(normalizeAgendaLimit(params.limitAgenda)));
   query.set("limit_chats", String(normalizeLimit(params.limitChats, 8)));
   query.set("limit_students", String(normalizeLimit(params.limitStudents, 8)));
+  if (params.includeHistory) {
+    query.set("include_history", "true");
+  }
 
   return teacherRequest<TeacherControlCenterOverviewResponse>({
     path: `/teacher/control-center/overview?${query.toString()}`,

@@ -1,4 +1,4 @@
-import { Calendar, CheckCircle2, MessageCircle, XCircle } from "lucide-react";
+import { Calendar, CheckCircle2, ClipboardList, MessageCircle, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { KidarioButton } from "@/components/ui/KidarioButton";
@@ -38,6 +38,7 @@ interface TeacherAgendaLessonCardProps {
   onRescheduleTimeChange: (bookingId: string, time: string) => void;
   onSaveReschedule: (bookingId: string) => void;
   onCancelReschedule: () => void;
+  onViewActivityPlan: (lessonId: string) => void;
 }
 
 export function TeacherAgendaLessonCard({
@@ -54,8 +55,10 @@ export function TeacherAgendaLessonCard({
   onRescheduleTimeChange,
   onSaveReschedule,
   onCancelReschedule,
+  onViewActivityPlan,
 }: TeacherAgendaLessonCardProps) {
   const isConcluded = lesson.status === "concluida";
+  const canViewActivityPlan = lesson.status === "confirmada" || lesson.status === "concluida";
 
   return (
     <div className="card-kidario p-4 space-y-3">
@@ -76,6 +79,13 @@ export function TeacherAgendaLessonCard({
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {canViewActivityPlan ? (
+          <KidarioButton size="sm" variant="outline" onClick={() => onViewActivityPlan(lesson.id)}>
+            <ClipboardList className="w-4 h-4" />
+            Ver plan
+          </KidarioButton>
+        ) : null}
+
         {lesson.actions.can_open_chat ? (
           <KidarioButton
             size="sm"

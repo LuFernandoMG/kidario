@@ -4,6 +4,13 @@ import { format } from "date-fns";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getOrCreateChatThreadFromBooking } from "@/lib/backendChat";
 import { getSupabaseAccessToken } from "@/lib/authSession";
@@ -30,17 +37,29 @@ const agendaFilters: { value: AgendaFilter; label: string }[] = [
   { value: "canceladas", label: "Canceladas" },
 ];
 
+const activityPlanSourceLabel = {
+  llm: "Plano sugerido por IA",
+  fallback: "Plano sugerido automaticamente",
+} as const;
+
+const modalityLabelByLesson = {
+  online: "Online",
+  presencial: "Presencial",
+} as const;
+
 export default function TeacherAgendaPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeFilter, setActiveFilter] = useState<AgendaFilter>("todas");
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
+  const [selectedPlanLessonId, setSelectedPlanLessonId] = useState<string | null>(null);
   const [rescheduleState, setRescheduleState] = useState<Record<string, RescheduleState>>({});
 
   const overviewQuery = useTeacherControlCenterOverview({
-    limitAgenda: 24,
+    limitAgenda: 200,
     limitChats: 6,
     limitStudents: 6,
+    includeHistory: true,
   });
   const decisionMutation = useTeacherBookingDecisionMutation();
   const rescheduleMutation = useTeacherBookingRescheduleMutation();
@@ -73,11 +92,19 @@ export default function TeacherAgendaPage() {
     }
     return sortedLessons;
   }, [activeFilter, sortedLessons]);
+  const selectedPlanLesson = useMemo(() => {
+    if (!selectedPlanLessonId) return null;
+    return lessons.find((lesson) => lesson.id === selectedPlanLessonId) ?? null;
+  }, [lessons, selectedPlanLessonId]);
 
-  const upcomingCount = useMemo(
-    () => lessons.filter((lesson) => lesson.status === "pendente" || lesson.status === "confirmada").length,
-    [lessons],
-  );
+  const upcomingCount = useMemo(() => {
+    const now = new Date();
+    return lessons.filter((lesson) => {
+      if (lesson.status !== "pendente" && lesson.status !== "confirmada") return false;
+      const lessonTime = new Date(`${lesson.date_iso}T${lesson.time}:00`);
+      return lessonTime >= now;
+    }).length;
+  }, [lessons]);
 
   const pendingCount = useMemo(
     () => lessons.filter((lesson) => lesson.status === "pendente").length,
@@ -294,10 +321,58 @@ export default function TeacherAgendaPage() {
                     }
                     onSaveReschedule={(bookingId) => void onSaveReschedule(bookingId)}
                     onCancelReschedule={() => setEditingBookingId(null)}
+                    onViewActivityPlan={(lessonId) => setSelectedPlanLessonId(lessonId)}
                   />
                 );
               })
             )}
+
+            <Dialog open={Boolean(selectedPlanLessonId)} onOpenChange={(open) => !open && setSelectedPlanLessonId(null)}>
+              <DialogContent className="max-w-xl p-0">
+                <div className="p-4 space-y-3 max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Detalle del plan de clase</DialogTitle>
+                    <DialogDescription>
+                      Revisa el plan generado para esta agenda.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  {selectedPlanLesson ? (
+                    <>
+                      <div className="rounded-xl border border-border/60 p-3 space-y-1">
+                        <p className="text-sm font-medium text-foreground">{selectedPlanLesson.child_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedPlanLesson.date_label} às {selectedPlanLesson.time} •{" "}
+                          {modalityLabelByLesson[selectedPlanLesson.modality]}
+                        </p>
+                        <span className="inline-flex rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-foreground mt-1">
+                          {activityPlanSourceLabel[selectedPlanLesson.activity_plan_source]}
+                        </span>
+                      </div>
+
+                      <div className="rounded-xl border border-border/60 p-3">
+                        <p className="text-xs font-medium text-foreground mb-2">Atividades sugeridas</p>
+                        {selectedPlanLesson.activity_plan.length > 0 ? (
+                          <ul className="space-y-1">
+                            {selectedPlanLesson.activity_plan.map((activity, index) => (
+                              <li key={`${selectedPlanLesson.id}-plan-${index}`} className="text-sm text-foreground">
+                                • {activity}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Ainda não há atividades geradas para esta agenda.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No se encontró la agenda seleccionada.</p>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </div>

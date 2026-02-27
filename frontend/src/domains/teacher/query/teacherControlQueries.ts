@@ -14,7 +14,12 @@ import {
 export const teacherQueryKeys = {
   root: ["teacher"] as const,
   controlCenter: () => [...teacherQueryKeys.root, "control-center"] as const,
-  controlCenterWithLimits: (params: { limitAgenda?: number; limitChats?: number; limitStudents?: number }) =>
+  controlCenterWithLimits: (params: {
+    limitAgenda?: number;
+    limitChats?: number;
+    limitStudents?: number;
+    includeHistory?: boolean;
+  }) =>
     [...teacherQueryKeys.controlCenter(), params] as const,
   chatThreads: (params: { status?: BookingStatus; limit?: number }) =>
     [...teacherQueryKeys.root, "chat-threads", params] as const,
@@ -32,6 +37,7 @@ export function useTeacherControlCenterOverview(params: {
   limitAgenda?: number;
   limitChats?: number;
   limitStudents?: number;
+  includeHistory?: boolean;
 }) {
   return useQuery({
     queryKey: teacherQueryKeys.controlCenterWithLimits(params),

@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import ssl
 from dataclasses import dataclass
 from urllib import error, request
+
+import certifi
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 
@@ -34,6 +41,66 @@ def generate_teacher_activity_plan(
     if llm_activities:
         return {"source": "llm", "activities": llm_activities}
     return {"source": "fallback", "activities": fallback_activities}
+
+
+def get_or_create_teacher_activity_plan_for_booking(
+    *,
+    db: Session,
+    booking_id: str,
+    teacher_profile_id: str,
+    child_id: str,
+    planner_input: TeacherActivityPlanInput,
+    settings: Settings | None = None,
+) -> dict:
+    resolved_settings = settings or get_settings()
+    context_hash = _build_context_hash(planner_input)
+
+    try:
+        cached_plan_row = _load_cached_plan_row(db, booking_id)
+    except SQLAlchemyError:
+        return generate_teacher_activity_plan(planner_input, resolved_settings)
+
+    if cached_plan_row:
+        cached_activities = _normalize_activities_payload(cached_plan_row.get("activities"))
+        if cached_activities and str(cached_plan_row.get("context_hash") or "") == context_hash:
+            return {
+                "source": str(cached_plan_row.get("source") or "fallback"),
+                "activities": cached_activities,
+            }
+
+    generated_plan = generate_teacher_activity_plan(planner_input, resolved_settings)
+    try:
+        _persist_booking_activity_plan(
+            db=db,
+            booking_id=booking_id,
+            teacher_profile_id=teacher_profile_id,
+            child_id=child_id,
+            source=str(generated_plan["source"]),
+            activities=generated_plan["activities"],
+            context_hash=context_hash,
+        )
+    except SQLAlchemyError:
+        return generated_plan
+    return generated_plan
+
+
+def get_cached_teacher_activity_plan_for_booking(
+    *,
+    db: Session,
+    booking_id: str,
+) -> dict | None:
+    try:
+        cached_plan_row = _load_cached_plan_row(db, booking_id)
+    except SQLAlchemyError:
+        return None
+    if not cached_plan_row:
+        return None
+
+    cached_activities = _normalize_activities_payload(cached_plan_row.get("activities"))
+    return {
+        "source": str(cached_plan_row.get("source") or "fallback"),
+        "activities": cached_activities,
+    }
 
 
 def _generate_with_openai(
@@ -68,11 +135,18 @@ def _generate_with_openai(
         },
         method="POST",
     )
+    ssl_context = ssl.create_default_context(
+        cafile=settings.teacher_activity_llm_ca_bundle or certifi.where()
+    )
 
     try:
-        with request.urlopen(req, timeout=settings.teacher_activity_llm_timeout_seconds) as response:
+        with request.urlopen(
+            req,
+            timeout=settings.teacher_activity_llm_timeout_seconds,
+            context=ssl_context,
+        ) as response:
             raw_response = response.read().decode("utf-8")
-    except (error.HTTPError, error.URLError, TimeoutError):
+    except (error.HTTPError, error.URLError, TimeoutError, ssl.SSLError):
         return []
 
     try:
@@ -110,6 +184,47 @@ def _build_user_prompt(planner_input: TeacherActivityPlanInput) -> str:
     )
 
 
+def _build_context_hash(planner_input: TeacherActivityPlanInput) -> str:
+    normalized_payload = {
+        "child_name": planner_input.child_name.strip(),
+        "child_age": planner_input.child_age,
+        "completed_lessons_with_child": int(planner_input.completed_lessons_with_child or 0),
+        "objectives": [objective.strip() for objective in planner_input.objectives if objective.strip()],
+        "parent_focus_points": [
+            point.strip()
+            for point in planner_input.parent_focus_points
+            if point.strip()
+        ],
+        "latest_follow_up_summary": (planner_input.latest_follow_up_summary or "").strip(),
+    }
+    canonical = json.dumps(
+        normalized_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _load_cached_plan_row(db: Session, booking_id: str) -> dict | None:
+    row = (
+        db.execute(
+            text(
+                """
+                select source, activities, context_hash
+                from booking_activity_plans
+                where booking_id = :booking_id
+                limit 1
+                """
+            ),
+            {"booking_id": booking_id},
+        )
+        .mappings()
+        .first()
+    )
+    return dict(row) if row else None
+
+
 def _extract_activity_list(raw_content: str) -> list[str]:
     normalized = raw_content.strip()
     if not normalized:
@@ -136,6 +251,66 @@ def _extract_activity_list(raw_content: str) -> list[str]:
         if line:
             lines.append(line)
     return lines[:3]
+
+
+def _normalize_activities_payload(raw_activities: object) -> list[str]:
+    if isinstance(raw_activities, str):
+        try:
+            parsed = json.loads(raw_activities)
+        except json.JSONDecodeError:
+            return []
+        raw_activities = parsed
+
+    if not isinstance(raw_activities, list):
+        return []
+
+    normalized: list[str] = []
+    for item in raw_activities:
+        cleaned = str(item).strip()
+        if cleaned:
+            normalized.append(cleaned)
+    return normalized[:3]
+
+
+def _persist_booking_activity_plan(
+    *,
+    db: Session,
+    booking_id: str,
+    teacher_profile_id: str,
+    child_id: str,
+    source: str,
+    activities: list[str],
+    context_hash: str,
+) -> None:
+    bind = db.get_bind()
+    with bind.begin() as connection:
+        connection.execute(
+            text(
+                """
+                insert into booking_activity_plans
+                  (booking_id, teacher_profile_id, child_id, source, activities, context_hash, generated_at)
+                values
+                  (:booking_id, :teacher_profile_id, :child_id, :source, cast(:activities as jsonb), :context_hash, now())
+                on conflict (booking_id)
+                do update set
+                  teacher_profile_id = excluded.teacher_profile_id,
+                  child_id = excluded.child_id,
+                  source = excluded.source,
+                  activities = excluded.activities,
+                  context_hash = excluded.context_hash,
+                  generated_at = now(),
+                  updated_at = now()
+                """
+            ),
+            {
+                "booking_id": booking_id,
+                "teacher_profile_id": teacher_profile_id,
+                "child_id": child_id,
+                "source": source,
+                "activities": json.dumps(activities, ensure_ascii=False),
+                "context_hash": context_hash,
+            },
+        )
 
 
 def _build_fallback_activities(planner_input: TeacherActivityPlanInput) -> list[str]:

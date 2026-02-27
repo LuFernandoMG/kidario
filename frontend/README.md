@@ -148,7 +148,7 @@ In Supabase dashboard:
 ```bash
 cd ../backend
 source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --reload-dir app --reload-exclude ".venv/*" --reload-exclude "tests/*" --reload-exclude "sql/*" --port 8000
 ```
 6. In this MVP, after signup the user is redirected to login with a "check email" notice.
    The user must confirm the email from inbox first, then login manually.
