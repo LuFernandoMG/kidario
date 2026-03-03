@@ -58,7 +58,7 @@ export default function TeacherProfile() {
 
   const availableSlots = useMemo(() => {
     if (!teacher) return [];
-    if (remoteAvailability && remoteAvailability.length > 0) {
+    if (remoteAvailability !== null) {
       return remoteAvailability;
     }
     return buildTeacherAvailability(teacher.id, {
@@ -104,11 +104,6 @@ export default function TeacherProfile() {
               event.currentTarget.src = DEFAULT_TEACHER_AVATAR;
             }}
           />
-          {teacher.isOnline && (
-            <span className="absolute bottom-2 right-2 w-8 h-8 bg-success rounded-full border-4 border-card flex items-center justify-center">
-              <Video className="w-4 h-4 text-success-foreground" />
-            </span>
-          )}
         </motion.div>
       </div>
 
@@ -202,27 +197,35 @@ export default function TeacherProfile() {
           className="mt-6"
         >
           <h2 className="section-title">Próximos horários</h2>
-          <div className="space-y-3">
-            {availableSlots.slice(0, 2).map((day, dayIndex) => (
-              <div key={dayIndex} className="card-kidario p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Calendar className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-foreground">{day.dateLabel}</span>
+          {availableSlots.length > 0 ? (
+            <div className="space-y-3">
+              {availableSlots.slice(0, 2).map((day, dayIndex) => (
+                <div key={dayIndex} className="card-kidario p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calendar className="w-4 h-4 text-primary" />
+                    <span className="font-medium text-foreground">{day.dateLabel}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {day.slots.map((slot, slotIndex) => (
+                      <button
+                        key={slotIndex}
+                        onClick={() => navigate(`/agendar/${teacher.id}?date=${day.dateIso}&time=${slot}`)}
+                        className="px-3 py-2 bg-muted hover:bg-primary hover:text-primary-foreground rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {slot}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {day.slots.map((slot, slotIndex) => (
-                    <button
-                      key={slotIndex}
-                      onClick={() => navigate(`/agendar/${teacher.id}?date=${day.dateIso}&time=${slot}`)}
-                      className="px-3 py-2 bg-muted hover:bg-primary hover:text-primary-foreground rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="card-kidario p-4">
+              <p className="text-sm text-muted-foreground">
+                Sem horários disponíveis nos próximos dias.
+              </p>
+            </div>
+          )}
         </motion.section>
 
         {/* Reviews Preview */}

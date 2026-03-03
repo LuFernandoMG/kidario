@@ -8,10 +8,12 @@ from app.api.deps import get_current_admin
 from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.db.session import get_db
+from app.schemas.admin import AdminAccessResponse, AdminDashboardResponse
 from app.schemas.profiles import TeacherActivationPatch, TeacherActivationResponse
+from app.services.admin_service import get_admin_dashboard
 from app.services.profile_service import ProfileNotFoundError, set_teacher_activation
 
-router = APIRouter(prefix="/admin/teachers", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
@@ -29,7 +31,26 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail) from exc
 
 
-@router.patch("/{profile_id}/activation", response_model=TeacherActivationResponse)
+@router.get("/dashboard", response_model=AdminDashboardResponse)
+def get_admin_dashboard_endpoint(
+    _: AuthUser = Security(get_current_admin),
+    db: Session = Depends(get_db),
+) -> AdminDashboardResponse:
+    try:
+        data = get_admin_dashboard(db)
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return AdminDashboardResponse(**data)
+
+
+@router.get("/access", response_model=AdminAccessResponse)
+def get_admin_access(
+    _: AuthUser = Security(get_current_admin),
+) -> AdminAccessResponse:
+    return AdminAccessResponse()
+
+
+@router.patch("/teachers/{profile_id}/activation", response_model=TeacherActivationResponse)
 def patch_teacher_activation(
     profile_id: UUID,
     payload: TeacherActivationPatch,

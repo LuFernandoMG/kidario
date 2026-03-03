@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 
 import { getAuthSession, type UserRole } from "@/lib/authSession";
 import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
+import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/lib/privateRoutes";
 
 interface RequireRoleRouteProps {
   allowedRoles: UserRole[];
@@ -19,7 +20,11 @@ export function RequireRoleRoute({ allowedRoles, children }: RequireRoleRoutePro
   }
 
   if (!session.role || !allowedRoles.includes(session.role)) {
-    const fallback = session.role === "teacher" ? TEACHER_CONTROL_CENTER_PATH : "/explorar";
+    const fallback = session.role === "admin"
+      ? ADMIN_HIDDEN_DASHBOARD_PATH
+      : session.role === "teacher"
+        ? TEACHER_CONTROL_CENTER_PATH
+        : "/explorar";
     return <Navigate to={fallback} replace />;
   }
 

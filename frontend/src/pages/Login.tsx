@@ -3,10 +3,12 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
-import { getSupabaseAccessToken, signInWithEmailPassword } from "@/lib/authSession";
+import { getSupabaseAccessToken, saveAuthSession, signInWithEmailPassword } from "@/lib/authSession";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 import { syncPendingProfileIfNeeded } from "@/lib/pendingProfileSync";
 import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
+import { getAdminAccess } from "@/lib/backendAdmin";
+import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/lib/privateRoutes";
 
 export default function Login() {
   const [searchParams] = useSearchParams();
@@ -47,13 +49,33 @@ export default function Login() {
         roleHint: roleFromQuery,
       });
 
+      let resolvedSession = session;
       const accessToken = getSupabaseAccessToken();
       if (accessToken) {
+        try {
+          const adminAccess = await getAdminAccess(accessToken);
+          if (adminAccess.is_admin) {
+            resolvedSession = { ...session, role: "admin" };
+            saveAuthSession(resolvedSession);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message.toLowerCase() : "";
+          const isPermissionError = message.includes("admin permission required");
+          if (!isPermissionError) {
+            console.warn("Admin access check failed during login:", error);
+          }
+        }
+
         await syncPendingProfileIfNeeded({
           accessToken,
-          role: session.role,
-          email: session.email,
+          role: resolvedSession.role,
+          email: resolvedSession.email,
         });
+      }
+
+      if (resolvedSession.role === "admin") {
+        navigate(ADMIN_HIDDEN_DASHBOARD_PATH);
+        return;
       }
 
       if (decodedReturnTo) {
@@ -61,12 +83,12 @@ export default function Login() {
         return;
       }
 
-      if (session.role === "teacher") {
+      if (resolvedSession.role === "teacher") {
         navigate(TEACHER_CONTROL_CENTER_PATH);
         return;
       }
 
-      if (session.role === "parent") {
+      if (resolvedSession.role === "parent") {
         navigate("/explorar");
         return;
       }

@@ -1,14 +1,23 @@
+import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import {
   getAuthSession,
   getRecoveryTokensFromUrlHash,
 } from "@/lib/authSession";
 import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
+import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/lib/privateRoutes";
+
+const ROTATING_HIGHLIGHTS = [
+  "Professoras verificadas e experientes",
+  "Agende em minutos",
+  "Acompanhe a evolução com clareza",
+];
 
 export default function Welcome() {
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const recoveryTokens = getRecoveryTokensFromUrlHash();
   const recoveryHash =
     typeof window !== "undefined" &&
@@ -23,106 +32,92 @@ export default function Welcome() {
 
   const authSession = getAuthSession();
   if (authSession.isAuthenticated) {
+    if (authSession.role === "admin") {
+      return <Navigate to={ADMIN_HIDDEN_DASHBOARD_PATH} replace />;
+    }
     if (authSession.role === "teacher") {
       return <Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />;
     }
     return <Navigate to="/explorar" replace />;
   }
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setHighlightIndex((previous) => (previous + 1) % ROTATING_HIGHLIGHTS.length);
+    }, 2800);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen gradient-hero flex flex-col">
-      {/* Hero Section */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pt-12 pb-8">
-        {/* Logo/Icon */}
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 200, damping: 15 }}
-          className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center shadow-kidario-elevated mb-8"
-        >
-          <Sparkles className="w-10 h-10 text-primary-foreground" />
-        </motion.div>
+    <div className="relative min-h-screen overflow-hidden">
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 h-full w-full object-cover"
+      >
+        <source src="/assets/background.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/40 to-emerald-500/40" />
 
-        {/* Title */}
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="font-display text-4xl font-bold text-foreground text-center"
-        >
-          Kidario
-        </motion.h1>
-        
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="text-muted-foreground text-center text-lg mt-3 max-w-xs"
-        >
-          Encontre a pedagoga ideal para o seu filho.
-        </motion.p>
+      <div className="relative z-10 flex min-h-screen flex-col justify-between">
+        <div className="flex-1 px-6 pt-14">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-auto max-w-md text-center"
+          >
+            <h1 className="font-display text-6xl font-bold text-white">Kidario</h1>
+            <p className="mt-3 text-md font-light text-white/95">
+              Encontre a pedagoga ideal para o seu filho.
+            </p>
+          </motion.div>
 
-        {/* Features */}
+        </div>
+
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-10 space-y-3 w-full max-w-sm"
+          transition={{ delay: 0.35 }}
+          className="px-6 pb-10 space-y-3"
         >
-          <FeatureItem 
-            emoji="📚" 
-            text="Professoras verificadas e experientes" 
-          />
-          <FeatureItem 
-            emoji="📅" 
-            text="Agende em minutos" 
-          />
-          <FeatureItem 
-            emoji="📈" 
-            text="Acompanhe a evolução com clareza" 
-          />
+          <div className="mx-auto h-10 w-full max-w-md overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={highlightIndex}
+                initial={{ y: 26, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -26, opacity: 0 }}
+                transition={{ duration: 0.45, ease: "easeInOut" }}
+                className="text-center text-base font-bold text-white"
+              >
+                {ROTATING_HIGHLIGHTS[highlightIndex]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+
+          <KidarioButton asChild variant="hero" size="xl" fullWidth>
+            <Link to="/explorar">
+              Explorar
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </KidarioButton>
+
+          <div className="flex items-center justify-center gap-4 pt-2">
+            <Link to="/login" className="text-sm font-medium text-white hover:underline">
+              Entrar
+            </Link>
+            <span className="text-white/70">•</span>
+            <Link to="/cadastro" className="text-sm font-medium text-white hover:underline">
+              Criar conta
+            </Link>
+          </div>
         </motion.div>
       </div>
-
-      {/* CTA Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="p-6 pb-10 space-y-3"
-      >
-        <KidarioButton asChild variant="hero" size="xl" fullWidth>
-          <Link to="/explorar">
-            Explorar pedagogas
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-        </KidarioButton>
-        
-        <div className="flex items-center justify-center gap-4 pt-2">
-          <Link 
-            to="/login" 
-            className="text-primary font-medium text-sm hover:underline"
-          >
-            Entrar
-          </Link>
-          <span className="text-muted-foreground">•</span>
-          <Link 
-            to="/cadastro" 
-            className="text-primary font-medium text-sm hover:underline"
-          >
-            Criar conta
-          </Link>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-function FeatureItem({ emoji, text }: { emoji: string; text: string }) {
-  return (
-    <div className="flex items-center gap-3 p-4 card-kidario">
-      <span className="text-2xl">{emoji}</span>
-      <span className="text-foreground font-medium">{text}</span>
     </div>
   );
 }

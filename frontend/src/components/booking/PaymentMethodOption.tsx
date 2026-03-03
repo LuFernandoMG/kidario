@@ -6,6 +6,7 @@ interface PaymentMethodOptionProps {
   description: string;
   icon: ReactNode;
   selected: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }
 
@@ -15,9 +16,11 @@ export function PaymentMethodOption({
   icon,
   selected,
   onSelect,
+  disabled = false,
 }: PaymentMethodOptionProps) {
   return (
     <button
+      disabled={disabled}
       type="button"
       onClick={onSelect}
       className={cn(

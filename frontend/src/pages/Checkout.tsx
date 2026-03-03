@@ -36,16 +36,16 @@ export default function Checkout() {
 
   const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
   const [isLoadingTeacher, setIsLoadingTeacher] = useState(false);
+  const [lessonDurationMinutes, setLessonDurationMinutes] = useState(60);
   const authSession = getAuthSession();
 
   const dateIso = searchParams.get("date") ?? "";
   const time = searchParams.get("time") ?? "";
-  const duration = Number(searchParams.get("duration") || 60);
   const modalityQuery = searchParams.get("modality");
 
   const modality: BookingModality = modalityQuery === "presencial" ? "presencial" : "online";
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cartao");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,6 +57,7 @@ export default function Checkout() {
   useEffect(() => {
     if (!id) {
       setTeacher(null);
+      setLessonDurationMinutes(60);
       return;
     }
 
@@ -69,6 +70,7 @@ export default function Checkout() {
       .then((detail) => {
         if (!isMounted) return;
         setTeacher(detail.teacher);
+        setLessonDurationMinutes(detail.lessonDurationMinutes > 0 ? detail.lessonDurationMinutes : 60);
       })
       .catch(() => {})
       .finally(() => {
@@ -124,8 +126,8 @@ export default function Checkout() {
 
   const basePrice = useMemo(() => {
     if (!teacher) return 0;
-    return Math.round(teacher.pricePerClass * (duration / 60));
-  }, [duration, teacher]);
+    return Math.round(teacher.pricePerClass * (lessonDurationMinutes / 60));
+  }, [lessonDurationMinutes, teacher]);
 
   const discountRate = appliedCoupon ? couponDiscounts[appliedCoupon] ?? 0 : 0;
   const discountValue = Math.round(basePrice * discountRate);
@@ -136,7 +138,7 @@ export default function Checkout() {
     children.find((child) => child.id === selectedChildId)?.name
     || (authSession.isAuthenticated ? "Não selecionado" : "Definido após login");
 
-  const isPayloadValid = Boolean(teacher && dateIso && time && duration > 0);
+  const isPayloadValid = Boolean(teacher && dateIso && time && lessonDurationMinutes > 0);
 
   const handleApplyCoupon = () => {
     const normalized = couponInput.trim().toUpperCase();
@@ -182,7 +184,7 @@ export default function Checkout() {
           child_id: selectedChildId || undefined,
           date_iso: dateIso,
           time,
-          duration_minutes: duration,
+          duration_minutes: lessonDurationMinutes,
           modality,
           payment_method: paymentMethod,
           coupon_code: appliedCoupon || undefined,
@@ -275,7 +277,7 @@ export default function Checkout() {
           rows={[
             { label: "Filho(a):", value: selectedChildName },
             { label: "Data:", value: dateLabel },
-            { label: "Horario:", value: `${time} (${duration} min)` },
+            { label: "Horario:", value: `${time} (${lessonDurationMinutes} min)` },
             { label: "Modalidade:", value: modality === "online" ? "Online" : "Presencial" },
           ]}
         />
@@ -329,13 +331,14 @@ export default function Checkout() {
         <section className="card-kidario p-4 space-y-3">
           <h2 className="font-display text-lg font-semibold text-foreground">Forma de pagamento</h2>
 
-          <PaymentMethodOption
+          {/* <PaymentMethodOption
+            disabled={true}
             title="Cartao"
             description="Confirma em poucos segundos."
             icon={<CreditCard className="w-4 h-4" />}
             selected={paymentMethod === "cartao"}
             onSelect={() => setPaymentMethod("cartao")}
-          />
+          /> */}
 
           <PaymentMethodOption
             title="Pix"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Calendar, Clock, MapPin, Video } from "lucide-react";
+import { Calendar, MapPin, Video } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
@@ -19,8 +19,6 @@ import {
 } from "@/domains/parent/api/backendParentProfiles";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const durationOptions = [45, 60, 90];
-
 export default function BookingScheduler() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -33,6 +31,7 @@ export default function BookingScheduler() {
   const [children, setChildren] = useState<BackendParentChildView[]>([]);
   const [selectedChildId, setSelectedChildId] = useState(queryChildId);
   const [isLoadingChildren, setIsLoadingChildren] = useState(false);
+  const [lessonDurationMinutes, setLessonDurationMinutes] = useState(60);
 
   const modalities = useMemo<BookingModality[]>(() => {
     if (!teacher) return ["online"];
@@ -44,7 +43,7 @@ export default function BookingScheduler() {
 
   const availability = useMemo<DayAvailability[]>(() => {
     if (!teacher) return [];
-    if (remoteAvailability && remoteAvailability.length > 0) {
+    if (remoteAvailability !== null) {
       return remoteAvailability;
     }
     return buildTeacherAvailability(teacher.id);
@@ -57,7 +56,6 @@ export default function BookingScheduler() {
   }, [availability, searchParams]);
 
   const [selectedModality, setSelectedModality] = useState<BookingModality>(modalities[0] ?? "online");
-  const [selectedDuration, setSelectedDuration] = useState<number>(60);
   const [selectedDate, setSelectedDate] = useState("");
 
   const timeOptions = useMemo(() => {
@@ -77,6 +75,7 @@ export default function BookingScheduler() {
     if (!id) {
       setTeacher(null);
       setRemoteAvailability(null);
+      setLessonDurationMinutes(60);
       return;
     }
 
@@ -90,6 +89,7 @@ export default function BookingScheduler() {
       .then((detail) => {
         if (!isMounted) return;
         setTeacher(detail.teacher);
+        setLessonDurationMinutes(detail.lessonDurationMinutes > 0 ? detail.lessonDurationMinutes : 60);
       })
       .catch(() => {})
       .finally(() => {
@@ -161,7 +161,7 @@ export default function BookingScheduler() {
       teacherProfileId: teacher.id,
       from: fromIso,
       to: toIso,
-      durationMinutes: selectedDuration,
+      durationMinutes: lessonDurationMinutes,
     })
       .then((response) => {
         if (!isMounted) return;
@@ -181,7 +181,7 @@ export default function BookingScheduler() {
     return () => {
       isMounted = false;
     };
-  }, [selectedDuration, teacher]);
+  }, [lessonDurationMinutes, teacher]);
 
   useEffect(() => {
     if (!availability.length) {
@@ -211,7 +211,7 @@ export default function BookingScheduler() {
   }, [modalities, selectedModality]);
 
   const selectedDayLabel = availability.find((day) => day.dateIso === selectedDate)?.dateLabel ?? "-";
-  const estimatedPrice = Math.round((teacher?.pricePerClass ?? 0) * (selectedDuration / 60));
+  const estimatedPrice = Math.round((teacher?.pricePerClass ?? 0) * (lessonDurationMinutes / 60));
   const selectedChildName =
     children.find((child) => child.id === selectedChildId)?.name || "Não selecionado";
   const requiresChildSelection = children.length > 0;
@@ -226,7 +226,6 @@ export default function BookingScheduler() {
     teacher
       && selectedDate
       && selectedTime
-      && selectedDuration > 0
       && (!requiresChildSelection || selectedChildId),
   );
 
@@ -236,7 +235,6 @@ export default function BookingScheduler() {
     const checkoutParams = new URLSearchParams({
       date: selectedDate,
       time: selectedTime,
-      duration: String(selectedDuration),
       modality: selectedModality,
     });
     if (selectedChildId) checkoutParams.set("childId", selectedChildId);
@@ -316,16 +314,9 @@ export default function BookingScheduler() {
 
         <section className="card-kidario p-4 space-y-3">
           <h3 className="font-display text-lg font-semibold text-foreground">Duracao da aula</h3>
-          <div className="flex flex-wrap gap-2">
-            {durationOptions.map((duration) => (
-              <button key={duration} type="button" onClick={() => setSelectedDuration(duration)}>
-                <Chip variant={selectedDuration === duration ? "mint" : "default"} size="md">
-                  <Clock className="w-3.5 h-3.5" />
-                  {duration} min
-                </Chip>
-              </button>
-            ))}
-          </div>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{lessonDurationMinutes} minutos</span>
+          </p>
         </section>
 
         <section className="card-kidario p-4 space-y-3">
@@ -333,7 +324,7 @@ export default function BookingScheduler() {
           {!availability.length && (
             <p className="text-sm text-muted-foreground">Sem horarios disponiveis para esta professora.</p>
           )}
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide [&::-webkit-scrollbar]:hidden">
             {availability.map((day) => (
               <button
                 key={day.dateIso}
@@ -377,7 +368,7 @@ export default function BookingScheduler() {
             { label: "Data:", value: selectedDayLabel },
             { label: "Horario:", value: selectedTime || "-" },
             { label: "Modalidade:", value: selectedModality === "online" ? "Online" : "Presencial" },
-            { label: "Duracao:", value: `${selectedDuration} minutos` },
+            { label: "Duracao:", value: `${lessonDurationMinutes} minutos` },
           ]}
           totalLabel="Estimativa"
           totalValue={`R$ ${estimatedPrice}`}

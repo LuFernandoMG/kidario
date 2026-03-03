@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 // Pages
 import Welcome from "./pages/Welcome";
@@ -12,6 +12,7 @@ import RecoverPassword from "./pages/RecoverPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Explore from "./pages/Explore";
 import TeacherProfile from "./pages/TeacherProfile";
+import AdminHiddenDashboard from "./pages/AdminHiddenDashboard";
 import BookingScheduler from "./pages/BookingScheduler";
 import Checkout from "./pages/Checkout";
 import BookingConfirmation from "./pages/BookingConfirmation";
@@ -24,7 +25,7 @@ import ParentProfileSettings from "./domains/parent/pages/ParentProfileSettingsP
 import TeacherProfileSettings from "./domains/teacher/pages/TeacherProfileSettingsPage";
 import NotFound from "./pages/NotFound";
 import TeacherPrivateSignup from "./domains/teacher/pages/TeacherPrivateSignupPage";
-import { TEACHER_PRIVATE_SIGNUP_PATH } from "./lib/privateRoutes";
+import { ADMIN_HIDDEN_DASHBOARD_PATH, TEACHER_PRIVATE_SIGNUP_PATH } from "./lib/privateRoutes";
 import { RequireRoleRoute } from "@/components/auth/RequireRoleRoute";
 import TeacherControlCenterPage from "@/domains/teacher/pages/TeacherControlCenterPage";
 import TeacherAgendaPage from "@/domains/teacher/pages/TeacherAgendaPage";
@@ -56,12 +57,22 @@ function RoleAwareAgendaRoute() {
   return authSession.role === "teacher" ? <TeacherAgendaPage /> : <Agenda />;
 }
 
+function AdminSessionGuard() {
+  const location = useLocation();
+  const authSession = getAuthSession();
+
+  if (!authSession.isAuthenticated || authSession.role !== "admin") return null;
+  if (location.pathname === ADMIN_HIDDEN_DASHBOARD_PATH) return null;
+  return <Navigate to={ADMIN_HIDDEN_DASHBOARD_PATH} replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AdminSessionGuard />
         <Routes>
           {/* Auth Flow */}
           <Route path="/" element={<Welcome />} />
@@ -69,6 +80,7 @@ const App = () => (
           <Route path="/recuperar-senha" element={<RecoverPassword />} />
           <Route path="/redefinir-senha" element={<ResetPassword />} />
           <Route path="/cadastro" element={<Signup />} />
+          <Route path={ADMIN_HIDDEN_DASHBOARD_PATH} element={<AdminHiddenDashboard />} />
           <Route path="/escolher-perfil" element={<Navigate to="/cadastro" replace />} />
           <Route path="/escolher-professora" element={<Navigate to={TEACHER_PRIVATE_SIGNUP_PATH} replace />} />
           <Route path={TEACHER_PRIVATE_SIGNUP_PATH} element={<TeacherPrivateSignup />} />

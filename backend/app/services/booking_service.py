@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -36,6 +37,9 @@ class BookingNotFoundError(Exception):
 
 class BookingPermissionError(Exception):
     pass
+
+
+MIN_BOOKING_LEAD_MINUTES = 60
 
 
 def _format_date_label(date_value: date) -> str:
@@ -119,6 +123,15 @@ def _booking_start_datetime(date_iso: date, time_value: str) -> datetime:
         hour=int(hours_part),
         minute=int(minutes_part),
     )
+
+
+def _ensure_minimum_booking_lead_time(*, date_iso: date, time_value: str) -> None:
+    booking_start = _booking_start_datetime(date_iso, time_value)
+    minimum_start = datetime.now() + timedelta(minutes=MIN_BOOKING_LEAD_MINUTES)
+    if booking_start < minimum_start:
+        raise BookingValidationError(
+            f"A aula deve ser agendada com pelo menos {MIN_BOOKING_LEAD_MINUTES} minutos de antecedência."
+        )
 
 
 def _can_teacher_complete_booking(*, booking_status: str, date_iso: date, time_value: str, duration_minutes: int) -> bool:
@@ -327,72 +340,94 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
     resolved_child_id = _resolve_child_id(db, user.user_id, payload.child_id)
     _ensure_teacher_exists(db, payload.teacher_profile_id)
     _ensure_teacher_supports_modality(db, payload.teacher_profile_id, payload.modality)
+    _ensure_minimum_booking_lead_time(date_iso=payload.date_iso, time_value=payload.time)
     _ensure_slot_is_available(db, payload.teacher_profile_id, payload.date_iso, payload.time)
 
-    teacher_hourly_rate = db.execute(
-        text("select hourly_rate from teacher_profiles where profile_id = :profile_id"),
-        {"profile_id": str(payload.teacher_profile_id)},
-    ).scalar()
-
-    hourly_rate_value = float(teacher_hourly_rate or 0)
-    price_total = round(hourly_rate_value * (payload.duration_minutes / 60), 2)
-    payment_status = "pago" if payload.payment_method == "cartao" else "pendente"
-    booking_status = "pendente"
-
-    row = (
+    teacher_pricing = (
         db.execute(
             text(
                 """
-                insert into bookings
-                  (
-                    parent_profile_id,
-                    child_id,
-                    teacher_profile_id,
-                    date_iso,
-                    time,
-                    duration_minutes,
-                    modality,
-                    status,
-                    payment_method,
-                    payment_status,
-                    price_total,
-                    currency
-                  )
-                values
-                  (
-                    :parent_profile_id,
-                    :child_id,
-                    :teacher_profile_id,
-                    :date_iso,
-                    :time,
-                    :duration_minutes,
-                    :modality,
-                    :status,
-                    :payment_method,
-                    :payment_status,
-                    :price_total,
-                    'BRL'
-                  )
-                returning id, status, payment_status
+                select
+                  coalesce(hourly_rate, 0) as hourly_rate,
+                  coalesce(nullif(lesson_duration_minutes, 0), 60) as lesson_duration_minutes
+                from teacher_profiles
+                where profile_id = :profile_id
                 """
             ),
-            {
-                "parent_profile_id": user.user_id,
-                "child_id": str(resolved_child_id),
-                "teacher_profile_id": str(payload.teacher_profile_id),
-                "date_iso": payload.date_iso,
-                "time": payload.time,
-                "duration_minutes": payload.duration_minutes,
-                "modality": payload.modality,
-                "status": booking_status,
-                "payment_method": payload.payment_method,
-                "payment_status": payment_status,
-                "price_total": price_total,
-            },
+            {"profile_id": str(payload.teacher_profile_id)},
         )
         .mappings()
         .first()
     )
+    if not teacher_pricing:
+        raise BookingValidationError("Teacher pricing profile not found.")
+
+    effective_duration_minutes = int(teacher_pricing["lesson_duration_minutes"] or 60)
+    hourly_rate_value = float(teacher_pricing["hourly_rate"] or 0)
+    price_total = round(hourly_rate_value * (effective_duration_minutes / 60), 2)
+    payment_status = "pago" if payload.payment_method == "cartao" else "pendente"
+    booking_status = "pendente"
+
+    try:
+        row = (
+            db.execute(
+                text(
+                    """
+                    insert into bookings
+                      (
+                        parent_profile_id,
+                        child_id,
+                        teacher_profile_id,
+                        date_iso,
+                        time,
+                        duration_minutes,
+                        modality,
+                        status,
+                        payment_method,
+                        payment_status,
+                        price_total,
+                        currency
+                      )
+                    values
+                      (
+                        :parent_profile_id,
+                        :child_id,
+                        :teacher_profile_id,
+                        :date_iso,
+                        :time,
+                        :duration_minutes,
+                        :modality,
+                        :status,
+                        :payment_method,
+                        :payment_status,
+                        :price_total,
+                        'BRL'
+                      )
+                    returning id, status, payment_status
+                    """
+                ),
+                {
+                    "parent_profile_id": user.user_id,
+                    "child_id": str(resolved_child_id),
+                    "teacher_profile_id": str(payload.teacher_profile_id),
+                    "date_iso": payload.date_iso,
+                    "time": payload.time,
+                    "duration_minutes": effective_duration_minutes,
+                    "modality": payload.modality,
+                    "status": booking_status,
+                    "payment_method": payload.payment_method,
+                    "payment_status": payment_status,
+                    "price_total": price_total,
+                },
+            )
+            .mappings()
+            .first()
+        )
+    except IntegrityError as exc:
+        sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+        if sqlstate == "23505":
+            raise BookingConflictError("Selected slot is no longer available.") from exc
+        raise
     if not row:
         raise BookingValidationError("Could not create booking.")
 
@@ -595,6 +630,7 @@ def reschedule_booking(db: Session, user: AuthUser, booking_id: UUID, payload: B
         raise BookingPermissionError("Only the parent owner can reschedule the booking.")
     if booking["status"] not in ("pendente", "confirmada"):
         raise BookingConflictError("Booking cannot be rescheduled in the current status.")
+    _ensure_minimum_booking_lead_time(date_iso=payload.new_date_iso, time_value=payload.new_time)
 
     _ensure_slot_is_available(
         db,
@@ -604,24 +640,30 @@ def reschedule_booking(db: Session, user: AuthUser, booking_id: UUID, payload: B
         excluding_booking_id=booking_id,
     )
 
-    updated = (
-        db.execute(
-            text(
-                """
-                update bookings
-                set
-                  date_iso = :date_iso,
-                  time = :time,
-                  updated_at = now()
-                where id = :booking_id
-                returning id, date_iso, time, status, updated_at
-                """
-            ),
-            {"booking_id": str(booking_id), "date_iso": payload.new_date_iso, "time": payload.new_time},
+    try:
+        updated = (
+            db.execute(
+                text(
+                    """
+                    update bookings
+                    set
+                      date_iso = :date_iso,
+                      time = :time,
+                      updated_at = now()
+                    where id = :booking_id
+                    returning id, date_iso, time, status, updated_at
+                    """
+                ),
+                {"booking_id": str(booking_id), "date_iso": payload.new_date_iso, "time": payload.new_time},
+            )
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
+    except IntegrityError as exc:
+        sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+        if sqlstate == "23505":
+            raise BookingConflictError("Selected slot is no longer available.") from exc
+        raise
     if not updated:
         raise BookingNotFoundError("Booking not found.")
 
@@ -716,6 +758,7 @@ def teacher_reschedule_booking(
         raise BookingPermissionError("Only the teacher owner can reschedule the booking.")
     if booking["status"] not in ("pendente", "confirmada"):
         raise BookingConflictError("Booking cannot be rescheduled in the current status.")
+    _ensure_minimum_booking_lead_time(date_iso=payload.new_date_iso, time_value=payload.new_time)
 
     _ensure_slot_is_available(
         db,
@@ -725,24 +768,30 @@ def teacher_reschedule_booking(
         excluding_booking_id=booking_id,
     )
 
-    updated = (
-        db.execute(
-            text(
-                """
-                update bookings
-                set
-                  date_iso = :date_iso,
-                  time = :time,
-                  updated_at = now()
-                where id = :booking_id
-                returning id, date_iso, time, status, updated_at
-                """
-            ),
-            {"booking_id": str(booking_id), "date_iso": payload.new_date_iso, "time": payload.new_time},
+    try:
+        updated = (
+            db.execute(
+                text(
+                    """
+                    update bookings
+                    set
+                      date_iso = :date_iso,
+                      time = :time,
+                      updated_at = now()
+                    where id = :booking_id
+                    returning id, date_iso, time, status, updated_at
+                    """
+                ),
+                {"booking_id": str(booking_id), "date_iso": payload.new_date_iso, "time": payload.new_time},
+            )
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
+    except IntegrityError as exc:
+        sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+        if sqlstate == "23505":
+            raise BookingConflictError("Selected slot is no longer available.") from exc
+        raise
     if not updated:
         raise BookingNotFoundError("Booking not found.")
 
@@ -1160,6 +1209,7 @@ def get_teacher_availability_slots(
         rows_by_day.setdefault(int(row["day_of_week"]), []).append(dict(row))
 
     slots = []
+    minimum_start = datetime.now() + timedelta(minutes=MIN_BOOKING_LEAD_MINUTES)
     current_date = date_from
     while current_date <= date_to:
         day_rows = rows_by_day.get(current_date.weekday(), [])
@@ -1172,6 +1222,9 @@ def get_teacher_availability_slots(
             minute = start_minutes
             while minute + duration_minutes <= end_minutes:
                 time_value = _minutes_to_time(minute)
+                if _booking_start_datetime(current_date, time_value) < minimum_start:
+                    minute += duration_minutes
+                    continue
                 if time_value not in blocked_times:
                     available_times.append(time_value)
                 minute += duration_minutes

@@ -1,4 +1,4 @@
-export type UserRole = "parent" | "teacher" | null;
+export type UserRole = "parent" | "teacher" | "admin" | null;
 
 export interface AuthSession {
   isAuthenticated: boolean;
@@ -215,7 +215,7 @@ function translateSupabaseAuthError(payload: SupabaseAuthResponse): string {
 }
 
 function normalizeRole(value: unknown): UserRole {
-  return value === "parent" || value === "teacher" ? value : null;
+  return value === "parent" || value === "teacher" || value === "admin" ? value : null;
 }
 
 function getStoredAuthMetadata(): StoredAuthMetadata | null {

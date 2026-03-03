@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import text
@@ -9,6 +9,9 @@ from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
 class MarketplaceNotFoundError(Exception):
     pass
+
+
+MIN_BOOKING_LEAD_MINUTES = 60
 
 
 def _format_date_label(date_value: date) -> str:
@@ -24,6 +27,17 @@ def _minutes_to_time(total_minutes: int) -> str:
     hours = total_minutes // 60
     minutes = total_minutes % 60
     return f"{hours:02d}:{minutes:02d}"
+
+
+def _booking_start_datetime(date_iso: date, time_value: str) -> datetime:
+    hours_part, minutes_part = time_value.split(":", maxsplit=1)
+    return datetime(
+        year=date_iso.year,
+        month=date_iso.month,
+        day=date_iso.day,
+        hour=int(hours_part),
+        minute=int(minutes_part),
+    )
 
 
 def _modality_flags(modality: str | None) -> tuple[bool, bool]:
@@ -77,6 +91,7 @@ def _build_next_availability_label(schedule_rows: list[dict]) -> str | None:
 def _build_preview_slots(
     schedule_rows: list[dict],
     duration_minutes: int,
+    booked_slots_by_date: dict[date, set[str]],
     max_days: int = 3,
 ) -> list[dict]:
     rows_by_day: dict[int, list[dict]] = {}
@@ -85,16 +100,23 @@ def _build_preview_slots(
 
     slots: list[dict] = []
     current_date = date.today()
+    minimum_start = datetime.now() + timedelta(minutes=MIN_BOOKING_LEAD_MINUTES)
     scanned_days = 0
     while len(slots) < max_days and scanned_days < 21:
         day_rows = rows_by_day.get(current_date.weekday(), [])
+        blocked_times = booked_slots_by_date.get(current_date, set())
         day_times: list[str] = []
         for day_row in day_rows:
             start_minutes = _time_to_minutes(str(day_row["start_time"]))
             end_minutes = _time_to_minutes(str(day_row["end_time"]))
             minute = start_minutes
             while minute + duration_minutes <= end_minutes:
-                day_times.append(_minutes_to_time(minute))
+                time_value = _minutes_to_time(minute)
+                if _booking_start_datetime(current_date, time_value) < minimum_start:
+                    minute += duration_minutes
+                    continue
+                if time_value not in blocked_times:
+                    day_times.append(time_value)
                 minute += duration_minutes
 
         unique_times = sorted(set(day_times))
@@ -266,8 +288,36 @@ def get_marketplace_teacher_detail(db: Session, teacher_profile_id: UUID) -> dic
         .all()
     )
 
+    booked_rows = (
+        db.execute(
+            text(
+                """
+                select date_iso, time
+                from bookings
+                where teacher_profile_id = :teacher_profile_id
+                  and status in ('pendente', 'confirmada')
+                  and date_iso >= current_date
+                """
+            ),
+            {"teacher_profile_id": str(teacher_profile_id)},
+        )
+        .mappings()
+        .all()
+    )
+    booked_slots_by_date: dict[date, set[str]] = {}
+    for booking in booked_rows:
+        booking_date = booking.get("date_iso")
+        booking_time = str(booking.get("time") or "")
+        if booking_date is None or not booking_time:
+            continue
+        booked_slots_by_date.setdefault(booking_date, set()).add(booking_time)
+
     lesson_duration = int(row["lesson_duration_minutes"] or 60)
-    preview_slots = _build_preview_slots([dict(item) for item in schedule_rows], duration_minutes=lesson_duration)
+    preview_slots = _build_preview_slots(
+        [dict(item) for item in schedule_rows],
+        duration_minutes=lesson_duration,
+        booked_slots_by_date=booked_slots_by_date,
+    )
     rating, review_count = _derive_rating_and_reviews(teacher_profile_id)
     is_online, is_presential = _modality_flags(row["modality"])
     experience_label = _build_experience_label(
