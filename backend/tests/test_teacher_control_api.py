@@ -53,7 +53,15 @@ def test_get_teacher_control_center_overview_returns_ok(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _fake_get_teacher_control_center_overview(db, user, limit_agenda, limit_chats, limit_students):
+    def _fake_get_teacher_control_center_overview(
+        db,
+        user,
+        limit_agenda,
+        limit_chats,
+        limit_students,
+        include_history,
+    ):
+        assert include_history is False
         return {
             "generated_at": "2026-02-25T10:00:00Z",
             "upcoming_lessons_count": 3,
@@ -137,6 +145,56 @@ def test_get_teacher_control_center_overview_returns_ok(
     assert body["upcoming_lessons_count"] == 3
     assert body["pending_decisions_count"] == 1
     assert len(body["agenda"]) == 1
+
+
+def test_get_teacher_student_timeline_returns_ok(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_child_id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+    def _fake_get_teacher_student_timeline(db, user, child_id, limit):
+        assert child_id == expected_child_id
+        assert limit == 50
+        return {
+            "child_id": expected_child_id,
+            "child_name": "Luca",
+            "total_completed_lessons": 1,
+            "timeline": [
+                {
+                    "booking_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                    "child_id": expected_child_id,
+                    "child_name": "Luca",
+                    "date_iso": "2026-02-27",
+                    "date_label": "27/02/2026",
+                    "time": "10:00",
+                    "summary": "Boa evolução na leitura e concentração.",
+                    "recent_objectives": [
+                        {
+                            "objective": "Ler em voz alta com confiança",
+                            "achieved": True,
+                            "fullfilment_level": 4,
+                        }
+                    ],
+                    "has_follow_up": True,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        teacher_control_endpoints,
+        "get_teacher_student_timeline",
+        _fake_get_teacher_student_timeline,
+    )
+
+    response = client.get(f"/api/v1/teacher/students/{expected_child_id}/timeline")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["child_name"] == "Luca"
+    assert body["total_completed_lessons"] == 1
+    assert len(body["timeline"]) == 1
+    assert body["timeline"][0]["summary"] == "Boa evolução na leitura e concentração."
 
 
 def test_get_chat_threads_returns_ok(

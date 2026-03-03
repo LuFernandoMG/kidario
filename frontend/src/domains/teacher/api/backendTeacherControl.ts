@@ -62,6 +62,34 @@ export interface TeacherStudentOverview {
   progress_status: TeacherProgressStatus;
 }
 
+export interface TeacherStudentTimelineEntry {
+  booking_id: string;
+  child_id: string;
+  child_name: string;
+  date_iso: string;
+  date_label: string;
+  time: string;
+  summary?: string | null;
+  recent_objectives: LessonObjectiveItem[];
+  has_follow_up: boolean;
+  follow_up?: {
+    updated_at: string;
+    summary: string;
+    next_steps: string;
+    objectives: LessonObjectiveItem[];
+    next_objectives: LessonObjectiveItem[];
+    tags: string[];
+    attention_points: string[];
+  } | null;
+}
+
+export interface TeacherStudentTimelineResponse {
+  child_id: string;
+  child_name: string;
+  total_completed_lessons: number;
+  timeline: TeacherStudentTimelineEntry[];
+}
+
 export interface TeacherControlCenterOverviewResponse {
   generated_at: string;
   upcoming_lessons_count: number;
@@ -246,5 +274,21 @@ export async function getTeacherChatThreads(
     path: `/chat/threads?${query.toString()}`,
     accessToken,
     fallback: "Não foi possível carregar as conversas da professora.",
+  });
+}
+
+export async function getTeacherStudentTimeline(
+  accessToken: string,
+  childId: string,
+  params: { limit?: number } = {},
+): Promise<TeacherStudentTimelineResponse> {
+  const query = new URLSearchParams();
+  const rawLimit = Number.isFinite(params.limit) ? Number(params.limit) : 50;
+  query.set("limit", String(Math.min(200, Math.max(1, rawLimit))));
+
+  return teacherRequest<TeacherStudentTimelineResponse>({
+    path: `/teacher/students/${childId}/timeline?${query.toString()}`,
+    accessToken,
+    fallback: "Não foi possível carregar a linha do tempo do aluno.",
   });
 }

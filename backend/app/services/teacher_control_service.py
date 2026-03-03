@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.security import AuthUser
-from app.schemas.teacher_control import TeacherControlCenterOverviewResponse
+from app.schemas.teacher_control import TeacherControlCenterOverviewResponse, TeacherStudentTimelineResponse
 from app.services.booking_service import (
     BookingNotFoundError,
     BookingValidationError,
@@ -16,6 +16,10 @@ from app.services.teacher_activity_planner_service import get_cached_teacher_act
 
 
 class TeacherControlPermissionError(Exception):
+    pass
+
+
+class TeacherStudentNotFoundError(Exception):
     pass
 
 
@@ -173,6 +177,17 @@ def _build_lesson_objectives(
             "fullfilment_level": 0,
         },
     ]
+
+
+def _build_recent_objectives(
+    *,
+    follow_up_next_objectives: object,
+    follow_up_objectives: object,
+) -> list[dict]:
+    recent_objectives = _normalize_objectives(follow_up_next_objectives)
+    if recent_objectives:
+        return recent_objectives
+    return _normalize_objectives(follow_up_objectives)
 
 
 def get_teacher_control_center_overview(
@@ -587,3 +602,122 @@ def get_teacher_control_center_overview(
     }
 
     return TeacherControlCenterOverviewResponse(**payload).model_dump()
+
+
+def get_teacher_student_timeline(
+    db: Session,
+    user: AuthUser,
+    *,
+    child_id: UUID,
+    limit: int = 50,
+) -> dict:
+    _ensure_teacher_role(db, user.user_id)
+
+    child_row = (
+        db.execute(
+            text(
+                """
+                select pc.id, pc.name
+                from parent_children pc
+                join bookings b on b.child_id = pc.id
+                where pc.id = :child_id
+                  and b.teacher_profile_id = :teacher_profile_id
+                limit 1
+                """
+            ),
+            {
+                "child_id": str(child_id),
+                "teacher_profile_id": user.user_id,
+            },
+        )
+        .mappings()
+        .first()
+    )
+
+    if not child_row:
+        raise TeacherStudentNotFoundError("Student not found for this teacher.")
+
+    timeline_rows = (
+        db.execute(
+            text(
+                """
+                select
+                  b.id as booking_id,
+                  b.child_id,
+                  coalesce(pc.name, :fallback_child_name) as child_name,
+                  b.date_iso,
+                  b.time,
+                  bf.updated_at as follow_up_updated_at,
+                  bf.summary,
+                  bf.next_steps,
+                  bf.next_objectives,
+                  bf.objectives,
+                  bf.tags,
+                  bf.attention_points
+                from bookings b
+                join parent_children pc on pc.id = b.child_id
+                left join booking_follow_ups bf on bf.booking_id = b.id
+                where b.teacher_profile_id = :teacher_profile_id
+                  and b.child_id = :child_id
+                  and b.status = 'concluida'
+                order by b.date_iso desc, b.time desc, coalesce(bf.updated_at, b.updated_at) desc
+                limit :limit_rows
+                """
+            ),
+            {
+                "teacher_profile_id": user.user_id,
+                "child_id": str(child_id),
+                "limit_rows": int(limit),
+                "fallback_child_name": "Aluno",
+            },
+        )
+        .mappings()
+        .all()
+    )
+
+    timeline_payload = []
+    for row in timeline_rows:
+        recent_objectives = _build_recent_objectives(
+            follow_up_next_objectives=row.get("next_objectives"),
+            follow_up_objectives=row.get("objectives"),
+        )
+        has_follow_up = bool(
+            (row.get("summary") or "").strip()
+            or (row.get("next_steps") or "").strip()
+            or recent_objectives
+            or list(row.get("tags") or [])
+            or list(row.get("attention_points") or [])
+        )
+        follow_up_payload = None
+        if has_follow_up and row.get("follow_up_updated_at") is not None:
+            follow_up_payload = {
+                "updated_at": row["follow_up_updated_at"],
+                "summary": row.get("summary") or "",
+                "next_steps": row.get("next_steps") or "",
+                "objectives": _normalize_objectives(row.get("objectives")),
+                "next_objectives": _normalize_objectives(row.get("next_objectives")),
+                "tags": list(row.get("tags") or []),
+                "attention_points": list(row.get("attention_points") or []),
+            }
+        timeline_payload.append(
+            {
+                "booking_id": row["booking_id"],
+                "child_id": row["child_id"],
+                "child_name": row["child_name"] or "Aluno",
+                "date_iso": row["date_iso"],
+                "date_label": _format_date_label(row["date_iso"]),
+                "time": row["time"],
+                "summary": row["summary"],
+                "recent_objectives": recent_objectives,
+                "has_follow_up": has_follow_up,
+                "follow_up": follow_up_payload,
+            }
+        )
+
+    payload = {
+        "child_id": child_row["id"],
+        "child_name": child_row["name"] or "Aluno",
+        "total_completed_lessons": len(timeline_payload),
+        "timeline": timeline_payload,
+    }
+    return TeacherStudentTimelineResponse(**payload).model_dump()

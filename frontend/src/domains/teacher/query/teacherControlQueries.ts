@@ -5,6 +5,7 @@ import {
   decideTeacherBooking,
   getTeacherChatThreads,
   getTeacherControlCenterOverview,
+  getTeacherStudentTimeline,
   rescheduleTeacherBooking,
   type BookingStatus,
   type TeacherBookingDecisionPayload,
@@ -23,6 +24,8 @@ export const teacherQueryKeys = {
     [...teacherQueryKeys.controlCenter(), params] as const,
   chatThreads: (params: { status?: BookingStatus; limit?: number }) =>
     [...teacherQueryKeys.root, "chat-threads", params] as const,
+  studentTimeline: (params: { childId: string; limit?: number }) =>
+    [...teacherQueryKeys.root, "student-timeline", params] as const,
 };
 
 function requireAccessToken() {
@@ -52,6 +55,18 @@ export function useTeacherChatThreads(params: { status?: BookingStatus; limit?: 
   return useQuery({
     queryKey: teacherQueryKeys.chatThreads(params),
     queryFn: () => getTeacherChatThreads(requireAccessToken(), params),
+    staleTime: 20_000,
+    gcTime: 5 * 60_000,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useTeacherStudentTimeline(params: { childId?: string; limit?: number }) {
+  const childId = params.childId?.trim() || "";
+  return useQuery({
+    queryKey: teacherQueryKeys.studentTimeline({ childId, limit: params.limit }),
+    queryFn: () => getTeacherStudentTimeline(requireAccessToken(), childId, { limit: params.limit }),
+    enabled: Boolean(childId),
     staleTime: 20_000,
     gcTime: 5 * 60_000,
     refetchInterval: 30_000,

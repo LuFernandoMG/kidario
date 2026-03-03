@@ -65,6 +65,36 @@ class TeacherStudentOverview(BaseModel):
     progress_status: Literal["sem_dados", "atencao", "consistente"]
 
 
+class TeacherStudentTimelineFollowUp(BaseModel):
+    updated_at: datetime
+    summary: str
+    next_steps: str
+    objectives: list[TeacherLessonObjective]
+    next_objectives: list[TeacherLessonObjective]
+    tags: list[str]
+    attention_points: list[str]
+
+
+class TeacherStudentTimelineEntry(BaseModel):
+    booking_id: UUID
+    child_id: UUID
+    child_name: str
+    date_iso: date
+    date_label: str
+    time: str
+    summary: str | None = None
+    recent_objectives: list[TeacherLessonObjective]
+    has_follow_up: bool
+    follow_up: TeacherStudentTimelineFollowUp | None = None
+
+
+class TeacherStudentTimelineResponse(BaseModel):
+    child_id: UUID
+    child_name: str
+    total_completed_lessons: int
+    timeline: list[TeacherStudentTimelineEntry]
+
+
 class TeacherFinanceSummary(BaseModel):
     currency: str = "BRL"
     gross_revenue_total: float
