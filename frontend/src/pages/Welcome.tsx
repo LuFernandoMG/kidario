@@ -26,6 +26,16 @@ export default function Welcome() {
       ? window.location.hash
       : "";
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setHighlightIndex((previous) => (previous + 1) % ROTATING_HIGHLIGHTS.length);
+    }, 2800);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+    
   if (recoveryHash) {
     return <Navigate to={`/redefinir-senha${recoveryHash}`} replace />;
   }
@@ -40,16 +50,6 @@ export default function Welcome() {
     }
     return <Navigate to="/explorar" replace />;
   }
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setHighlightIndex((previous) => (previous + 1) % ROTATING_HIGHLIGHTS.length);
-    }, 2800);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, []);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
