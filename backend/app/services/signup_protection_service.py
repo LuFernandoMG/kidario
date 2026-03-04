@@ -1,3 +1,4 @@
+import logging
 import json
 import ssl
 from collections import deque
@@ -10,6 +11,8 @@ from fastapi import Request
 
 from app.core.config import Settings
 from app.schemas.auth import AuthSignupRequest
+
+logger = logging.getLogger(__name__)
 
 
 class SignupProtectionError(Exception):
@@ -89,6 +92,10 @@ def get_client_ip(request_obj: Request, settings: Settings) -> str:
 
 def _verify_captcha_token(*, settings: Settings, token: str, client_ip: str) -> None:
     if not settings.signup_captcha_secret_key:
+        logger.error(
+            "Signup captcha verification aborted: missing secret key (provider=%s).",
+            settings.signup_captcha_provider,
+        )
         raise SignupProtectionError(
             "Proteção anti-spam indisponível no momento. Tente novamente em instantes.",
             status_code=503,
@@ -119,11 +126,22 @@ def _verify_captcha_token(*, settings: Settings, token: str, client_ip: str) -> 
             payload_raw = response.read().decode("utf-8")
     except error.HTTPError as exc:
         payload_raw = exc.read().decode("utf-8") if exc.fp is not None else ""
+        logger.warning(
+            "Signup captcha provider returned HTTP error (provider=%s status=%s body=%s).",
+            settings.signup_captcha_provider,
+            exc.code,
+            payload_raw[:500],
+        )
         raise SignupProtectionError(
             f"Validação anti-spam falhou no provedor ({exc.code}).",
             status_code=502,
         ) from exc
     except error.URLError as exc:
+        logger.warning(
+            "Signup captcha provider unreachable (provider=%s reason=%s).",
+            settings.signup_captcha_provider,
+            exc.reason,
+        )
         raise SignupProtectionError(
             "Não foi possível validar o desafio anti-spam. Tente novamente.",
             status_code=503,
@@ -132,11 +150,21 @@ def _verify_captcha_token(*, settings: Settings, token: str, client_ip: str) -> 
     try:
         parsed_payload = json.loads(payload_raw) if payload_raw else {}
     except json.JSONDecodeError as exc:
+        logger.warning(
+            "Signup captcha provider returned invalid JSON (provider=%s body=%s).",
+            settings.signup_captcha_provider,
+            payload_raw[:500],
+        )
         raise SignupProtectionError(
             "Resposta inválida do provedor de validação anti-spam.",
             status_code=502,
         ) from exc
     if not bool(parsed_payload.get("success")):
+        logger.warning(
+            "Signup captcha verification failed (provider=%s error_codes=%s).",
+            settings.signup_captcha_provider,
+            parsed_payload.get("error-codes"),
+        )
         raise SignupProtectionError(
             "Verificação anti-spam inválida. Refaça a validação e tente novamente.",
             status_code=422,
@@ -145,6 +173,11 @@ def _verify_captcha_token(*, settings: Settings, token: str, client_ip: str) -> 
     if settings.signup_captcha_provider == "recaptcha":
         score = parsed_payload.get("score")
         if isinstance(score, (int, float)) and score < settings.signup_captcha_recaptcha_min_score:
+            logger.warning(
+                "Signup recaptcha score below threshold (score=%s min=%s).",
+                score,
+                settings.signup_captcha_recaptcha_min_score,
+            )
             raise SignupProtectionError(
                 "A validação anti-spam foi considerada suspeita. Tente novamente.",
                 status_code=422,

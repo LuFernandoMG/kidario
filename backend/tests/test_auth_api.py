@@ -11,6 +11,8 @@ os.environ.setdefault(
     "KIDARIO_DATABASE_URL",
     "postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
 )
+# Keep signup protection deterministic in tests regardless of local .env values.
+os.environ["KIDARIO_SIGNUP_CAPTCHA_REQUIRED"] = "false"
 
 from app.api.v1.endpoints import auth as auth_endpoints
 from app.db.session import get_db
