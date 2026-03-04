@@ -122,7 +122,7 @@ def get_parent_profile(db: Session, user: AuthUser) -> dict:
         db.execute(
             text(
                 """
-                select profile_id, phone, birth_date, address, bio
+                select profile_id, phone, cpf, birth_date, address, bio
                 from parent_profiles
                 where profile_id = :profile_id
                 """
@@ -154,6 +154,7 @@ def get_parent_profile(db: Session, user: AuthUser) -> dict:
     return {
         "profile": profile,
         "phone": parent["phone"],
+        "cpf": parent["cpf"],
         "birth_date": parent["birth_date"],
         "address": parent["address"],
         "bio": parent["bio"],
@@ -305,6 +306,7 @@ def patch_parent_profile(db: Session, user: AuthUser, payload: ParentProfilePatc
     )
 
     phone = payload.phone if payload.phone is not None else existing_parent["phone"] if existing_parent else None
+    cpf = payload.cpf if payload.cpf is not None else existing_parent["cpf"] if existing_parent else None
     birth_date = (
         payload.birth_date if payload.birth_date is not None else existing_parent["birth_date"] if existing_parent else None
     )
@@ -316,13 +318,14 @@ def patch_parent_profile(db: Session, user: AuthUser, payload: ParentProfilePatc
             text(
                 """
                 update parent_profiles
-                set phone = :phone, birth_date = :birth_date, address = :address, bio = :bio, updated_at = now()
+                set phone = :phone, cpf = :cpf, birth_date = :birth_date, address = :address, bio = :bio, updated_at = now()
                 where profile_id = :profile_id
                 """
             ),
             {
                 "profile_id": str(profile_id),
                 "phone": phone,
+                "cpf": cpf,
                 "birth_date": birth_date,
                 "address": address,
                 "bio": bio,
@@ -332,13 +335,14 @@ def patch_parent_profile(db: Session, user: AuthUser, payload: ParentProfilePatc
         db.execute(
             text(
                 """
-                insert into parent_profiles (profile_id, phone, birth_date, address, bio)
-                values (:profile_id, :phone, :birth_date, :address, :bio)
+                insert into parent_profiles (profile_id, phone, cpf, birth_date, address, bio)
+                values (:profile_id, :phone, :cpf, :birth_date, :address, :bio)
                 """
             ),
             {
                 "profile_id": str(profile_id),
                 "phone": phone,
+                "cpf": cpf,
                 "birth_date": birth_date,
                 "address": address,
                 "bio": bio,

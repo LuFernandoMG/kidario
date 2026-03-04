@@ -32,6 +32,7 @@ interface ParentSignupFormData {
   firstName: string;
   lastName: string;
   phone: string;
+  cpf: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -66,6 +67,52 @@ const createEmptyChild = (): ChildFormData => ({
   focusPoints: "",
 });
 
+const extractDigits = (value: string, maxLength: number): string =>
+  value.replace(/\D/g, "").slice(0, maxLength);
+
+const formatPhoneMask = (value: string): string => {
+  const digits = extractDigits(value, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)} ${digits.slice(7)}`;
+};
+
+const formatCpfMask = (value: string): string => {
+  const digits = extractDigits(value, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
+const isValidEmail = (value: string): boolean => {
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+
+  const parts = trimmed.split("@");
+  if (parts.length !== 2) return false;
+
+  const [localPart, domainPart] = parts;
+  if (!localPart || !domainPart || domainPart.startsWith(".") || domainPart.endsWith(".")) {
+    return false;
+  }
+
+  const labels = domainPart.split(".");
+  if (labels.length < 2) return false;
+
+  const tld = labels[labels.length - 1];
+  if (!/^[A-Za-z]{2,}$/.test(tld)) return false;
+
+  return labels.every(
+    (label) =>
+      label.length > 0 &&
+      /^[A-Za-z0-9-]+$/.test(label) &&
+      !label.startsWith("-") &&
+      !label.endsWith("-"),
+  );
+};
+
 export default function Signup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -85,6 +132,7 @@ export default function Signup() {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
@@ -92,6 +140,7 @@ export default function Signup() {
     firstName: "",
     lastName: "",
     phone: "",
+    cpf: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -103,6 +152,36 @@ export default function Signup() {
 
   const setField = (field: keyof ParentSignupFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleEmailChange = (value: string) => {
+    setField("email", value);
+    setErrors((prev) => {
+      if (!prev.email) return prev;
+      const next = { ...prev };
+      if (!value.trim()) {
+        next.email = "Informe seu e-mail.";
+      } else if (!isValidEmail(value)) {
+        next.email = "Informe um e-mail valido no formato email@dominio.ext.";
+      } else {
+        delete next.email;
+      }
+      return next;
+    });
+  };
+
+  const handleEmailBlur = () => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (!formData.email.trim()) {
+        next.email = "Informe seu e-mail.";
+      } else if (!isValidEmail(formData.email)) {
+        next.email = "Informe um e-mail valido no formato email@dominio.ext.";
+      } else {
+        delete next.email;
+      }
+      return next;
+    });
   };
 
   const addChild = () => {
@@ -135,9 +214,16 @@ export default function Signup() {
       if (!formData.firstName.trim()) nextErrors.firstName = "Informe seu nome.";
       if (!formData.lastName.trim()) nextErrors.lastName = "Informe seu sobrenome.";
       if (!formData.phone.trim()) nextErrors.phone = "Informe seu telefone.";
+      if (formData.phone && formData.phone.length < 11) {
+        nextErrors.phone = "Informe o telefone completo com DDD.";
+      }
+      if (!formData.cpf.trim()) nextErrors.cpf = "Informe seu CPF.";
+      if (formData.cpf && formData.cpf.length < 11) {
+        nextErrors.cpf = "Informe o CPF completo.";
+      }
       if (!formData.email.trim()) nextErrors.email = "Informe seu e-mail.";
-      if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        nextErrors.email = "Informe um e-mail valido.";
+      if (formData.email && !isValidEmail(formData.email)) {
+        nextErrors.email = "Informe um e-mail valido no formato email@dominio.ext.";
       }
       if (!formData.birthDate) nextErrors.birthDate = "Informe sua data de nascimento.";
       if (!formData.password) nextErrors.password = "Crie uma senha.";
@@ -210,6 +296,7 @@ export default function Signup() {
         first_name: formData.firstName,
         last_name: formData.lastName,
         phone: formData.phone,
+        cpf: formData.cpf,
         birth_date: formData.birthDate,
         address: formData.address,
         bio: formData.bio,
@@ -239,6 +326,7 @@ export default function Signup() {
           first_name: formData.firstName,
           last_name: formData.lastName,
           phone: formData.phone,
+          cpf: formData.cpf,
           birth_date: formData.birthDate,
           address: formData.address,
           bio: formData.bio,
@@ -342,18 +430,36 @@ export default function Signup() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="phone" className="text-sm font-medium text-foreground">
-                Telefone
-              </label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setField("phone", e.target.value)}
-                placeholder="(11) 99999-9999"
-                className="h-12 rounded-xl bg-muted/50"
-              />
-              <FieldError message={errors.phone} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="phone" className="text-sm font-medium text-foreground">
+                  Telefone
+                </label>
+                <Input
+                  id="phone"
+                  value={formatPhoneMask(formData.phone)}
+                  onChange={(e) => setField("phone", extractDigits(e.target.value, 11))}
+                  placeholder="(11) 99999 9999"
+                  inputMode="numeric"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.phone} />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="cpf" className="text-sm font-medium text-foreground">
+                  CPF
+                </label>
+                <Input
+                  id="cpf"
+                  value={formatCpfMask(formData.cpf)}
+                  onChange={(e) => setField("cpf", extractDigits(e.target.value, 11))}
+                  placeholder="000.000.000-00"
+                  inputMode="numeric"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.cpf} />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -364,8 +470,10 @@ export default function Signup() {
                 id="email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => setField("email", e.target.value)}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                onBlur={handleEmailBlur}
                 placeholder="seu@email.com"
+                pattern="^[^\\s@]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
                 className="h-12 rounded-xl bg-muted/50"
               />
               <FieldError message={errors.email} />
@@ -414,14 +522,24 @@ export default function Signup() {
               <label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
                 Repetir senha
               </label>
-              <Input
-                id="confirmPassword"
-                type={showPassword ? "text" : "password"}
-                value={formData.confirmPassword}
-                onChange={(e) => setField("confirmPassword", e.target.value)}
-                placeholder="Repita sua senha"
-                className="h-12 rounded-xl bg-muted/50"
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={formData.confirmPassword}
+                  onChange={(e) => setField("confirmPassword", e.target.value)}
+                  placeholder="Repita sua senha"
+                  className="h-12 rounded-xl bg-muted/50 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Mostrar ou ocultar repeticao da senha"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
               <FieldError message={errors.confirmPassword} />
             </div>
           </section>

@@ -64,6 +64,7 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
             "parent_profile": {
                 "first_name": "Maria",
                 "last_name": "Silva",
+                "cpf": "12345678901",
                 "children_ops": {
                     "upsert": [{"name": "Lucas", "birth_month_year": "2017-04"}],
                     "delete_ids": [],

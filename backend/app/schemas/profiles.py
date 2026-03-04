@@ -32,6 +32,7 @@ class ParentChildView(BaseModel):
 class ParentProfileResponse(BaseModel):
     profile: ProfileView
     phone: str | None = None
+    cpf: str | None = None
     birth_date: date | None = None
     address: str | None = None
     bio: str | None = None
@@ -127,6 +128,7 @@ class ParentProfilePatch(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     phone: str | None = None
+    cpf: str | None = None
     birth_date: date | None = None
     address: str | None = None
     bio: str | None = None
@@ -139,6 +141,7 @@ class ParentProfilePatch(BaseModel):
                 self.first_name is not None,
                 self.last_name is not None,
                 self.phone is not None,
+                self.cpf is not None,
                 self.birth_date is not None,
                 self.address is not None,
                 self.bio is not None,

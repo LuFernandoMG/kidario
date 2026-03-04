@@ -19,6 +19,7 @@ export interface BackendParentChildView {
 export interface BackendParentProfileResponse {
   profile: BackendProfileView;
   phone?: string | null;
+  cpf?: string | null;
   birth_date?: string | null;
   address?: string | null;
   bio?: string | null;
@@ -40,6 +41,7 @@ export interface ParentProfilePatchPayload {
   first_name?: string;
   last_name?: string;
   phone?: string;
+  cpf?: string;
   birth_date?: string;
   address?: string;
   bio?: string;

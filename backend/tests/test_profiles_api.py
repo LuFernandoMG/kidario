@@ -89,6 +89,7 @@ def test_patch_parent_returns_ok(client: TestClient, monkeypatch: pytest.MonkeyP
         json={
             "first_name": "Luis",
             "last_name": "Mendez",
+            "cpf": "12345678901",
             "children_ops": {
                 "upsert": [
                     {
@@ -184,6 +185,7 @@ def test_get_parent_profile_returns_ok(client: TestClient, monkeypatch: pytest.M
                 "role": "parent",
             },
             "phone": "(11) 99999-9999",
+            "cpf": "12345678901",
             "birth_date": "1987-10-01",
             "address": "Rua A, 123",
             "bio": "Bio teste",
@@ -207,6 +209,7 @@ def test_get_parent_profile_returns_ok(client: TestClient, monkeypatch: pytest.M
     assert response.status_code == 200
     body = response.json()
     assert body["profile"]["role"] == "parent"
+    assert body["cpf"] == "12345678901"
     assert body["children"][0]["name"] == "Lucas"
 
 

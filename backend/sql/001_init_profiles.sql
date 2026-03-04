@@ -14,6 +14,7 @@ create table if not exists profiles (
 create table if not exists parent_profiles (
   profile_id uuid primary key references profiles(id) on delete cascade,
   phone text,
+  cpf text,
   birth_date date,
   address text,
   bio text,

@@ -46,6 +46,7 @@ Notas:
 
 - `profile_id uuid primary key references profiles(id) on delete cascade`
 - `phone text`
+- `cpf text`
 - `birth_date date`
 - `address text`
 - `bio text`
@@ -313,6 +314,7 @@ Request body:
   "first_name": "Maria",
   "last_name": "Silva",
   "phone": "(11) 99999-9999",
+  "cpf": "000.000.000-00",
   "birth_date": "1987-10-01",
   "address": "Rua X, 123",
   "bio": "Busca apoio pedagógico...",

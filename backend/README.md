@@ -127,6 +127,9 @@ Apply SQL scripts in order (Supabase SQL Editor):
 - `sql/006_normalize_parent_children_gender.sql`
 - `sql/007_init_chat.sql`
 - `sql/008_rls_chat.sql`
+- `sql/009_add_follow_up_objectives.sql`
+- `sql/010_add_booking_activity_plans.sql`
+- `sql/011_add_parent_cpf.sql`
 - `sql/003_rls_validation.sql` (optional smoke test)
 
 `002` enables RLS with owner-based policies for `authenticated` users and keeps
