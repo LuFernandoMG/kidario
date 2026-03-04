@@ -97,7 +97,7 @@ export function TurnstileWidget({ siteKey, onTokenChange, onError }: TurnstileWi
       }
       widgetIdRef.current = null;
     };
-  }, [siteKey, onTokenChange, onError]);
+  }, [siteKey, onTokenChange, onError, handleChallengeError]);
 
   if (loadError) {
     return <p className="text-xs text-destructive">{loadError}</p>;
