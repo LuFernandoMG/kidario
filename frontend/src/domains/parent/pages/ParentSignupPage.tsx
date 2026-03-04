@@ -87,11 +87,15 @@ const formatCpfMask = (value: string): string => {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 };
 
-const isValidEmail = (value: string): boolean => {
-  const trimmed = value.trim();
-  if (!trimmed || /\s/.test(trimmed)) return false;
+const normalizeEmailInput = (value: string): string => value.replace(/\s+/g, "");
 
-  const parts = trimmed.split("@");
+const canonicalizeEmail = (value: string): string => normalizeEmailInput(value).toLowerCase();
+
+const isValidEmail = (value: string): boolean => {
+  const normalized = canonicalizeEmail(value);
+  if (!normalized) return false;
+
+  const parts = normalized.split("@");
   if (parts.length !== 2) return false;
 
   const [localPart, domainPart] = parts;
@@ -162,13 +166,14 @@ export default function Signup() {
   };
 
   const handleEmailChange = (value: string) => {
-    setField("email", value);
+    const normalized = normalizeEmailInput(value);
+    setField("email", normalized);
     setErrors((prev) => {
       if (!prev.email) return prev;
       const next = { ...prev };
-      if (!value.trim()) {
+      if (!normalized) {
         next.email = "Informe seu e-mail.";
-      } else if (!isValidEmail(value)) {
+      } else if (!isValidEmail(normalized)) {
         next.email = "Informe um e-mail valido no formato email@dominio.ext.";
       } else {
         delete next.email;
@@ -178,11 +183,16 @@ export default function Signup() {
   };
 
   const handleEmailBlur = () => {
+    const canonicalEmail = canonicalizeEmail(formData.email);
+    if (canonicalEmail !== formData.email) {
+      setField("email", canonicalEmail);
+    }
+
     setErrors((prev) => {
       const next = { ...prev };
-      if (!formData.email.trim()) {
+      if (!canonicalEmail) {
         next.email = "Informe seu e-mail.";
-      } else if (!isValidEmail(formData.email)) {
+      } else if (!isValidEmail(canonicalEmail)) {
         next.email = "Informe um e-mail valido no formato email@dominio.ext.";
       } else {
         delete next.email;
@@ -218,6 +228,8 @@ export default function Signup() {
     const nextErrors: Record<string, string> = {};
 
     if (step === 0) {
+      const email = canonicalizeEmail(formData.email);
+
       if (!formData.firstName.trim()) nextErrors.firstName = "Informe seu nome.";
       if (!formData.lastName.trim()) nextErrors.lastName = "Informe seu sobrenome.";
       if (!formData.phone.trim()) nextErrors.phone = "Informe seu telefone.";
@@ -228,8 +240,8 @@ export default function Signup() {
       if (formData.cpf && formData.cpf.length < 11) {
         nextErrors.cpf = "Informe o CPF completo.";
       }
-      if (!formData.email.trim()) nextErrors.email = "Informe seu e-mail.";
-      if (formData.email && !isValidEmail(formData.email)) {
+      if (!email) nextErrors.email = "Informe seu e-mail.";
+      if (email && !isValidEmail(email)) {
         nextErrors.email = "Informe um e-mail valido no formato email@dominio.ext.";
       }
       if (captchaEnabledFlag && !isCaptchaConfigured) {
@@ -305,6 +317,7 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
+      const email = canonicalizeEmail(formData.email);
       const parentProfilePayload = {
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -329,7 +342,7 @@ export default function Signup() {
 
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const result = await signUpWithBackend({
-        email: formData.email,
+        email,
         password: formData.password,
         full_name: fullName,
         role: "parent",
@@ -359,7 +372,7 @@ export default function Signup() {
 
       applyBackendSignupSession({
         role: result.role,
-        email: formData.email,
+        email,
         fullName,
         accessToken: result.access_token ?? undefined,
         refreshToken: result.refresh_token ?? undefined,
@@ -369,7 +382,7 @@ export default function Signup() {
 
       if (result.email_confirmation_required) {
         const params = new URLSearchParams();
-        params.set("email", formData.email);
+        params.set("email", email);
         params.set("notice", "check-email");
         if (decodedReturnTo) params.set("returnTo", encodeURIComponent(decodedReturnTo));
         if (roleParam === "parent" || roleParam === "teacher") params.set("role", roleParam);
@@ -410,6 +423,7 @@ export default function Signup() {
         transition={{ delay: 0.2 }}
         className="mt-6 pb-8 space-y-5"
         onSubmit={handleSubmit}
+        noValidate
       >
         {currentStep === 0 && (
           <section className="card-kidario p-5 space-y-4">
@@ -488,7 +502,11 @@ export default function Signup() {
                 onChange={(e) => handleEmailChange(e.target.value)}
                 onBlur={handleEmailBlur}
                 placeholder="seu@email.com"
-                pattern="^[^\\s@]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 className="h-12 rounded-xl bg-muted/50"
               />
               <FieldError message={errors.email} />

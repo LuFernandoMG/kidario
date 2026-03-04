@@ -14,7 +14,7 @@ playwright-report
 test-results
 *.local
 .env
-
+/public/email-confirmation-template.html
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
