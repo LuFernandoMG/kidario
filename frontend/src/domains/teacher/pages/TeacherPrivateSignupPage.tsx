@@ -1,7 +1,7 @@
 import { type KeyboardEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Plus, Trash2, X } from "lucide-react";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,7 +49,6 @@ interface TeacherSignupFormData {
   confirmPassword: string;
   phone: string;
   cpf: string;
-  professionalRegistration: string;
   city: string;
   state: string;
   modality: string;
@@ -158,9 +157,29 @@ const createEmptyExperience = (): ProfessionalExperience => ({
   currentPosition: false,
 });
 
+const extractDigits = (value: string, maxLength: number): string =>
+  value.replace(/\D/g, "").slice(0, maxLength);
+
+const formatPhoneMask = (value: string): string => {
+  const digits = extractDigits(value, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)} ${digits.slice(7)}`;
+};
+
+const formatCpfMask = (value: string): string => {
+  const digits = extractDigits(value, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
 const normalizeEmailInput = (value: string): string => value.replace(/\s+/g, "");
 
 const canonicalizeEmail = (value: string): string => normalizeEmailInput(value).toLowerCase();
+const PROFESSIONAL_REGISTRATION_DEFAULT = "12345";
 
 const isValidEmail = (value: string): boolean => {
   const normalized = canonicalizeEmail(value);
@@ -192,6 +211,8 @@ const isValidEmail = (value: string): boolean => {
 export default function TeacherPrivateSignup() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -206,7 +227,6 @@ export default function TeacherPrivateSignup() {
     confirmPassword: "",
     phone: "",
     cpf: "",
-    professionalRegistration: "",
     city: "",
     state: "",
     modality: "",
@@ -370,9 +390,12 @@ export default function TeacherPrivateSignup() {
         nextErrors.confirmPassword = "As senhas nao coincidem.";
       }
       if (!formData.phone.trim()) nextErrors.phone = "Informe o telefone.";
+      if (formData.phone && formData.phone.length < 11) {
+        nextErrors.phone = "Informe o telefone completo com DDD.";
+      }
       if (!formData.cpf.trim()) nextErrors.cpf = "Informe o CPF.";
-      if (!formData.professionalRegistration.trim()) {
-        nextErrors.professionalRegistration = "Informe o registro profissional.";
+      if (formData.cpf && formData.cpf.length < 11) {
+        nextErrors.cpf = "Informe o CPF completo.";
       }
       if (!formData.city.trim()) nextErrors.city = "Informe a cidade.";
       if (!formData.state) nextErrors.state = "Selecione a UF.";
@@ -455,7 +478,7 @@ export default function TeacherPrivateSignup() {
         last_name: formData.lastName,
         phone: formData.phone,
         cpf: formData.cpf,
-        professional_registration: formData.professionalRegistration,
+        professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
         city: formData.city,
         state: formData.state,
         modality: formData.modality,
@@ -513,7 +536,7 @@ export default function TeacherPrivateSignup() {
           last_name: formData.lastName,
           phone: formData.phone,
           cpf: formData.cpf,
-          professional_registration: formData.professionalRegistration,
+          professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
           city: formData.city,
           state: formData.state,
           modality: formData.modality,
@@ -657,9 +680,10 @@ export default function TeacherPrivateSignup() {
 
                 <FormField label="Telefone / WhatsApp">
                   <Input
-                    value={formData.phone}
-                    onChange={(e) => setField("phone", e.target.value)}
-                    placeholder="(11) 99999-9999"
+                    value={formatPhoneMask(formData.phone)}
+                    onChange={(e) => setField("phone", extractDigits(e.target.value, 11))}
+                    placeholder="(11) 99999 9999"
+                    inputMode="numeric"
                     className="h-12 rounded-xl bg-muted/50"
                   />
                   <FieldError message={errors.phone} />
@@ -668,49 +692,58 @@ export default function TeacherPrivateSignup() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Senha">
-                  <Input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setField("password", e.target.value)}
-                    placeholder="Minimo 8 caracteres"
-                    className="h-12 rounded-xl bg-muted/50"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={formData.password}
+                      onChange={(e) => setField("password", e.target.value)}
+                      placeholder="Minimo 8 caracteres"
+                      className="h-12 rounded-xl bg-muted/50 pr-12"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="Mostrar ou ocultar senha"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                   <FieldError message={errors.password} />
                 </FormField>
 
                 <FormField label="Repetir senha">
-                  <Input
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setField("confirmPassword", e.target.value)}
-                    placeholder="Repita a senha"
-                    className="h-12 rounded-xl bg-muted/50"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={formData.confirmPassword}
+                      onChange={(e) => setField("confirmPassword", e.target.value)}
+                      placeholder="Repita a senha"
+                      className="h-12 rounded-xl bg-muted/50 pr-12"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="Mostrar ou ocultar repeticao da senha"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                   <FieldError message={errors.confirmPassword} />
                 </FormField>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField label="CPF">
-                  <Input
-                    value={formData.cpf}
-                    onChange={(e) => setField("cpf", e.target.value)}
-                    placeholder="000.000.000-00"
-                    className="h-12 rounded-xl bg-muted/50"
-                  />
-                  <FieldError message={errors.cpf} />
-                </FormField>
-
-                <FormField label="Registro profissional (pedagogo/professor)">
-                  <Input
-                    value={formData.professionalRegistration}
-                    onChange={(e) => setField("professionalRegistration", e.target.value)}
-                    placeholder="Numero do registro profissional"
-                    className="h-12 rounded-xl bg-muted/50"
-                  />
-                  <FieldError message={errors.professionalRegistration} />
-                </FormField>
-              </div>
+              <FormField label="CPF">
+                <Input
+                  value={formatCpfMask(formData.cpf)}
+                  onChange={(e) => setField("cpf", extractDigits(e.target.value, 11))}
+                  placeholder="000.000.000-00"
+                  inputMode="numeric"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.cpf} />
+              </FormField>
 
               <FormField label="Foto de perfil">
                 <Input
