@@ -1051,6 +1051,13 @@ export default function TeacherPrivateSignup() {
                           return next;
                         });
                       }}
+                      onError={(errorCode) => {
+                        const suffix = errorCode ? ` (${errorCode})` : "";
+                        setErrors((prev) => ({
+                          ...prev,
+                          captcha: `Falha na verificação anti-spam${suffix}. Tente novamente.`,
+                        }));
+                      }}
                     />
                   ) : (
                     <p className="text-xs text-destructive">

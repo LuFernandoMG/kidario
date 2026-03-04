@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface TurnstileWidgetProps {
   siteKey: string;
   onTokenChange: (token: string) => void;
+  onError?: (errorCode?: string) => void;
 }
 
 interface TurnstileInstance {
@@ -12,7 +13,8 @@ interface TurnstileInstance {
       sitekey: string;
       callback?: (token: string) => void;
       "expired-callback"?: () => void;
-      "error-callback"?: () => void;
+      "error-callback"?: (errorCode?: string) => void;
+      "timeout-callback"?: () => void;
       theme?: "light" | "dark" | "auto";
     },
   ) => string;
@@ -55,10 +57,17 @@ function loadTurnstileScript(): Promise<void> {
   return window.__kidarioTurnstileLoadPromise;
 }
 
-export function TurnstileWidget({ siteKey, onTokenChange }: TurnstileWidgetProps) {
+export function TurnstileWidget({ siteKey, onTokenChange, onError }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const [loadError, setLoadError] = useState("");
+
+  const handleChallengeError = useCallback((errorCode?: string) => {
+    const suffix = errorCode ? ` (${errorCode})` : "";
+    console.warn(`[Turnstile] challenge error${suffix}`);
+    onTokenChange("");
+    onError?.(errorCode);
+  }, [onTokenChange, onError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +80,8 @@ export function TurnstileWidget({ siteKey, onTokenChange }: TurnstileWidgetProps
           sitekey: siteKey,
           callback: (token) => onTokenChange(token),
           "expired-callback": () => onTokenChange(""),
-          "error-callback": () => onTokenChange(""),
+          "error-callback": (errorCode) => handleChallengeError(errorCode),
+          "timeout-callback": () => handleChallengeError("timeout-or-duplicate"),
           theme: "light",
         });
       })
@@ -87,7 +97,7 @@ export function TurnstileWidget({ siteKey, onTokenChange }: TurnstileWidgetProps
       }
       widgetIdRef.current = null;
     };
-  }, [siteKey, onTokenChange]);
+  }, [siteKey, onTokenChange, onError]);
 
   if (loadError) {
     return <p className="text-xs text-destructive">{loadError}</p>;
