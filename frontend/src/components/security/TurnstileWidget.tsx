@@ -60,14 +60,21 @@ function loadTurnstileScript(): Promise<void> {
 export function TurnstileWidget({ siteKey, onTokenChange, onError }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const onTokenChangeRef = useRef(onTokenChange);
+  const onErrorRef = useRef(onError);
   const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    onTokenChangeRef.current = onTokenChange;
+    onErrorRef.current = onError;
+  }, [onTokenChange, onError]);
 
   const handleChallengeError = useCallback((errorCode?: string) => {
     const suffix = errorCode ? ` (${errorCode})` : "";
     console.warn(`[Turnstile] challenge error${suffix}`);
-    onTokenChange("");
-    onError?.(errorCode);
-  }, [onTokenChange, onError]);
+    onTokenChangeRef.current("");
+    onErrorRef.current?.(errorCode);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,8 +85,8 @@ export function TurnstileWidget({ siteKey, onTokenChange, onError }: TurnstileWi
 
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
-          callback: (token) => onTokenChange(token),
-          "expired-callback": () => onTokenChange(""),
+          callback: (token) => onTokenChangeRef.current(token),
+          "expired-callback": () => onTokenChangeRef.current(""),
           "error-callback": (errorCode) => handleChallengeError(errorCode),
           "timeout-callback": () => handleChallengeError("timeout-or-duplicate"),
           theme: "light",
@@ -97,7 +104,7 @@ export function TurnstileWidget({ siteKey, onTokenChange, onError }: TurnstileWi
       }
       widgetIdRef.current = null;
     };
-  }, [siteKey, onTokenChange, onError, handleChallengeError]);
+  }, [siteKey, handleChallengeError]);
 
   if (loadError) {
     return <p className="text-xs text-destructive">{loadError}</p>;
