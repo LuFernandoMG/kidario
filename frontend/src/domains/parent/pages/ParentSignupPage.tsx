@@ -17,6 +17,7 @@ import { applyBackendSignupSession } from "@/lib/authSession";
 import { signUpWithBackend } from "@/lib/backendAuth";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 import { childGenderOptions, childGradeOptions, normalizeChildGender, type ChildGender } from "@/lib/childProfile";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 
 interface ChildFormData {
   name: string;
@@ -133,6 +134,8 @@ export default function Signup() {
   const [currentStep, setCurrentStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [honeypot, setHoneypot] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
@@ -149,6 +152,10 @@ export default function Signup() {
     bio: "",
     children: [createEmptyChild()],
   });
+  const captchaEnabledFlag = import.meta.env.VITE_SIGNUP_CAPTCHA_ENABLED === "true";
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || "";
+  const isCaptchaConfigured = Boolean(turnstileSiteKey);
+  const requireCaptcha = captchaEnabledFlag && isCaptchaConfigured;
 
   const setField = (field: keyof ParentSignupFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -224,6 +231,12 @@ export default function Signup() {
       if (!formData.email.trim()) nextErrors.email = "Informe seu e-mail.";
       if (formData.email && !isValidEmail(formData.email)) {
         nextErrors.email = "Informe um e-mail valido no formato email@dominio.ext.";
+      }
+      if (captchaEnabledFlag && !isCaptchaConfigured) {
+        nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
+      }
+      if (requireCaptcha && !captchaToken) {
+        nextErrors.captcha = "Confirme que você não é um robô.";
       }
       if (!formData.birthDate) nextErrors.birthDate = "Informe sua data de nascimento.";
       if (!formData.password) nextErrors.password = "Crie uma senha.";
@@ -321,6 +334,8 @@ export default function Signup() {
         full_name: fullName,
         role: "parent",
         parent_profile: parentProfilePayload,
+        captcha_token: captchaToken || undefined,
+        honeypot,
         metadata: {
           signup_source: "parent_public",
           first_name: formData.firstName,
@@ -479,6 +494,19 @@ export default function Signup() {
               <FieldError message={errors.email} />
             </div>
 
+            <div className="absolute -left-[9999px] top-auto h-0 w-0 overflow-hidden opacity-0">
+              <label htmlFor="signup-company">Company</label>
+              <input
+                id="signup-company"
+                name="company"
+                type="text"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                autoComplete="off"
+                tabIndex={-1}
+              />
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="birthDate" className="text-sm font-medium text-foreground">
                 Data de nascimento
@@ -542,6 +570,33 @@ export default function Signup() {
               </div>
               <FieldError message={errors.confirmPassword} />
             </div>
+
+            {captchaEnabledFlag && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Verificacao de seguranca</label>
+                {isCaptchaConfigured ? (
+                  <TurnstileWidget
+                    siteKey={turnstileSiteKey}
+                    onTokenChange={(token) => {
+                      setCaptchaToken(token);
+                      setErrors((prev) => {
+                        if (!prev.captcha) return prev;
+                        const next = { ...prev };
+                        if (token) {
+                          delete next.captcha;
+                        }
+                        return next;
+                      });
+                    }}
+                  />
+                ) : (
+                  <p className="text-xs text-destructive">
+                    Não foi possível carregar a verificação anti-spam.
+                  </p>
+                )}
+                <FieldError message={errors.captcha} />
+              </div>
+            )}
           </section>
         )}
 
@@ -737,7 +792,7 @@ export default function Signup() {
           </div>
         </div>
       </motion.form>
-
+            
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

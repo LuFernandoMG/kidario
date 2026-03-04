@@ -11,6 +11,8 @@ export interface AuthSignupRequestPayload {
   parent_profile?: ParentProfilePatchPayload;
   teacher_profile?: TeacherProfilePatchPayload;
   metadata?: Record<string, unknown>;
+  captcha_token?: string;
+  honeypot?: string;
 }
 
 export interface AuthSignupResponse {

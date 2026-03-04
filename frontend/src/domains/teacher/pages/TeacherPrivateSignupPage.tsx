@@ -23,6 +23,7 @@ import { uploadTeacherProfilePhoto } from "@/domains/teacher/api/backendTeacherP
 import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
 import { applyBackendSignupSession } from "@/lib/authSession";
 import { signUpWithBackend } from "@/lib/backendAuth";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 
 interface AcademicFormation {
   degreeType: string;
@@ -160,6 +161,8 @@ const createEmptyExperience = (): ProfessionalExperience => ({
 export default function TeacherPrivateSignup() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [honeypot, setHoneypot] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [specialtyInput, setSpecialtyInput] = useState("");
@@ -187,6 +190,10 @@ export default function TeacherPrivateSignup() {
     experiences: [],
     weeklyAvailability: [],
   });
+  const captchaEnabledFlag = import.meta.env.VITE_SIGNUP_CAPTCHA_ENABLED === "true";
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || "";
+  const isCaptchaConfigured = Boolean(turnstileSiteKey);
+  const requireCaptcha = captchaEnabledFlag && isCaptchaConfigured;
 
   const setField = (
     field: keyof TeacherSignupFormData,
@@ -309,6 +316,12 @@ export default function TeacherPrivateSignup() {
       if (!formData.acceptTerms) {
         nextErrors.acceptTerms = "Voce precisa aceitar os termos e condicoes.";
       }
+      if (captchaEnabledFlag && !isCaptchaConfigured) {
+        nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
+      }
+      if (requireCaptcha && !captchaToken) {
+        nextErrors.captcha = "Confirme que você não é um robô.";
+      }
 
       formData.formations.forEach((formation, index) => {
         const prefix = `formations.${index}`;
@@ -420,6 +433,8 @@ export default function TeacherPrivateSignup() {
         full_name: fullName,
         role: "teacher",
         teacher_profile: buildTeacherProfilePayload(null),
+        captcha_token: captchaToken || undefined,
+        honeypot,
         metadata: {
           signup_source: "teacher_private_invite",
           first_name: formData.firstName,
@@ -989,6 +1004,19 @@ export default function TeacherPrivateSignup() {
             </section>
 
             <section className="card-kidario p-5 space-y-3">
+              <div className="absolute -left-[9999px] top-auto h-0 w-0 overflow-hidden opacity-0">
+                <label htmlFor="teacher-signup-company">Company</label>
+                <input
+                  id="teacher-signup-company"
+                  name="company"
+                  type="text"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                  autoComplete="off"
+                  tabIndex={-1}
+                />
+              </div>
+
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="aceite-termos-professora"
@@ -1005,6 +1033,33 @@ export default function TeacherPrivateSignup() {
                 </label>
               </div>
               <FieldError message={errors.acceptTerms} />
+
+              {captchaEnabledFlag && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Verificacao de seguranca</p>
+                  {isCaptchaConfigured ? (
+                    <TurnstileWidget
+                      siteKey={turnstileSiteKey}
+                      onTokenChange={(token) => {
+                        setCaptchaToken(token);
+                        setErrors((prev) => {
+                          if (!prev.captcha) return prev;
+                          const next = { ...prev };
+                          if (token) {
+                            delete next.captcha;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  ) : (
+                    <p className="text-xs text-destructive">
+                      Não foi possível carregar a verificação anti-spam.
+                    </p>
+                  )}
+                  <FieldError message={errors.captcha} />
+                </div>
+              )}
             </section>
           </>
         )}

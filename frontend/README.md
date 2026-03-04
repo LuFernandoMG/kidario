@@ -134,6 +134,8 @@ Set:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_BACKEND_API_URL` (default local: `http://localhost:8000/api/v1`)
+- `VITE_SIGNUP_CAPTCHA_ENABLED` (`true` or `false`)
+- `VITE_TURNSTILE_SITE_KEY` (required when captcha is enabled)
 
 In Supabase dashboard:
 

@@ -207,6 +207,8 @@ Request body (parent):
   "password": "senha-forte-123",
   "full_name": "Maria Silva",
   "role": "parent",
+  "captcha_token": "captcha-response-token",
+  "honeypot": "",
   "parent_profile": {
     "first_name": "Maria",
     "last_name": "Silva",
@@ -240,6 +242,8 @@ Request body (teacher):
   "password": "senha-forte-123",
   "full_name": "Ana Souza",
   "role": "teacher",
+  "captcha_token": "captcha-response-token",
+  "honeypot": "",
   "teacher_profile": {
     "first_name": "Ana",
     "last_name": "Souza",
@@ -282,6 +286,7 @@ Notas:
 
 - Si Supabase requiere confirmación de email, `email_confirmation_required` vendrá como `true` y los tokens podrán venir `null`.
 - Si falla la persistencia de perfil tras crear Auth user, backend intenta compensar eliminando el usuario de Auth cuando `KIDARIO_SUPABASE_SERVICE_ROLE_KEY` está configurada.
+- `captcha_token` y `honeypot` son campos de anti-spam; `captcha_token` puede volverse obligatorio según configuración del backend.
 
 ## 4.1 GET `/api/v1/profiles/me`
 

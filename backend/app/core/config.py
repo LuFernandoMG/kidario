@@ -19,6 +19,17 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = None
     supabase_jwks_ca_bundle: str | None = None
     supabase_http_timeout_seconds: float = 15.0
+    trust_proxy_headers: bool = True
+
+    signup_rate_limit_window_seconds: int = 300
+    signup_rate_limit_max_attempts_per_ip: int = 20
+    signup_rate_limit_max_attempts_per_email: int = 8
+    signup_captcha_required: bool = False
+    signup_captcha_provider: str = "turnstile"
+    signup_captcha_secret_key: str | None = None
+    signup_captcha_verify_url: str | None = None
+    signup_captcha_timeout_seconds: float = 8.0
+    signup_captcha_recaptcha_min_score: float = 0.5
     profile_photos_bucket: str = "teacher-profile-photos"
     profile_photo_max_upload_bytes: int = 5_242_880
     profile_photo_signed_url_ttl_seconds: int = 3600
@@ -44,6 +55,14 @@ class Settings(BaseSettings):
             return f"/{value}"
         return value
 
+    @field_validator("signup_captcha_provider")
+    @classmethod
+    def validate_signup_captcha_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"turnstile", "recaptcha"}:
+            raise ValueError("signup_captcha_provider must be 'turnstile' or 'recaptcha'.")
+        return normalized
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
@@ -61,6 +80,14 @@ class Settings(BaseSettings):
     @property
     def admin_email_set(self) -> set[str]:
         return {email.strip().lower() for email in self.admin_emails.split(",") if email.strip()}
+
+    @property
+    def signup_captcha_verify_endpoint(self) -> str:
+        if self.signup_captcha_verify_url:
+            return self.signup_captcha_verify_url.strip()
+        if self.signup_captcha_provider == "recaptcha":
+            return "https://www.google.com/recaptcha/api/siteverify"
+        return "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 
 @lru_cache

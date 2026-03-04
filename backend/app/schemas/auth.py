@@ -19,6 +19,8 @@ class AuthSignupRequest(BaseModel):
     parent_profile: ParentProfilePatch | None = None
     teacher_profile: TeacherProfilePatch | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    captcha_token: str | None = None
+    honeypot: str | None = None
 
     @field_validator("email")
     @classmethod

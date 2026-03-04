@@ -124,3 +124,46 @@ def test_post_auth_signup_requires_role_specific_payload(client: TestClient) -> 
     )
 
     assert response.status_code == 422
+
+
+def test_post_auth_signup_rejects_honeypot(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    called = False
+
+    def _fake_signup_with_profile(db, settings, payload):
+        nonlocal called
+        called = True
+        return {
+            "status": "ok",
+            "profile_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "auth_user_id": UUID("b4f13a88-9e68-4d11-bd1b-5d03498ea5f0"),
+            "role": "parent",
+            "email_confirmation_required": False,
+            "access_token": "access-token",
+            "refresh_token": "refresh-token",
+            "expires_in": 3600,
+            "token_type": "bearer",
+        }
+
+    monkeypatch.setattr(auth_endpoints, "signup_with_profile", _fake_signup_with_profile)
+
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "email": "parent@example.com",
+            "password": "very-secure-password",
+            "role": "parent",
+            "honeypot": "spam-bot-filled-field",
+            "parent_profile": {
+                "first_name": "Maria",
+                "last_name": "Silva",
+                "cpf": "12345678901",
+                "children_ops": {
+                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04"}],
+                    "delete_ids": [],
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    assert called is False
