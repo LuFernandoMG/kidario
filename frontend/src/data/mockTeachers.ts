@@ -15,7 +15,7 @@ export const mockTeachers: Teacher[] = [
     isPresential: true,
     nextAvailability: "Hoje, 14h",
     experience: "8 anos de experiência",
-    bio: "Pedagoga especializada em alfabetização e dificuldades de aprendizagem. Formada pela USP com mestrado em Educação Infantil.",
+    bio: "Pedagoga especializada em alfabetização e dificuldades de aprendizagem. Formada pela USP com mestrado em Neuroeducação.",
   },
   {
     id: "2",

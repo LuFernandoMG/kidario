@@ -12,8 +12,39 @@ pip install -e ".[dev]"
 
 ## Run API
 
+Recommended dev startup:
+
 ```bash
-uvicorn app.main:app --reload --reload-dir app --reload-exclude ".venv/*" --reload-exclude "tests/*" --reload-exclude "sql/*" --port 8000
+make dev
+```
+
+This starts the API without auto-reload, which is the most stable option when integrating with the frontend.
+
+If you need hot reload while editing backend code, use:
+
+```bash
+make dev-watch
+```
+
+That watcher is scoped to `app/` and excludes `tests/`, `scripts/`, `.venv/`, caches, and other files that can cause reload loops.
+
+Equivalent explicit command for watch mode:
+
+```bash
+python -m uvicorn app.main:app \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --reload \
+  --reload-dir app \
+  --reload-include '*.py' \
+  --reload-exclude '.venv/*' \
+  --reload-exclude 'tests/*' \
+  --reload-exclude 'scripts/*' \
+  --reload-exclude 'sql/*' \
+  --reload-exclude 'docs/*' \
+  --reload-exclude '.git/*' \
+  --reload-exclude '.pytest_cache/*' \
+  --reload-exclude '__pycache__/*'
 ```
 
 ## Run tests (automated)
@@ -40,7 +71,7 @@ Current automated test:
 ```bash
 cd backend
 source .venv/bin/activate
-uvicorn app.main:app --reload --reload-dir app --reload-exclude ".venv/*" --reload-exclude "tests/*" --reload-exclude "sql/*" --port 8000
+make dev
 ```
 
 2. Verifica health:

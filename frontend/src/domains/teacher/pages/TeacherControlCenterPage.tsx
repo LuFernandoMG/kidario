@@ -333,7 +333,7 @@ export default function TeacherControlCenterPage() {
                       )}
                     </>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No se encontró la agenda seleccionada.</p>
+                    <p className="text-sm text-muted-foreground">Não foi possível encontrar a agenda selecionada.</p>
                   )}
                 </div>
               </DialogContent>

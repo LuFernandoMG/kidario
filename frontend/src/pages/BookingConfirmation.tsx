@@ -13,10 +13,10 @@ export default function BookingConfirmation() {
   if (!booking) {
     return (
       <AppShell hideNav>
-        <TopBar title="Confirmacao" showBack />
+        <TopBar title="Confirmação" showBack />
         <div className="px-4 pt-10">
           <div className="card-kidario p-6 text-center">
-            <p className="text-foreground font-medium">Nao encontramos os dados da reserva.</p>
+            <p className="text-foreground font-medium">Não encontramos os dados da reserva.</p>
             <Link to="/agenda" className="text-primary text-sm font-medium hover:underline mt-3 inline-block">
               Ir para agenda
             </Link>
@@ -30,7 +30,7 @@ export default function BookingConfirmation() {
 
   return (
     <AppShell hideNav>
-      <TopBar title="Confirmacao" />
+      <TopBar title="Confirmação" />
 
       <div className="px-4 pt-8 pb-8 space-y-6">
         <section className="card-kidario p-5 text-center">
@@ -47,8 +47,8 @@ export default function BookingConfirmation() {
           </h1>
           <p className="text-muted-foreground mt-2">
             {isPending
-              ? "Recebemos seu pedido. Assim que o pagamento for confirmado, sua aula sera confirmada."
-              : "Seu agendamento foi concluido com sucesso."}
+              ? "Recebemos seu pedido. Assim que o pagamento for confirmado, sua aula será confirmada."
+              : "Seu agendamento foi concluído com sucesso."}
           </p>
         </section>
 
@@ -58,7 +58,7 @@ export default function BookingConfirmation() {
             { label: "Professora:", value: booking.teacherName },
             { label: "Especialidade:", value: booking.specialty },
             { label: "Data:", value: booking.dateLabel },
-            { label: "Horario:", value: booking.time },
+            { label: "Horário:", value: booking.time },
             { label: "Modalidade:", value: booking.modality === "online" ? "Online" : "Presencial" },
             { label: "Status:", value: booking.status === "confirmada" ? "Confirmada" : "Pendente" },
           ]}

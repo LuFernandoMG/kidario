@@ -16,46 +16,46 @@ function resolvePlatformUrl(): string {
 
 const productPillars = [
   {
-    title: "Mudanca real para cada crianca",
+    title: "Mudança real para cada criança",
     description:
-      "Cada etapa e planejada para desenvolver autonomia, confianca e desempenho de forma consistente.",
+      "Cada etapa é planejada para desenvolver autonomia, confiança e desempenho de forma consistente.",
   },
   {
     title: "Aprendizagem personalizada",
     description:
-      "Planos a medida respeitam o ritmo do seu filho e transformam desafios em oportunidades de evolucao.",
+      "Planos sob medida respeitam o ritmo do seu filho e transformam desafios em oportunidades de evolução.",
   },
   {
-    title: "Apoio para toda a familia",
+    title: "Apoio para toda a família",
     description:
-      "Pais recebem orientacao clara para acompanhar o processo e potencializar o desenvolvimento em casa.",
+      "Pais recebem orientação clara para acompanhar o processo e potencializar o desenvolvimento em casa.",
   },
 ];
 
 const valuePoints = [
-  "Conectamos sua familia aos melhores profissionais de educacao da sua regiao.",
-  "Cada crianca recebe atencao individual, com objetivos e plano pedagogico personalizados.",
-  "Pais acompanham progresso com clareza e participam ativamente do desenvolvimento dos filhos.",
-  "A rotina de aprendizagem fica mais organizada, previsivel e eficaz no dia a dia.",
+  "Conectamos sua família aos melhores profissionais de educação da sua região.",
+  "Cada criança recebe atenção individual, com objetivos e plano pedagógico personalizados.",
+  "Pais acompanham o progresso com clareza e participam ativamente do desenvolvimento dos filhos.",
+  "A rotina de aprendizagem fica mais organizada, previsível e eficaz no dia a dia.",
 ];
 
 const journeyCards = [
   {
     title: "Aulas envolventes que despertam interesse",
     description:
-      "Com metodologias ativas, a aprendizagem vira experiencia significativa e prazerosa para a crianca.",
+      "Com metodologias ativas, a aprendizagem vira uma experiência significativa e prazerosa para a criança.",
     image: "/images/interactive-learning.jpg",
   },
   {
-    title: "Plano pedagogico feito sob medida",
+    title: "Plano pedagógico feito sob medida",
     description:
-      "Conteudo, ritmo e abordagem sao ajustados para extrair o melhor potencial de cada aluno.",
+      "Conteúdo, ritmo e abordagem são ajustados para extrair o melhor potencial de cada aluno.",
     image: "/images/customized-teaching.jpg",
   },
   {
-    title: "Participacao ativa da familia",
+    title: "Participação ativa da família",
     description:
-      "Pais e responsaveis acompanham o progresso e reforcam em casa os pontos trabalhados nas aulas.",
+      "Pais e responsáveis acompanham o progresso e reforçam em casa os pontos trabalhados nas aulas.",
     image: "/images/reading-together.jpg",
   },
 ];
@@ -64,35 +64,35 @@ const schedulingSteps = [
   {
     title: "Diagnostique a necessidade",
     description:
-      "Voce descreve o que seu filho precisa fortalecer e o Kidario direciona as melhores opcoes de atendimento.",
+      "Você descreve o que seu filho precisa fortalecer, e o Kidario direciona as melhores opções de atendimento.",
   },
   {
     title: "Escolha a professora ideal",
     description:
-      "Compare perfis, experiencia e especialidades para selecionar a profissional certa para o momento da crianca.",
+      "Compare perfis, experiência e especialidades para selecionar a profissional certa para o momento da criança.",
   },
   {
     title: "Agende em poucos cliques",
     description:
-      "Defina horario, confirme a aula e mantenha toda a rotina organizada em um unico lugar.",
+      "Defina o horário, confirme a aula e mantenha toda a rotina organizada em um único lugar.",
   },
 ];
 
 const platformBenefits = [
   {
-    title: "Evolucao visivel de ponta a ponta",
+    title: "Evolução visível de ponta a ponta",
     description:
-      "Voce acompanha os avancos com mais clareza, identifica o que funciona e ajusta a rota no momento certo.",
+      "Você acompanha os avanços com mais clareza, identifica o que funciona e ajusta a rota no momento certo.",
   },
   {
-    title: "Gestao simples da agenda familiar",
+    title: "Gestão simples da agenda familiar",
     description:
-      "Todas as aulas ficam centralizadas para reduzir ruido, evitar conflitos de horario e manter consistencia.",
+      "Todas as aulas ficam centralizadas para reduzir ruído, evitar conflitos de horário e manter consistência.",
   },
   {
     title: "Especialistas para cada desafio",
     description:
-      "Quando surgir uma nova necessidade, voce encontra com rapidez profissionais focados exatamente no que seu filho precisa.",
+      "Quando surgir uma nova necessidade, você encontra com rapidez profissionais focados exatamente no que seu filho precisa.",
   },
 ];
 
@@ -126,15 +126,15 @@ export default function LandingPage() {
       <section className="hero container">
         <div className="hero-grid">
           <div className="hero-copy-wrap">
-            <p className="eyebrow">Educacao personalizada para familias que querem evoluir</p>
+            <p className="eyebrow">Educação personalizada para famílias que querem evoluir</p>
             <h1>Seu filho pode ir muito mais longe.</h1>
             <p className="hero-copy">
-              O Kidario conecta familias aos melhores educadores perto de voce para criar uma jornada
-              de aprendizagem unica, com atencao individual e resultados concretos.
+              O Kidario conecta famílias aos melhores educadores perto de você para criar uma jornada
+              de aprendizagem única, com atenção individual e resultados concretos.
             </p>
             <div className="hero-cta">
               <a href={signupUrl} className="cta cta-solid cta-lg">
-                Comecar agora
+                Começar agora
               </a>
               <a href={platformUrl} className="cta cta-outline cta-lg">
                 Conhecer a plataforma
@@ -145,7 +145,7 @@ export default function LandingPage() {
           <div className="hero-visual">
             <Image
               src="/images/ben-white-4K2lIP0zc_k-unsplash.jpg"
-              alt="Crianca em atividade de aprendizagem com acompanhamento pedagogico"
+              alt="Criança em atividade de aprendizagem com acompanhamento pedagógico"
               width={6016}
               height={4016}
               className="hero-image"
@@ -157,10 +157,10 @@ export default function LandingPage() {
 
       <section className="section container">
         <div className="section-head">
-          <h2>Uma plataforma para transformar o futuro das criancas</h2>
+          <h2>Uma plataforma para transformar o futuro das crianças</h2>
           <p>
-            Nosso foco e gerar mudanca real na educacao infantil, com suporte especializado para alunos
-            e familias.
+            Nosso foco é gerar mudança real no desenvolvimento de crianças, com suporte especializado para alunos
+            e famílias.
           </p>
         </div>
         <div className="card-grid">
@@ -175,8 +175,8 @@ export default function LandingPage() {
 
       <section className="section container">
         <div className="section-head">
-          <h2>Como a personalizacao acontece na pratica</h2>
-          <p>Da sala de aula ao ambiente familiar, cada etapa e pensada para desenvolver o aluno.</p>
+          <h2>Como a personalização acontece na prática</h2>
+          <p>Da sala de aula ao ambiente familiar, cada etapa é pensada para desenvolver o aluno.</p>
         </div>
         <div className="journey-grid">
           {journeyCards.map((card) => (
@@ -203,10 +203,10 @@ export default function LandingPage() {
         <div className="process-layout">
           <div className="process-copy">
             <p className="eyebrow">Como agendar uma aula</p>
-            <h2>Processo rapido para familias, atencao profunda para cada crianca</h2>
+            <h2>Processo rápido para famílias, atenção profunda para cada criança</h2>
             <p>
-              O fluxo de agendamento foi pensado para ser direto, sem perder qualidade pedagogica.
-              Voce decide com seguranca e mantem controle total da jornada.
+              O fluxo de agendamento foi pensado para ser direto, sem perder qualidade pedagógica.
+              Você decide com segurança e mantém controle total da jornada.
             </p>
             <div className="process-steps">
               {schedulingSteps.map((step, index) => (
@@ -223,7 +223,7 @@ export default function LandingPage() {
             <div className="media-frame media-frame-tall">
               <Image
                 src="/images/gaelle-marcel-L8SNwGUNqbU-unsplash.jpg"
-                alt="Acompanhamento proximo entre educador e crianca"
+                alt="Acompanhamento próximo entre educador e criança"
                 width={4016}
                 height={6016}
                 className="media-cover object-cover overflow-hidden"
@@ -244,7 +244,7 @@ export default function LandingPage() {
 
       <section className="section container split">
         <div>
-          <p className="eyebrow">Profissionais de excelencia, perto de voce</p>
+          <p className="eyebrow">Profissionais de excelência, perto de você</p>
           <h2>Apoio completo para pais que querem o melhor desenvolvimento dos filhos</h2>
           <ul className="value-list">
             {valuePoints.map((point) => (
@@ -265,8 +265,8 @@ export default function LandingPage() {
           </div>
           <p className="impact-kicker">Impacto esperado</p>
           <p className="impact-main">
-            Mais foco, mais autoestima e melhores resultados academicos para as criancas, com
-            tranquilidade para as familias.
+            Mais foco, mais autoestima e melhores resultados acadêmicos para as crianças, com
+            tranquilidade para as famílias.
           </p>
           <a href={signupUrl} className="cta cta-solid">
             Quero experimentar o Kidario
@@ -276,10 +276,10 @@ export default function LandingPage() {
 
       <section className="section container">
         <div className="section-head">
-          <h2>Atendimento humano com plano a medida</h2>
+          <h2>Atendimento humano com plano sob medida</h2>
           <p>
-            Combinamos proximidade, metodologia correta e experiencia de aprendizagem acolhedora para
-            extrair o maximo potencial de cada crianca.
+            Combinamos proximidade, metodologia correta e experiência de aprendizagem acolhedora para
+            extrair o máximo potencial de cada criança.
           </p>
         </div>
         <div className="dual-media-grid">
@@ -287,16 +287,16 @@ export default function LandingPage() {
             <div className="media-frame">
               <Image
                 src="/images/bring-them-the-best-experience-at-home.jpg"
-                alt="Crianca recebendo uma experiencia de aprendizagem de alta qualidade em casa"
+                alt="Criança recebendo uma experiência de aprendizagem de alta qualidade em casa"
                 width={7188}
                 height={4797}
                 className="media-cover"
               />
             </div>
             <div className="journey-copy">
-              <h3>Experiencia premium no conforto de casa</h3>
+              <h3>Experiência premium no conforto de casa</h3>
               <p>
-                Aulas que respeitam a rotina da familia e mantem alto nivel pedagogico com proximidade.
+                Aulas que respeitam a rotina da família e mantêm alto nível pedagógico com proximidade.
               </p>
             </div>
           </article>
@@ -305,16 +305,16 @@ export default function LandingPage() {
             <div className="media-frame">
               <Image
                 src="/images/build-a-solid-path-for-your-child.jpg"
-                alt="Familia construindo uma trilha pedagogica solida para a crianca"
+                alt="Família construindo uma trilha pedagógica sólida para a criança"
                 width={5472}
                 height={3648}
                 className="media-cover"
               />
             </div>
             <div className="journey-copy">
-              <h3>Metodo certo para cada fase</h3>
+              <h3>Método certo para cada fase</h3>
               <p>
-                Professores aplicam estrategias adequadas para desenvolver habilidades academicas e
+                Professores aplicam estratégias adequadas para desenvolver habilidades acadêmicas e
                 socioemocionais.
               </p>
             </div>
@@ -323,17 +323,17 @@ export default function LandingPage() {
       </section>
 
       <section className="section container final-cta">
-        <h2>Comece agora a mudanca educacional que seu filho merece</h2>
+        <h2>Comece agora a mudança educacional que seu filho merece</h2>
         <p>
           Entre no Kidario e encontre os melhores profissionais para construir um plano personalizado,
-          acelerar o aprendizado e desenvolver plenamente o potencial da sua crianca.
+          acelerar o aprendizado e desenvolver plenamente o potencial da sua criança.
         </p>
         <div className="hero-cta">
           <a href={signupUrl} className="cta cta-solid cta-lg">
-            Criar conta gratis
+            Criar conta grátis
           </a>
           <a href={loginUrl} className="cta cta-ghost cta-lg">
-            Ja tenho conta
+            Já tenho conta
           </a>
         </div>
       </section>

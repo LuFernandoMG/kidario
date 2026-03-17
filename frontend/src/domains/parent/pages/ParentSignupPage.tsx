@@ -45,12 +45,12 @@ interface ParentSignupFormData {
 
 const signupSteps: SignupStep[] = [
   {
-    title: "Informacoes basicas",
+    title: "Informações básicas",
     subtitle: "Dados de contato e acesso",
   },
   {
-    title: "Perfil da familia",
-    subtitle: "Endereco e objetivo pedagogico",
+    title: "Perfil da família",
+    subtitle: "Endereço e objetivo pedagógico",
   },
   {
     title: "Registro de filhos",
@@ -174,7 +174,7 @@ export default function Signup() {
       if (!normalized) {
         next.email = "Informe seu e-mail.";
       } else if (!isValidEmail(normalized)) {
-        next.email = "Informe um e-mail valido no formato email@dominio.ext.";
+        next.email = "Informe um e-mail válido no formato email@dominio.ext.";
       } else {
         delete next.email;
       }
@@ -193,7 +193,7 @@ export default function Signup() {
       if (!canonicalEmail) {
         next.email = "Informe seu e-mail.";
       } else if (!isValidEmail(canonicalEmail)) {
-        next.email = "Informe um e-mail valido no formato email@dominio.ext.";
+        next.email = "Informe um e-mail válido no formato email@dominio.ext.";
       } else {
         delete next.email;
       }
@@ -242,7 +242,7 @@ export default function Signup() {
       }
       if (!email) nextErrors.email = "Informe seu e-mail.";
       if (email && !isValidEmail(email)) {
-        nextErrors.email = "Informe um e-mail valido no formato email@dominio.ext.";
+        nextErrors.email = "Informe um e-mail válido no formato email@dominio.ext.";
       }
       if (captchaEnabledFlag && !isCaptchaConfigured) {
         nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
@@ -257,14 +257,14 @@ export default function Signup() {
       }
       if (!formData.confirmPassword) nextErrors.confirmPassword = "Repita sua senha.";
       if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
-        nextErrors.confirmPassword = "As senhas nao coincidem.";
+        nextErrors.confirmPassword = "As senhas não coincidem.";
       }
     }
 
     if (step === 1) {
-      if (!formData.address.trim()) nextErrors.address = "Informe seu endereco.";
+      if (!formData.address.trim()) nextErrors.address = "Informe seu endereço.";
       if (!formData.bio.trim()) {
-        nextErrors.bio = "Conte um pouco sobre o que voce busca para seus filhos.";
+        nextErrors.bio = "Conte um pouco sobre o que você busca para seus filhos.";
       }
     }
 
@@ -277,15 +277,15 @@ export default function Signup() {
         const prefix = `children.${index}`;
 
         if (!child.name.trim()) nextErrors[`${prefix}.name`] = "Informe o nome do filho.";
-        if (!child.gender) nextErrors[`${prefix}.gender`] = "Selecione o genero.";
+        if (!child.gender) nextErrors[`${prefix}.gender`] = "Selecione o gênero.";
         if (!child.age) nextErrors[`${prefix}.age`] = "Informe a idade.";
         if (child.age && (Number(child.age) < 1 || Number(child.age) > 18)) {
           nextErrors[`${prefix}.age`] = "A idade deve estar entre 1 e 18 anos.";
         }
         if (!child.currentGrade.trim()) nextErrors[`${prefix}.currentGrade`] = "Informe o curso atual.";
-        if (!child.birthMonthYear) nextErrors[`${prefix}.birthMonthYear`] = "Informe mes e ano.";
+        if (!child.birthMonthYear) nextErrors[`${prefix}.birthMonthYear`] = "Informe mês e ano.";
         if (!child.school.trim()) nextErrors[`${prefix}.school`] = "Informe a escola.";
-        if (!child.focusPoints.trim()) nextErrors[`${prefix}.focusPoints`] = "Descreva os pontos de atencao.";
+        if (!child.focusPoints.trim()) nextErrors[`${prefix}.focusPoints`] = "Descreva os pontos de atenção.";
       });
     }
 
@@ -404,7 +404,7 @@ export default function Signup() {
   return (
     <AuthPageLayout
       title="Criar conta"
-      subtitle="Cadastro publico para pais e responsaveis."
+      subtitle="Cadastro público para pais e responsáveis."
       titleContainerClassName="mt-8"
       contentContainerClassName="mt-0"
     >
@@ -427,7 +427,7 @@ export default function Signup() {
       >
         {currentStep === 0 && (
           <section className="card-kidario p-5 space-y-4">
-            <h2 className="font-display text-xl font-semibold text-foreground">Dados basicos</h2>
+            <h2 className="font-display text-xl font-semibold text-foreground">Dados básicos</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -549,7 +549,7 @@ export default function Signup() {
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={(e) => setField("password", e.target.value)}
-                  placeholder="Minimo 8 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   className="h-12 rounded-xl bg-muted/50 pr-12"
                 />
                 <button
@@ -581,7 +581,7 @@ export default function Signup() {
                   type="button"
                   onClick={() => setShowConfirmPassword((prev) => !prev)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Mostrar ou ocultar repeticao da senha"
+                  aria-label="Mostrar ou ocultar repetição da senha"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -591,7 +591,7 @@ export default function Signup() {
 
             {captchaEnabledFlag && (
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Verificacao de seguranca</label>
+                <label className="text-sm font-medium text-foreground">Verificação de segurança</label>
                 {isCaptchaConfigured ? (
                   <TurnstileWidget
                     siteKey={turnstileSiteKey}
@@ -627,17 +627,17 @@ export default function Signup() {
 
         {currentStep === 1 && (
           <section className="card-kidario p-5 space-y-4">
-            <h2 className="font-display text-xl font-semibold text-foreground">Perfil da familia</h2>
+            <h2 className="font-display text-xl font-semibold text-foreground">Perfil da família</h2>
 
             <div className="space-y-2">
               <label htmlFor="address" className="text-sm font-medium text-foreground">
-                Endereco
+                Endereço
               </label>
               <Input
                 id="address"
                 value={formData.address}
                 onChange={(e) => setField("address", e.target.value)}
-                placeholder="Rua, numero, bairro, cidade"
+                placeholder="Rua, número, bairro, cidade"
                 className="h-12 rounded-xl bg-muted/50"
               />
               <FieldError message={errors.address} />
@@ -645,13 +645,13 @@ export default function Signup() {
 
             <div className="space-y-2">
               <label htmlFor="bio" className="text-sm font-medium text-foreground">
-                Biografia curta / o que voce esta buscando para seus filhos
+                Biografia curta / o que você está buscando para seus filhos
               </label>
               <Textarea
                 id="bio"
                 value={formData.bio}
                 onChange={(e) => setField("bio", e.target.value)}
-                placeholder="Conte objetivos, rotina e o tipo de apoio pedagogico que deseja."
+                placeholder="Conte objetivos, rotina e o tipo de apoio pedagógico que deseja."
                 className="min-h-[120px] rounded-xl bg-muted/50"
               />
               <FieldError message={errors.bio} />
@@ -694,13 +694,13 @@ export default function Signup() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Genero</label>
+                  <label className="text-sm font-medium text-foreground">Gênero</label>
                   <Select
                     value={child.gender}
                     onValueChange={(value) => updateChild(index, "gender", value as ChildGender)}
                   >
                     <SelectTrigger className="h-12 rounded-xl bg-muted/50">
-                      <SelectValue placeholder="Selecione o genero" />
+                      <SelectValue placeholder="Selecione o gênero" />
                     </SelectTrigger>
                     <SelectContent>
                       {childGenderOptions.map((option) => (
@@ -750,7 +750,7 @@ export default function Signup() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Mes e ano de nascimento</label>
+                  <label className="text-sm font-medium text-foreground">Mês e ano de nascimento</label>
                   <Input
                     type="month"
                     value={child.birthMonthYear}
@@ -773,12 +773,12 @@ export default function Signup() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">
-                    Pontos de atencao que querem fortalecer
+                    Pontos de atenção que querem fortalecer
                   </label>
                   <Textarea
                     value={child.focusPoints}
                     onChange={(e) => updateChild(index, "focusPoints", e.target.value)}
-                    placeholder="Ex.: leitura, concentracao, coordenacao motora, linguagem..."
+                    placeholder="Ex.: leitura, concentração, coordenação motora, linguagem..."
                     className="min-h-[96px] rounded-xl bg-muted/50"
                   />
                   <FieldError message={errors[`children.${index}.focusPoints`]} />
@@ -825,7 +825,7 @@ export default function Signup() {
         className="text-center text-muted-foreground pb-8"
       >
         {submitError && <span className="block mb-3 text-sm text-destructive">{submitError}</span>}
-        Ja tem conta?{" "}
+        Já tem conta?{" "}
         <Link to={loginLink} className="text-primary font-medium hover:underline">
           Entrar
         </Link>

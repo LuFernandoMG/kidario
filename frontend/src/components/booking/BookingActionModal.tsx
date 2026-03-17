@@ -92,7 +92,7 @@ export function BookingActionModal({
           </DialogTitle>
           <DialogDescription>
             {mode === "reschedule"
-              ? "Selecione a nova data e horario para atualizar a reserva."
+              ? "Selecione a nova data e o horário para atualizar a reserva."
               : "Informe um motivo para cancelar esta aula."}
           </DialogDescription>
         </DialogHeader>
@@ -119,7 +119,7 @@ export function BookingActionModal({
 
             <div className="space-y-2">
               <label htmlFor="reschedule-time" className="text-sm font-medium text-foreground">
-                Novo horario
+                Novo horário
               </label>
               <select
                 id="reschedule-time"
@@ -129,7 +129,7 @@ export function BookingActionModal({
                 disabled={timeOptions.length === 0}
               >
                 {timeOptions.length === 0 ? (
-                  <option value="">Sem horarios para esta data</option>
+                  <option value="">Sem horários para esta data</option>
                 ) : (
                   timeOptions.map((time) => (
                     <option key={time} value={time}>
@@ -149,7 +149,7 @@ export function BookingActionModal({
               id="cancel-reason"
               value={cancelReason}
               onChange={(event) => setCancelReason(event.target.value)}
-              placeholder="Ex.: conflito de horario, imprevisto familiar, etc."
+              placeholder="Ex.: conflito de horário, imprevisto familiar etc."
               className="min-h-[120px] bg-muted/50"
             />
           </div>

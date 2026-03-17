@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next"
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kidario | Apoio educacional para cada familia",
+  title: "Kidario | Apoio educacional para cada família",
   description:
-    "Kidario conecta familias a professoras especializadas para impulsionar a aprendizagem de cada crianca com acompanhamento humano e personalizado.",
+    "Kidario conecta famílias a professoras especializadas para impulsionar a aprendizagem de cada criança com acompanhamento humano e personalizado.",
 };
 
 export default function RootLayout({
@@ -14,7 +15,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>{children}
+        <Analytics />
+      </body>
     </html>
   );
 }

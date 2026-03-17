@@ -67,11 +67,11 @@ interface TeacherSignupFormData {
 const steps: SignupStep[] = [
   {
     title: "Perfil profissional",
-    subtitle: "Dados, formacao e experiencia",
+    subtitle: "Dados, formação e experiência",
   },
   {
     title: "Agenda semanal",
-    subtitle: "Horarios disponiveis para atendimento",
+    subtitle: "Horários disponíveis para atendimento",
   },
 ];
 
@@ -106,12 +106,12 @@ const states = [
 ];
 
 const degreeTypes = [
-  { value: "graduacao", label: "Graduacao" },
-  { value: "pos-graduacao", label: "Pos-graduacao" },
-  { value: "especializacao", label: "Especializacao" },
+  { value: "graduacao", label: "Graduação" },
+  { value: "pos-graduacao", label: "Pós-graduação" },
+  { value: "especializacao", label: "Especialização" },
   { value: "mestrado", label: "Mestrado" },
   { value: "doutorado", label: "Doutorado" },
-  { value: "curso-livre", label: "Curso livre / certificacao" },
+  { value: "curso-livre", label: "Curso livre / certificação" },
 ];
 
 const durationOptions = [
@@ -262,7 +262,7 @@ export default function TeacherPrivateSignup() {
       if (!normalized) {
         next.email = "Informe o e-mail.";
       } else if (!isValidEmail(normalized)) {
-        next.email = "Informe um e-mail valido no formato email@dominio.ext.";
+        next.email = "Informe um e-mail válido no formato email@dominio.ext.";
       } else {
         delete next.email;
       }
@@ -280,7 +280,7 @@ export default function TeacherPrivateSignup() {
       if (!canonicalEmail) {
         next.email = "Informe o e-mail.";
       } else if (!isValidEmail(canonicalEmail)) {
-        next.email = "Informe um e-mail valido no formato email@dominio.ext.";
+        next.email = "Informe um e-mail válido no formato email@dominio.ext.";
       } else {
         delete next.email;
       }
@@ -375,7 +375,7 @@ export default function TeacherPrivateSignup() {
       if (!formData.lastName.trim()) nextErrors.lastName = "Informe o sobrenome.";
       if (!email) nextErrors.email = "Informe o e-mail.";
       if (email && !isValidEmail(email)) {
-        nextErrors.email = "Informe um e-mail valido no formato email@dominio.ext.";
+        nextErrors.email = "Informe um e-mail válido no formato email@dominio.ext.";
       }
       if (!formData.password) nextErrors.password = "Crie uma senha.";
       if (formData.password && formData.password.length < 8) {
@@ -387,7 +387,7 @@ export default function TeacherPrivateSignup() {
         formData.confirmPassword &&
         formData.password !== formData.confirmPassword
       ) {
-        nextErrors.confirmPassword = "As senhas nao coincidem.";
+        nextErrors.confirmPassword = "As senhas não coincidem.";
       }
       if (!formData.phone.trim()) nextErrors.phone = "Informe o telefone.";
       if (formData.phone && formData.phone.length < 11) {
@@ -400,15 +400,15 @@ export default function TeacherPrivateSignup() {
       if (!formData.city.trim()) nextErrors.city = "Informe a cidade.";
       if (!formData.state) nextErrors.state = "Selecione a UF.";
       if (!formData.modality) nextErrors.modality = "Selecione a modalidade.";
-      if (!formData.lessonDuration) nextErrors.lessonDuration = "Selecione a duracao media da aula.";
+      if (!formData.lessonDuration) nextErrors.lessonDuration = "Selecione a duração média da aula.";
       if (!formData.hourlyRate.trim()) nextErrors.hourlyRate = "Informe o custo por hora.";
       if (!formData.profilePhoto) nextErrors.profilePhoto = "Adicione uma foto de perfil.";
-      if (!formData.miniBio.trim()) nextErrors.miniBio = "Informe uma mini bio profissional.";
+      if (!formData.miniBio.trim()) nextErrors.miniBio = "Informe uma minibio profissional.";
       if (formData.specialties.length === 0) {
         nextErrors.specialties = "Adicione pelo menos uma especialidade.";
       }
       if (!formData.acceptTerms) {
-        nextErrors.acceptTerms = "Voce precisa aceitar os termos e condicoes.";
+        nextErrors.acceptTerms = "Você precisa aceitar os termos e condições.";
       }
       if (captchaEnabledFlag && !isCaptchaConfigured) {
         nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
@@ -421,16 +421,16 @@ export default function TeacherPrivateSignup() {
         const prefix = `formations.${index}`;
         if (!formation.degreeType) nextErrors[`${prefix}.degreeType`] = "Selecione o tipo.";
         if (!formation.courseName.trim()) nextErrors[`${prefix}.courseName`] = "Informe o curso.";
-        if (!formation.institution.trim()) nextErrors[`${prefix}.institution`] = "Informe a instituicao.";
+        if (!formation.institution.trim()) nextErrors[`${prefix}.institution`] = "Informe a instituição.";
       });
 
       formData.experiences.forEach((experience, index) => {
         const prefix = `experiences.${index}`;
-        if (!experience.institution.trim()) nextErrors[`${prefix}.institution`] = "Informe a escola/instituicao.";
+        if (!experience.institution.trim()) nextErrors[`${prefix}.institution`] = "Informe a escola/instituição.";
         if (!experience.role.trim()) nextErrors[`${prefix}.role`] = "Informe o cargo.";
-        if (!experience.periodFrom) nextErrors[`${prefix}.periodFrom`] = "Informe o inicio.";
+        if (!experience.periodFrom) nextErrors[`${prefix}.periodFrom`] = "Informe o início.";
         if (!experience.currentPosition && !experience.periodTo) {
-          nextErrors[`${prefix}.periodTo`] = "Informe o termino.";
+          nextErrors[`${prefix}.periodTo`] = "Informe o término.";
         }
         if (!experience.responsibilities.trim()) {
           nextErrors[`${prefix}.responsibilities`] = "Descreva o que fazia.";
@@ -440,7 +440,7 @@ export default function TeacherPrivateSignup() {
 
     if (step === 1) {
       if (formData.weeklyAvailability.length === 0) {
-        nextErrors.weeklyAvailability = "Adicione pelo menos um horario semanal.";
+        nextErrors.weeklyAvailability = "Adicione pelo menos um horário semanal.";
       }
     }
 
@@ -636,7 +636,7 @@ export default function TeacherPrivateSignup() {
         {currentStep === 0 && (
           <>
             <section className="card-kidario p-5 space-y-4">
-              <h2 className="font-display text-xl font-semibold text-foreground">Dados basicos</h2>
+              <h2 className="font-display text-xl font-semibold text-foreground">Dados básicos</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Nome">
@@ -697,7 +697,7 @@ export default function TeacherPrivateSignup() {
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => setField("password", e.target.value)}
-                      placeholder="Minimo 8 caracteres"
+                      placeholder="Mínimo 8 caracteres"
                       className="h-12 rounded-xl bg-muted/50 pr-12"
                     />
                     <button
@@ -725,7 +725,7 @@ export default function TeacherPrivateSignup() {
                       type="button"
                       onClick={() => setShowConfirmPassword((prev) => !prev)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label="Mostrar ou ocultar repeticao da senha"
+                      aria-label="Mostrar ou ocultar repetição da senha"
                     >
                       {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
@@ -809,13 +809,13 @@ export default function TeacherPrivateSignup() {
                   <FieldError message={errors.hourlyRate} />
                 </FormField>
 
-                <FormField label="Duracao media da aula">
+                <FormField label="Duração média da aula">
                   <Select
                     value={formData.lessonDuration}
                     onValueChange={(value) => setField("lessonDuration", value)}
                   >
                     <SelectTrigger className="h-12 rounded-xl bg-muted/50">
-                      <SelectValue placeholder="Selecione a duracao" />
+                      <SelectValue placeholder="Selecione a duração" />
                     </SelectTrigger>
                     <SelectContent>
                       {durationOptions.map((duration) => (
@@ -837,7 +837,7 @@ export default function TeacherPrivateSignup() {
                   <SelectContent>
                     <SelectItem value="online">Online</SelectItem>
                     <SelectItem value="presencial">Presencial</SelectItem>
-                    <SelectItem value="hibrido">Hibrido</SelectItem>
+                    <SelectItem value="hibrido">Híbrido</SelectItem>
                   </SelectContent>
                 </Select>
                 <FieldError message={errors.modality} />
@@ -886,7 +886,7 @@ export default function TeacherPrivateSignup() {
                 <Textarea
                   value={formData.miniBio}
                   onChange={(e) => setField("miniBio", e.target.value)}
-                  placeholder="Resumo da experiencia e abordagem pedagogica."
+                  placeholder="Resumo da experiência e abordagem pedagógica."
                   className="min-h-[110px] rounded-xl bg-muted/50"
                 />
                 <FieldError message={errors.miniBio} />
@@ -895,7 +895,7 @@ export default function TeacherPrivateSignup() {
 
             <section className="card-kidario p-5 space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="font-display text-xl font-semibold text-foreground">Formacao academica</h2>
+                <h2 className="font-display text-xl font-semibold text-foreground">Formação acadêmica</h2>
                 <KidarioButton type="button" variant="outline" size="sm" onClick={addFormation}>
                   <Plus className="h-4 w-4" />
                   Adicionar
@@ -905,7 +905,7 @@ export default function TeacherPrivateSignup() {
               {formData.formations.map((formation, index) => (
                 <div key={index} className="card-kidario p-4 space-y-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-foreground">Formacao {index + 1}</p>
+                    <p className="font-medium text-foreground">Formação {index + 1}</p>
                     {formData.formations.length > 1 && (
                       <KidarioButton
                         type="button"
@@ -950,7 +950,7 @@ export default function TeacherPrivateSignup() {
                       <FieldError message={errors[`formations.${index}.courseName`]} />
                     </FormField>
 
-                    <FormField label="Instituicao">
+                    <FormField label="Instituição">
                       <Input
                         value={formation.institution}
                         onChange={(e) => updateFormation(index, "institution", e.target.value)}
@@ -961,7 +961,7 @@ export default function TeacherPrivateSignup() {
                     </FormField>
                   </div>
 
-                  <FormField label="Ano de conclusao (opcional)">
+                  <FormField label="Ano de conclusão (opcional)">
                     <Input
                       type="number"
                       min={1950}
@@ -979,7 +979,7 @@ export default function TeacherPrivateSignup() {
             <section className="card-kidario p-5 space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="font-display text-xl font-semibold text-foreground">
-                  Experiencia profissional
+                  Experiência profissional
                 </h2>
                 <KidarioButton type="button" variant="outline" size="sm" onClick={addExperience}>
                   <Plus className="h-4 w-4" />
@@ -1000,24 +1000,24 @@ export default function TeacherPrivateSignup() {
                     htmlFor="anonimato-experiencia"
                     className="text-sm text-foreground cursor-pointer"
                   >
-                    Solicitar anonimato na experiencia profissional
+                    Solicitar anonimato na experiência profissional
                   </label>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Se marcado, seus dados de experiencia poderao ser exibidos com anonimato na plataforma.
+                  Se marcado, seus dados de experiência poderão ser exibidos com anonimato na plataforma.
                 </p>
               </div>
 
               {formData.experiences.length === 0 && (
                 <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                  Experiencia profissional e opcional neste momento. Recem-graduadas podem seguir sem preencher.
+                  A experiência profissional é opcional neste momento. Recém-graduadas podem seguir sem preencher.
                 </div>
               )}
 
               {formData.experiences.map((experience, index) => (
                 <div key={index} className="card-kidario p-4 space-y-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-foreground">Experiencia {index + 1}</p>
+                    <p className="font-medium text-foreground">Experiência {index + 1}</p>
                     <KidarioButton
                       type="button"
                       size="sm"
@@ -1031,11 +1031,11 @@ export default function TeacherPrivateSignup() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField label="Escola / instituicao">
+                    <FormField label="Escola / instituição">
                       <Input
                         value={experience.institution}
                         onChange={(e) => updateExperience(index, "institution", e.target.value)}
-                        placeholder="Nome da escola ou instituicao"
+                        placeholder="Nome da escola ou instituição"
                         className="h-12 rounded-xl bg-muted/50"
                       />
                       <FieldError message={errors[`experiences.${index}.institution`]} />
@@ -1069,14 +1069,14 @@ export default function TeacherPrivateSignup() {
                           htmlFor={`experiencia-atual-${index}`}
                           className="text-sm text-foreground cursor-pointer"
                         >
-                          Posicao atual
+                          Posição atual
                         </label>
                       </div>
                     </div>
                     
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField label="Periodo - inicio">
+                    <FormField label="Período - início">
                       <Input
                         type="month"
                         value={experience.periodFrom}
@@ -1085,7 +1085,7 @@ export default function TeacherPrivateSignup() {
                       />
                       <FieldError message={errors[`experiences.${index}.periodFrom`]} />
                     </FormField>
-                    <FormField label="Periodo - termino">
+                    <FormField label="Período - término">
                       <Input
                         type="month"
                         value={experience.periodTo}
@@ -1095,7 +1095,7 @@ export default function TeacherPrivateSignup() {
                       />
                       {experience.currentPosition && (
                         <p className="text-xs text-muted-foreground">
-                          Como esta marcado como posicao atual, termino nao e obrigatorio.
+                          Como está marcado como posição atual, o término não é obrigatório.
                         </p>
                       )}
                       <FieldError message={errors[`experiences.${index}.periodTo`]} />
@@ -1141,14 +1141,14 @@ export default function TeacherPrivateSignup() {
                   htmlFor="aceite-termos-professora"
                   className="text-sm text-foreground cursor-pointer"
                 >
-                  Li e aceito os termos e condicoes da plataforma
+                  Li e aceito os termos e condições da plataforma
                 </label>
               </div>
               <FieldError message={errors.acceptTerms} />
 
               {captchaEnabledFlag && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">Verificacao de seguranca</p>
+                  <p className="text-sm font-medium text-foreground">Verificação de segurança</p>
                   {isCaptchaConfigured ? (
                     <TurnstileWidget
                       siteKey={turnstileSiteKey}

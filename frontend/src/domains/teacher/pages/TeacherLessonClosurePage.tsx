@@ -194,7 +194,7 @@ export default function TeacherLessonClosurePage() {
   if (isLoading) {
     return (
       <AppShell hideNav>
-        <TopBar title="Cierre de clase" showBack />
+        <TopBar title="Fechamento da aula" showBack />
         <div className="px-4 pt-6">
           <div className="card-kidario p-4 text-sm text-muted-foreground">Carregando formulário...</div>
         </div>
@@ -205,7 +205,7 @@ export default function TeacherLessonClosurePage() {
   if (error || !context) {
     return (
       <AppShell hideNav>
-        <TopBar title="Cierre de clase" showBack />
+        <TopBar title="Fechamento da aula" showBack />
         <div className="px-4 pt-6 space-y-3">
           <div className="card-kidario p-4 text-sm text-destructive">{error || "Não foi possível carregar."}</div>
           <KidarioButton asChild variant="outline">
@@ -218,7 +218,7 @@ export default function TeacherLessonClosurePage() {
 
   return (
     <AppShell hideNav>
-      <TopBar title={detail?.status === "concluida" ? "Editar revisión" : "Cierre de clase"} showBack />
+      <TopBar title={detail?.status === "concluida" ? "Editar revisão" : "Fechamento da aula"} showBack />
       <form className="px-4 pt-4 pb-8 space-y-4" onSubmit={onSubmit}>
         <section className="card-kidario p-4 space-y-1">
           <p className="text-sm font-medium text-foreground">{context.child_name}</p>
@@ -231,7 +231,7 @@ export default function TeacherLessonClosurePage() {
         </section>
 
         <section className="card-kidario p-4 space-y-3">
-          <p className="text-sm font-medium text-foreground">Objetivos trabajados en esta clase</p>
+          <p className="text-sm font-medium text-foreground">Objetivos trabalhados nesta aula</p>
           {objectiveReviews.map((objective, index) => (
             <div key={`review-${index}`} className="rounded-xl border border-border/70 p-3 space-y-2">
               <p className="text-sm text-foreground">{objective.objective}</p>
@@ -246,11 +246,11 @@ export default function TeacherLessonClosurePage() {
                     )
                   }
                 />
-                Objetivo alcanzado
+                Objetivo alcançado
               </label>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">
-                  Nivel de cumplimiento: {objective.fullfilment_level}
+                  Nível de cumprimento: {objective.fullfilment_level}
                 </p>
                 <Slider
                   className="py-1"
@@ -291,9 +291,9 @@ export default function TeacherLessonClosurePage() {
         </section>
 
         <section className="card-kidario p-4 space-y-3">
-          <p className="text-sm font-medium text-foreground">Plan sugerido para la clase</p>
+          <p className="text-sm font-medium text-foreground">Plano sugerido para a aula</p>
           <p className="text-xs text-muted-foreground">
-            {context.activity_plan_source === "llm" ? "Generado por IA" : "Generado automaticamente"}
+            {context.activity_plan_source === "llm" ? "Gerado por IA" : "Gerado automaticamente"}
           </p>
           <ul className="space-y-1">
             {context.activity_plan.map((item, index) => (
@@ -305,7 +305,7 @@ export default function TeacherLessonClosurePage() {
         </section>
 
         <section className="card-kidario p-4 space-y-3">
-          <p className="text-sm font-medium text-foreground">Focos de la sesión (tags)</p>
+          <p className="text-sm font-medium text-foreground">Focos da sessão (tags)</p>
           <div className="flex gap-2">
             <Input
               placeholder="Ex.: Matemática"
@@ -331,7 +331,7 @@ export default function TeacherLessonClosurePage() {
         </section>
 
         <section className="card-kidario p-4 space-y-3">
-          <p className="text-sm font-medium text-foreground">Próximos objetivos para evaluar</p>
+          <p className="text-sm font-medium text-foreground">Próximos objetivos para avaliar</p>
           {nextObjectives.map((objective, index) => (
             <div key={`next-objective-${index}`} className="flex gap-2">
               <Input
@@ -365,16 +365,16 @@ export default function TeacherLessonClosurePage() {
         </section>
 
         <section className="card-kidario p-4 space-y-3">
-          <p className="text-sm font-medium text-foreground">Resumen de evolución</p>
+          <p className="text-sm font-medium text-foreground">Resumo da evolução</p>
           <Textarea
-            placeholder="Describe brevemente cómo fue la evolución del niño durante la sesión."
+            placeholder="Descreva brevemente como foi a evolução da criança durante a sessão."
             value={summary}
             onChange={(event) => setSummary(event.target.value)}
             rows={5}
           />
           <p className="text-sm font-medium text-foreground">Próximos pasos</p>
           <Textarea
-            placeholder="Describe próximos pasos pedagógicos."
+            placeholder="Descreva os próximos passos pedagógicos."
             value={nextSteps}
             onChange={(event) => setNextSteps(event.target.value)}
             rows={4}
@@ -382,7 +382,7 @@ export default function TeacherLessonClosurePage() {
         </section>
 
         <section className="card-kidario p-4 space-y-3">
-          <p className="text-sm font-medium text-foreground">Attention points para la familia</p>
+          <p className="text-sm font-medium text-foreground">Pontos de atenção para a família</p>
           <div className="flex gap-2">
             <Input
               placeholder="Ex.: Sinais de cansaço na segunda metade da aula"
@@ -414,7 +414,7 @@ export default function TeacherLessonClosurePage() {
             Cancelar
           </KidarioButton>
           <KidarioButton type="submit" variant="hero" disabled={isSubmitting}>
-            {isSubmitting ? "Salvando..." : "Guardar revisión"}
+            {isSubmitting ? "Salvando..." : "Salvar revisão"}
           </KidarioButton>
         </div>
       </form>

@@ -21,7 +21,7 @@ const weekDays = [
   { value: "quarta", label: "Qua" },
   { value: "quinta", label: "Qui" },
   { value: "sexta", label: "Sex" },
-  { value: "sabado", label: "Sab" },
+  { value: "sabado", label: "Sáb" },
   { value: "domingo", label: "Dom" },
 ];
 
@@ -162,4 +162,3 @@ function sortSlots(slots: WeeklyAvailabilitySlot[]) {
     return a.startTime.localeCompare(b.startTime);
   });
 }
-

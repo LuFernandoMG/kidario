@@ -272,7 +272,7 @@ function BookingFollowUpReadOnly(props: {
   const followUp = timelineEntry?.follow_up ?? null;
 
   if (!timelineEntry) {
-    return <p className="text-sm text-muted-foreground">No se encontró la clase seleccionada.</p>;
+    return <p className="text-sm text-muted-foreground">Não foi possível encontrar a aula selecionada.</p>;
   }
 
   return (

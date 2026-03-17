@@ -145,7 +145,7 @@ export default function Checkout() {
     if (!normalized) return;
 
     if (!couponDiscounts[normalized]) {
-      setCouponError("Cupom invalido para este MVP.");
+      setCouponError("Cupom inválido para este MVP.");
       setAppliedCoupon("");
       return;
     }
@@ -195,7 +195,7 @@ export default function Checkout() {
           teacherId: teacher.id,
           teacherName: teacher.name,
           teacherAvatar: teacher.avatar,
-          specialty: teacher.specialties[0] ?? "Apoio pedagogico",
+          specialty: teacher.specialties[0] ?? "Apoio pedagógico",
           dateLabel,
           dateIso,
           time,
@@ -210,7 +210,7 @@ export default function Checkout() {
       } catch (error) {
         setIsSubmitting(false);
         toast({
-          title: "Nao foi possivel concluir no backend",
+          title: "Não foi possível concluir no backend",
           description:
             error instanceof Error
               ? error.message
@@ -229,7 +229,7 @@ export default function Checkout() {
         teacherId: teacher.id,
         teacherName: teacher.name,
         teacherAvatar: teacher.avatar,
-        specialty: teacher.specialties[0] ?? "Apoio pedagogico",
+        specialty: teacher.specialties[0] ?? "Apoio pedagógico",
         dateLabel,
         dateIso,
         time,
@@ -277,7 +277,7 @@ export default function Checkout() {
           rows={[
             { label: "Filho(a):", value: selectedChildName },
             { label: "Data:", value: dateLabel },
-            { label: "Horario:", value: `${time} (${lessonDurationMinutes} min)` },
+            { label: "Horário:", value: `${time} (${lessonDurationMinutes} min)` },
             { label: "Modalidade:", value: modality === "online" ? "Online" : "Presencial" },
           ]}
         />
@@ -342,7 +342,7 @@ export default function Checkout() {
 
           <PaymentMethodOption
             title="Pix"
-            description="Reserva fica pendente ate a confirmacao do pagamento."
+            description="A reserva fica pendente até a confirmação do pagamento."
             icon={<Landmark className="w-4 h-4" />}
             selected={paymentMethod === "pix"}
             onSelect={() => setPaymentMethod("pix")}
@@ -350,16 +350,16 @@ export default function Checkout() {
         </section>
 
         <section className="card-kidario p-4 space-y-2">
-          <h2 className="font-display text-lg font-semibold text-foreground">Politica de cancelamento</h2>
+          <h2 className="font-display text-lg font-semibold text-foreground">Política de cancelamento</h2>
           <p className="text-sm text-muted-foreground">
-            Cancelamentos com menos de 6 horas de antecedencia podem ter cobranca parcial.
+            Cancelamentos com menos de 6 horas de antecedência podem ter cobrança parcial.
           </p>
         </section>
 
         {!authSession.isAuthenticated && (
           <section className="card-kidario p-4 bg-warning/5 border-warning/30">
             <p className="text-sm text-foreground">
-              Para concluir o pagamento, entre na sua conta de responsavel.
+              Para concluir o pagamento, entre na sua conta de responsável.
             </p>
           </section>
         )}

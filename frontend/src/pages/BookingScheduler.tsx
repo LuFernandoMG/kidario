@@ -249,7 +249,7 @@ export default function BookingScheduler() {
         <div className="px-4 pt-10">
           <div className="card-kidario p-6 text-center">
             <p className="text-foreground font-medium">
-              {isLoadingRemote ? "Carregando professora..." : "Professora nao encontrada."}
+              {isLoadingRemote ? "Carregando professora..." : "Professora não encontrada."}
             </p>
             <Link to="/explorar" className="text-primary text-sm font-medium hover:underline mt-3 inline-block">
               Voltar para explorar
@@ -313,7 +313,7 @@ export default function BookingScheduler() {
         </section>
 
         <section className="card-kidario p-4 space-y-3">
-          <h3 className="font-display text-lg font-semibold text-foreground">Duracao da aula</h3>
+          <h3 className="font-display text-lg font-semibold text-foreground">Duração da aula</h3>
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">{lessonDurationMinutes} minutos</span>
           </p>
@@ -322,7 +322,7 @@ export default function BookingScheduler() {
         <section className="card-kidario p-4 space-y-3">
           <h3 className="font-display text-lg font-semibold text-foreground">Selecione o dia</h3>
           {!availability.length && (
-            <p className="text-sm text-muted-foreground">Sem horarios disponiveis para esta professora.</p>
+            <p className="text-sm text-muted-foreground">Sem horários disponíveis para esta professora.</p>
           )}
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide [&::-webkit-scrollbar]:hidden">
             {availability.map((day) => (
@@ -341,7 +341,7 @@ export default function BookingScheduler() {
           </div>
 
           <div className="pt-1">
-            <p className="text-sm text-muted-foreground mb-2">Horarios disponiveis</p>
+            <p className="text-sm text-muted-foreground mb-2">Horários disponíveis</p>
             <div className="flex flex-wrap gap-2">
               {timeOptions.map((time) => (
                 <button
@@ -366,9 +366,9 @@ export default function BookingScheduler() {
           rows={[
             { label: "Filho(a):", value: selectedChildName },
             { label: "Data:", value: selectedDayLabel },
-            { label: "Horario:", value: selectedTime || "-" },
+            { label: "Horário:", value: selectedTime || "-" },
             { label: "Modalidade:", value: selectedModality === "online" ? "Online" : "Presencial" },
-            { label: "Duracao:", value: `${lessonDurationMinutes} minutos` },
+            { label: "Duração:", value: `${lessonDurationMinutes} minutos` },
           ]}
           totalLabel="Estimativa"
           totalValue={`R$ ${estimatedPrice}`}

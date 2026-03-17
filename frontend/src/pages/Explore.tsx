@@ -135,7 +135,7 @@ export default function Explore() {
             className="text-center py-12"
           >
             <p className="text-muted-foreground">
-              Ainda nao temos professoras disponiveis por aqui. Que tal tentar novamente em instantes e conferir sua conexao com a internet?
+              Ainda não temos professoras disponíveis por aqui. Que tal tentar novamente em instantes e conferir sua conexão com a internet?
             </p>
           </motion.div>
         )}

@@ -57,7 +57,7 @@ export default function Agenda() {
           time: lesson.time,
           status: lesson.status,
           isOnline: lesson.modality === "online",
-          specialty: lesson.specialty || "Apoio pedagogico",
+          specialty: lesson.specialty || "Apoio pedagógico",
         }));
         setBookings(mapped);
       })

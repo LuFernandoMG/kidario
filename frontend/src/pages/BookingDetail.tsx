@@ -40,7 +40,7 @@ function mapBackendDetailToStoredBooking(detail: BookingDetailResponse, fallback
     teacherName: detail.teacher_name,
     teacherAvatar:
       resolveTeacherAvatarUrl(detail.teacher_avatar_url) || fallback?.teacherAvatar,
-    specialty: detail.specialty || fallback?.specialty || "Apoio pedagogico",
+    specialty: detail.specialty || fallback?.specialty || "Apoio pedagógico",
     dateLabel: detail.date_label,
     dateIso: detail.date_iso,
     time: detail.time,
@@ -54,9 +54,9 @@ function mapBackendDetailToStoredBooking(detail: BookingDetailResponse, fallback
 
 function getLocalFollowUpSnapshot(booking: StoredBooking): FollowUpSnapshot {
   return {
-    updatedAt: "Ultima atualizacao: em breve",
-    summary: "A professora ainda nao registrou devolutiva para esta aula.",
-    nextSteps: "Apos a conclusao da aula, a devolutiva pedagogica aparecera aqui.",
+    updatedAt: "Última atualização: em breve",
+    summary: "A professora ainda não registrou devolutiva para esta aula.",
+    nextSteps: "Após a conclusão da aula, a devolutiva pedagógica aparecerá aqui.",
     tags: [booking.specialty, "Acompanhamento"],
     attentionPoints: [],
   };
@@ -165,7 +165,7 @@ export default function BookingDetail() {
         <TopBar title="Detalhe da aula" showBack />
         <div className="px-4 pt-10">
           <div className="card-kidario p-6 text-center">
-            <p className="text-foreground font-medium">Nao encontramos esta aula na sua agenda.</p>
+            <p className="text-foreground font-medium">Não encontramos esta aula na sua agenda.</p>
             <Link to="/agenda" className="text-primary text-sm font-medium hover:underline mt-3 inline-block">
               Voltar para agenda
             </Link>
@@ -178,7 +178,7 @@ export default function BookingDetail() {
   const followUp: FollowUpSnapshot =
     backendDetail?.latest_follow_up
       ? {
-          updatedAt: `Ultima atualizacao: ${new Date(
+          updatedAt: `Última atualização: ${new Date(
             backendDetail.latest_follow_up.updated_at,
           ).toLocaleDateString("pt-BR")}`,
           summary: backendDetail.latest_follow_up.summary,
@@ -256,7 +256,7 @@ export default function BookingDetail() {
 
         if (activeModalMode === "cancel") {
           await cancelBooking(accessToken, booking.id, {
-            reason: payload.reason || "Cancelado pelo responsavel.",
+            reason: payload.reason || "Cancelado pelo responsável.",
           });
         }
 
@@ -285,7 +285,7 @@ export default function BookingDetail() {
         });
       } catch (error) {
         toast({
-          title: "Nao foi possivel atualizar a aula",
+          title: "Não foi possível atualizar a aula",
           description:
             error instanceof Error ? error.message : "Tente novamente em alguns instantes.",
         });
@@ -318,7 +318,7 @@ export default function BookingDetail() {
 
       if (!updatedBooking) {
         toast({
-          title: "Nao foi possivel atualizar a aula",
+          title: "Não foi possível atualizar a aula",
           description: "Tente novamente em alguns instantes.",
         });
         return;
@@ -355,7 +355,7 @@ export default function BookingDetail() {
 
         <section className="card-kidario p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-lg font-semibold text-foreground">Informacoes da aula</h2>
+            <h2 className="font-display text-lg font-semibold text-foreground">Informações da aula</h2>
             <BookingStatusPill status={booking.status} />
           </div>
 
@@ -394,7 +394,7 @@ export default function BookingDetail() {
 
           <p className="text-sm text-foreground leading-relaxed">{followUp.summary}</p>
           <p className="text-sm text-foreground leading-relaxed">
-            <span className="font-medium">Proximos passos:</span> {followUp.nextSteps}
+            <span className="font-medium">Próximos passos:</span> {followUp.nextSteps}
           </p>
 
           <div className="flex flex-wrap gap-2">
@@ -407,7 +407,7 @@ export default function BookingDetail() {
 
           {followUp.attentionPoints.length > 0 && (
             <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/5 p-3">
-              <p className="text-sm font-medium text-foreground">Pontos de atencao</p>
+              <p className="text-sm font-medium text-foreground">Pontos de atenção</p>
               <ul className="space-y-1">
                 {followUp.attentionPoints.map((point, index) => (
                   <li key={`${point}-${index}`} className="text-sm text-muted-foreground">

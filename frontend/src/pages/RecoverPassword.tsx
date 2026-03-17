@@ -34,7 +34,7 @@ export default function RecoverPassword() {
     <AuthPageLayout
       backTo="/login"
       title="Recuperar senha"
-      subtitle="Informe seu e-mail e enviaremos instrucoes para redefinir sua senha."
+      subtitle="Informe seu e-mail e enviaremos instruções para redefinir sua senha."
       contentContainerClassName="mt-8"
     >
       <motion.form
@@ -60,7 +60,7 @@ export default function RecoverPassword() {
         </div>
 
         <KidarioButton type="submit" variant="hero" size="xl" fullWidth disabled={isSubmitting}>
-          {isSubmitting ? "Enviando..." : "Enviar link de recuperacao"}
+          {isSubmitting ? "Enviando..." : "Enviar link de recuperação"}
         </KidarioButton>
       </motion.form>
 
@@ -82,7 +82,7 @@ export default function RecoverPassword() {
         >
           <MailCheck className="w-5 h-5 text-success mt-0.5" />
           <p className="text-sm text-foreground">
-            Se o e-mail existir na plataforma, voce recebera as instrucoes em instantes.
+            Se o e-mail existir na plataforma, você receberá as instruções em instantes.
           </p>
         </motion.div>
       )}
