@@ -13,6 +13,8 @@ This folder was created as part of `MOB-001` and currently contains:
 - Mobile shell that loads the existing `frontend`
 - dedicated shell entry screens for shared, parent and teacher routes
 - development diagnostics for frontend reachability and WebView prerequisites
+- validation coverage for wrapped auth, parent and teacher flows
+- a native boot splash while the shell initializes
 
 Current status:
 
@@ -72,3 +74,10 @@ The development check now also validates:
 - the shell URL configured in `EXPO_PUBLIC_FRONTEND_WEB_URL`
 - that the local frontend responds over HTTP
 - that `react-native-webview` is installed
+
+## Validation Coverage
+
+The current validation matrix is documented in:
+
+- [mobile-shell-validation.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-shell-validation.md)
+- [mobile-shell-limitations.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-shell-limitations.md)

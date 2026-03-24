@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { Screen } from "@/components/common/Screen";
+import { FrontendShellLoading } from "@/components/webview/FrontendShellLoading";
 import { FrontendShellStatus } from "@/components/webview/FrontendShellStatus";
 import { buildFrontendUrl } from "@/lib/frontendWeb";
 import { theme } from "@/theme";
@@ -84,13 +85,7 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
           style={styles.frame}
           title="Kidario Frontend Shell"
         />
-        {status === "loading" ? (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={theme.colors.accent} />
-            <Text style={styles.loadingTitle}>Loading Kidario</Text>
-            <Text style={styles.loadingBody}>Waiting for the frontend shell to respond.</Text>
-          </View>
-        ) : null}
+        {status === "loading" ? <FrontendShellLoading message="Waiting for the frontend shell to respond." mode="inline" /> : null}
       </View>
     </Screen>
   );
@@ -135,25 +130,5 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     borderWidth: 0,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing.md,
-    backgroundColor: "rgba(255, 250, 243, 0.94)",
-    paddingHorizontal: theme.spacing.xl,
-  },
-  loadingTitle: {
-    fontSize: theme.typography.link.fontSize,
-    lineHeight: theme.typography.link.lineHeight,
-    fontWeight: theme.typography.link.fontWeight,
-    color: theme.colors.textPrimary,
-  },
-  loadingBody: {
-    fontSize: theme.typography.body.fontSize,
-    lineHeight: theme.typography.body.lineHeight,
-    color: theme.colors.textSecondary,
-    textAlign: "center",
   },
 });

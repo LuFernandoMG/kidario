@@ -1,15 +1,14 @@
 import logging
 import json
-import ssl
 from collections import deque
 from threading import Lock
 from time import monotonic
 from urllib import error, parse, request
 
-import certifi
 from fastapi import Request
 
 from app.core.config import Settings
+from app.core.ssl_utils import build_ssl_context
 from app.schemas.auth import AuthSignupRequest
 
 logger = logging.getLogger(__name__)
@@ -115,7 +114,7 @@ def _verify_captcha_token(*, settings: Settings, token: str, client_ip: str) -> 
         method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    ssl_context = build_ssl_context()
 
     try:
         with request.urlopen(

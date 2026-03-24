@@ -1,14 +1,13 @@
 import importlib
 import mimetypes
-import ssl
 from urllib import error, parse, request
 from uuid import uuid4
 
-import certifi
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.core.security import AuthUser
+from app.core.ssl_utils import build_ssl_context
 from app.schemas.profiles import TeacherProfilePatch
 from app.services.profile_service import patch_teacher_profile
 from app.services.storage_url_service import resolve_teacher_profile_photo_url
@@ -95,7 +94,7 @@ def _upload_via_supabase_storage_rest(
             "Content-Type": content_type or "application/octet-stream",
         },
     )
-    ssl_context = ssl.create_default_context(cafile=settings.supabase_jwks_ca_bundle or certifi.where())
+    ssl_context = build_ssl_context(settings.supabase_jwks_ca_bundle)
 
     try:
         with request.urlopen(req, timeout=settings.supabase_http_timeout_seconds, context=ssl_context):
@@ -123,7 +122,7 @@ def _delete_via_supabase_storage_rest(*, settings: Settings, bucket: str, object
             "Authorization": f"Bearer {settings.supabase_service_role_key}",
         },
     )
-    ssl_context = ssl.create_default_context(cafile=settings.supabase_jwks_ca_bundle or certifi.where())
+    ssl_context = build_ssl_context(settings.supabase_jwks_ca_bundle)
     try:
         with request.urlopen(req, timeout=settings.supabase_http_timeout_seconds, context=ssl_context):
             return

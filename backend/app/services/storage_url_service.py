@@ -1,11 +1,9 @@
 import importlib
 import json
-import ssl
 from urllib import error, parse, request
 
-import certifi
-
 from app.core.config import Settings
+from app.core.ssl_utils import build_ssl_context
 
 
 def _get_boto3_module():
@@ -98,7 +96,7 @@ def _create_supabase_signed_url(settings: Settings, object_key: str) -> str | No
             "Content-Type": "application/json",
         },
     )
-    ssl_context = ssl.create_default_context(cafile=settings.supabase_jwks_ca_bundle or certifi.where())
+    ssl_context = build_ssl_context(settings.supabase_jwks_ca_bundle)
 
     try:
         with request.urlopen(req, timeout=settings.supabase_http_timeout_seconds, context=ssl_context) as response:

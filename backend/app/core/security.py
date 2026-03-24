@@ -2,10 +2,10 @@ import importlib
 from functools import lru_cache
 import ssl
 
-import certifi
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.ssl_utils import build_ssl_context
 
 SUPPORTED_JWKS_ALGORITHMS = {"RS256", "ES256", "EDDSA"}
 
@@ -37,10 +37,9 @@ class SupabaseJWTVerifier:
 
     @staticmethod
     def _build_ssl_context(ca_bundle_path: str | None) -> ssl.SSLContext:
-        # Use explicit CA bundle if configured; otherwise use certifi to avoid
-        # local trust-store issues when fetching Supabase JWKS.
-        cafile = ca_bundle_path or certifi.where()
-        return ssl.create_default_context(cafile=cafile)
+        # Prefer an explicit CA bundle when configured, but fall back cleanly if
+        # a local path becomes stale after a Python/venv upgrade.
+        return build_ssl_context(ca_bundle_path)
 
     def _get_jwk_client(self):
         if self._jwk_client is None:

@@ -7,12 +7,12 @@ import ssl
 from dataclasses import dataclass
 from urllib import error, request
 
-import certifi
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.core.ssl_utils import build_ssl_context
 
 
 @dataclass
@@ -135,9 +135,7 @@ def _generate_with_openai(
         },
         method="POST",
     )
-    ssl_context = ssl.create_default_context(
-        cafile=settings.teacher_activity_llm_ca_bundle or certifi.where()
-    )
+    ssl_context = build_ssl_context(settings.teacher_activity_llm_ca_bundle)
 
     try:
         with request.urlopen(

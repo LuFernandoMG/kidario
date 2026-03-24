@@ -1,14 +1,13 @@
 import json
-import ssl
 from typing import Any
 from urllib import error, request
 from uuid import UUID
 
-import certifi
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.core.security import AuthUser
+from app.core.ssl_utils import build_ssl_context
 from app.schemas.auth import AuthSignupRequest
 from app.services.profile_service import (
     ProfileConflictError,
@@ -36,7 +35,7 @@ def _http_json_request(
 ) -> tuple[int, dict[str, Any]]:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = request.Request(url=url, data=data, method=method, headers=headers)
-    ssl_context = ssl.create_default_context(cafile=ca_bundle_path or certifi.where())
+    ssl_context = build_ssl_context(ca_bundle_path)
 
     try:
         with request.urlopen(req, timeout=timeout_seconds, context=ssl_context) as response:

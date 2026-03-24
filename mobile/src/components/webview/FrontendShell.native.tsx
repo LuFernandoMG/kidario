@@ -1,12 +1,11 @@
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { Linking } from "react-native";
 import { WebView } from "react-native-webview";
 import type { WebViewErrorEvent, WebViewHttpErrorEvent } from "react-native-webview/lib/WebViewTypes";
 import { useState } from "react";
 
-import { Screen } from "@/components/common/Screen";
+import { FrontendShellLoading } from "@/components/webview/FrontendShellLoading";
 import { FrontendShellStatus } from "@/components/webview/FrontendShellStatus";
 import { buildFrontendUrl, isInternalFrontendUrl, isOpenableExternalUrl } from "@/lib/frontendWeb";
-import { theme } from "@/theme";
 
 interface FrontendShellProps {
   path?: string;
@@ -85,40 +84,8 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
       source={{ uri: targetUrl }}
       startInLoadingState
       renderLoading={() => (
-        <Screen>
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={theme.colors.accent} />
-            <Text style={styles.title}>Loading Kidario</Text>
-            <Text style={styles.body}>{message}</Text>
-            <Text style={styles.url}>{targetUrl}</Text>
-          </View>
-        </Screen>
+        <FrontendShellLoading message={message} targetUrl={targetUrl} />
       )}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  center: {
-    alignItems: "center",
-    gap: theme.spacing.md,
-  },
-  title: {
-    fontSize: theme.typography.title.fontSize,
-    lineHeight: theme.typography.title.lineHeight,
-    fontWeight: theme.typography.title.fontWeight,
-    color: theme.colors.textPrimary,
-  },
-  body: {
-    fontSize: theme.typography.body.fontSize,
-    lineHeight: theme.typography.body.lineHeight,
-    color: theme.colors.textSecondary,
-    textAlign: "center",
-  },
-  url: {
-    fontSize: theme.typography.body.fontSize,
-    lineHeight: theme.typography.body.lineHeight,
-    color: theme.colors.accent,
-    textAlign: "center",
-  },
-});

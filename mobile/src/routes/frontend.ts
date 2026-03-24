@@ -10,6 +10,7 @@ export const frontendRoutes = {
     explore: "/explorar",
     agenda: "/agenda",
     profile: "/perfil",
+    chatTemplate: "/chat/:threadId",
   },
   teacher: {
     home: "/inicio",
@@ -20,3 +21,7 @@ export const frontendRoutes = {
     privateSignup: "/convites/professoras/cadastro-privado-kidario-a8k3m2",
   },
 } as const;
+
+export function buildFrontendChatPath(threadId: string) {
+  return `/chat/${encodeURIComponent(threadId)}`;
+}
