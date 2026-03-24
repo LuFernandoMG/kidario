@@ -81,3 +81,5 @@ The current validation matrix is documented in:
 
 - [mobile-shell-validation.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-shell-validation.md)
 - [mobile-shell-limitations.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-shell-limitations.md)
+- [mobile-upload-bridge.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-upload-bridge.md)
+- [mobile-push-notifications-evaluation.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-push-notifications-evaluation.md)

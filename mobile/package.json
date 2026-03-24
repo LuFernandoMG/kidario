@@ -15,8 +15,10 @@
     "check": "npm run dev:check"
   },
   "dependencies": {
+    "@react-native-community/netinfo": "^11.5.2",
     "expo": "~55.0.8",
     "expo-constants": "~55.0.9",
+    "expo-document-picker": "~55.0.9",
     "expo-linking": "~55.0.8",
     "expo-router": "~55.0.7",
     "expo-status-bar": "~55.0.4",

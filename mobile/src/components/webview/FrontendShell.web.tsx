@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Screen } from "@/components/common/Screen";
+import { FrontendConnectivityBanner } from "@/components/webview/FrontendConnectivityBanner";
 import { FrontendShellLoading } from "@/components/webview/FrontendShellLoading";
 import { FrontendShellStatus } from "@/components/webview/FrontendShellStatus";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { buildFrontendUrl } from "@/lib/frontendWeb";
 import { theme } from "@/theme";
 
@@ -15,9 +17,8 @@ const IFrame = "iframe" as unknown as React.ComponentType<Record<string, unknown
 
 export function FrontendShell({ path = "/" }: FrontendShellProps) {
   const [reloadKey, setReloadKey] = useState(0);
-  const [status, setStatus] = useState<"loading" | "ready" | "error" | "offline">(() =>
-    typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "loading",
-  );
+  const [status, setStatus] = useState<"loading" | "ready" | "error" | "offline">("loading");
+  const networkStatus = useNetworkStatus();
   const targetUrl = buildFrontendUrl(path);
 
   useEffect(() => {
@@ -33,21 +34,16 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
   }, [reloadKey, targetUrl]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
+    if (networkStatus === "offline") {
+      setStatus("offline");
+      return;
     }
 
-    const handleOnline = () => setStatus("loading");
-    const handleOffline = () => setStatus("offline");
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+    if (networkStatus === "reconnecting") {
+      setStatus("loading");
+      setReloadKey((current) => current + 1);
+    }
+  }, [networkStatus]);
 
   if (status === "error" || status === "offline") {
     return (
@@ -71,6 +67,7 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
 
   return (
     <Screen contentStyle={styles.screenContent}>
+      <FrontendConnectivityBanner status={networkStatus} />
       <View style={styles.header}>
         <Text style={styles.eyebrow}>WebView First</Text>
         <Text style={styles.title}>Kidario Frontend Shell</Text>

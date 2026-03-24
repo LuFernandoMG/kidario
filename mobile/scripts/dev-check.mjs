@@ -171,6 +171,8 @@ const checks = [
 printSection("Shell");
 const shellChecks = [
   checkFile("react-native-webview", resolve(root, "node_modules/react-native-webview/package.json")),
+  checkFile("expo-document-picker", resolve(root, "node_modules/expo-document-picker/package.json")),
+  checkFile("@react-native-community/netinfo", resolve(root, "node_modules/@react-native-community/netinfo/package.json")),
   await checkFrontendAvailability(frontendUrl),
 ];
 

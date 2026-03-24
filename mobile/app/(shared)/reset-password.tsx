@@ -1,6 +1,16 @@
+import { useLocalSearchParams } from "expo-router";
+
 import { FrontendShellScreen } from "@/components/webview/FrontendShellScreen";
-import { frontendRoutes } from "@/routes/frontend";
+import { buildFrontendPathWithQuery, frontendRoutes } from "@/routes/frontend";
 
 export default function ResetPasswordScreen() {
-  return <FrontendShellScreen path={frontendRoutes.shared.resetPassword} />;
+  const params = useLocalSearchParams();
+  return (
+    <FrontendShellScreen
+      path={buildFrontendPathWithQuery(
+        frontendRoutes.shared.resetPassword,
+        params as Record<string, string | string[] | undefined>,
+      )}
+    />
+  );
 }
