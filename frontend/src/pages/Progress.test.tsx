@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
-import Progress from "@/pages/Progress";
+import Progress from "@/pages/parent/Progress";
 
 const mockGetSupabaseAccessToken = vi.fn();
 const mockGetParentProfile = vi.fn();
@@ -12,11 +12,11 @@ vi.mock("@/lib/authSession", () => ({
   getSupabaseAccessToken: () => mockGetSupabaseAccessToken(),
 }));
 
-vi.mock("@/domains/parent/api/backendParentProfiles", () => ({
+vi.mock("@/data/api/parentProfiles", () => ({
   getParentProfile: (...args: unknown[]) => mockGetParentProfile(...args),
 }));
 
-vi.mock("@/lib/backendBookings", () => ({
+vi.mock("@/data/api/bookings", () => ({
   getParentAgenda: (...args: unknown[]) => mockGetParentAgenda(...args),
   getBookingDetail: (...args: unknown[]) => mockGetBookingDetail(...args),
 }));

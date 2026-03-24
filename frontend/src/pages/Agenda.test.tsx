@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
-import Agenda from "@/pages/Agenda";
+import Agenda from "@/pages/parent/Agenda";
 
 const mockGetAuthSession = vi.fn();
 const mockGetSupabaseAccessToken = vi.fn();
@@ -12,7 +12,7 @@ vi.mock("@/lib/authSession", () => ({
   getSupabaseAccessToken: () => mockGetSupabaseAccessToken(),
 }));
 
-vi.mock("@/lib/backendBookings", () => ({
+vi.mock("@/data/api/bookings", () => ({
   getParentAgenda: (...args: unknown[]) => mockGetParentAgenda(...args),
 }));
 

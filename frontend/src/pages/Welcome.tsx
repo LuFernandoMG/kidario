@@ -7,13 +7,14 @@ import {
   getAuthSession,
   getRecoveryTokensFromUrlHash,
 } from "@/lib/authSession";
-import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
-import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/lib/privateRoutes";
+import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/routes/admin";
+import { EXPLORE_PATH, LOGIN_PATH, RESET_PASSWORD_PATH, SIGNUP_PATH } from "@/routes/paths";
+import { TEACHER_CONTROL_CENTER_PATH } from "@/routes/teacher";
 
 const ROTATING_HIGHLIGHTS = [
-  "Professoras verificadas e experientes",
+  "Profissionais verificados e experientes",
   "Agende em minutos",
-  "Acompanhe a evolução com clareza",
+  "Acompanhe o processo de perto",
 ];
 
 export default function Welcome() {
@@ -37,7 +38,7 @@ export default function Welcome() {
   }, []);
     
   if (recoveryHash) {
-    return <Navigate to={`/redefinir-senha${recoveryHash}`} replace />;
+    return <Navigate to={`${RESET_PASSWORD_PATH}${recoveryHash}`} replace />;
   }
 
   const authSession = getAuthSession();
@@ -48,7 +49,7 @@ export default function Welcome() {
     if (authSession.role === "teacher") {
       return <Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />;
     }
-    return <Navigate to="/explorar" replace />;
+    return <Navigate to={EXPLORE_PATH} replace />;
   }
 
   return (
@@ -73,7 +74,7 @@ export default function Welcome() {
           >
             <h1 className="font-display text-6xl font-bold text-white">Kidario</h1>
             <p className="mt-3 text-md font-light text-white/95">
-              Encontre a pedagoga ideal para o seu filho.
+              Encontre a professora ideal para o seu filho.
             </p>
           </motion.div>
 
@@ -101,18 +102,18 @@ export default function Welcome() {
           </div>
 
           <KidarioButton asChild variant="hero" size="xl" fullWidth>
-            <Link to="/explorar">
+            <Link to={EXPLORE_PATH}>
               Explorar
               <ArrowRight className="w-5 h-5" />
             </Link>
           </KidarioButton>
 
           <div className="flex items-center justify-center gap-4 pt-2">
-            <Link to="/login" className="text-sm font-medium text-white hover:underline">
+            <Link to={LOGIN_PATH} className="text-sm font-medium text-white hover:underline">
               Entrar
             </Link>
             <span className="text-white/70">•</span>
-            <Link to="/cadastro" className="text-sm font-medium text-white hover:underline">
+            <Link to={SIGNUP_PATH} className="text-sm font-medium text-white hover:underline">
               Criar conta
             </Link>
           </div>

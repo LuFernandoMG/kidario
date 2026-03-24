@@ -1,0 +1,2 @@
+- Capitalize the first letter in the date at appointment form
+- keep first column and row static in the weekly agenda

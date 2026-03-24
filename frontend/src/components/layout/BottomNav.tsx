@@ -7,9 +7,10 @@ import {
   TEACHER_AGENDA_PATH,
   TEACHER_CONTROL_CENTER_PATH,
   TEACHER_FINANCE_PATH,
+  TEACHER_PRIVATE_SIGNUP_PATH,
   TEACHER_STUDENTS_PATH,
-} from "@/domains/teacher/lib/teacherRoutes";
-import { TEACHER_PRIVATE_SIGNUP_PATH } from "@/lib/privateRoutes";
+} from "@/routes/teacher";
+import { LOGIN_PATH, ROOT_PATH, SIGNUP_PATH } from "@/routes/paths";
 
 interface NavItem {
   path: string;
@@ -38,7 +39,7 @@ export function BottomNav() {
   const navItems = authSession.role === "teacher" ? teacherNavItems : parentNavItems;
 
   // Don't show on auth pages
-  const hideOnPaths = ["/", "/login", "/cadastro", TEACHER_PRIVATE_SIGNUP_PATH];
+  const hideOnPaths = [ROOT_PATH, LOGIN_PATH, SIGNUP_PATH, TEACHER_PRIVATE_SIGNUP_PATH];
   if (hideOnPaths.includes(location.pathname)) return null;
 
   return (

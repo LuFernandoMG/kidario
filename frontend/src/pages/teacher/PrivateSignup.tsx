@@ -1,0 +1,1242 @@
+import { type KeyboardEvent, type ReactNode, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ArrowLeft, Eye, EyeOff, Plus, Trash2, X } from "lucide-react";
+import { KidarioButton } from "@/components/ui/KidarioButton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Chip } from "@/components/ui/Chip";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SignupStepCarousel, type SignupStep } from "@/components/forms/SignupStepCarousel";
+import {
+  WeeklyAvailabilityCalendar,
+  type WeeklyAvailabilitySlot,
+} from "@/components/teacher/WeeklyAvailabilityCalendar";
+import { uploadTeacherProfilePhoto } from "@/data/api/teacherProfiles";
+import { signUpWithBackend } from "@/data/api/auth";
+import { applyBackendSignupSession } from "@/lib/authSession";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
+import { ROOT_PATH } from "@/routes/paths";
+import { TEACHER_CONTROL_CENTER_PATH } from "@/routes/teacher";
+
+interface AcademicFormation {
+  degreeType: string;
+  courseName: string;
+  institution: string;
+  completionYear: string;
+}
+
+interface ProfessionalExperience {
+  institution: string;
+  role: string;
+  responsibilities: string;
+  periodFrom: string;
+  periodTo: string;
+  currentPosition: boolean;
+}
+
+interface TeacherSignupFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phone: string;
+  cpf: string;
+  city: string;
+  state: string;
+  modality: string;
+  miniBio: string;
+  hourlyRate: string;
+  lessonDuration: string;
+  profilePhoto: File | null;
+  requestExperienceAnonymity: boolean;
+  acceptTerms: boolean;
+  specialties: string[];
+  formations: AcademicFormation[];
+  experiences: ProfessionalExperience[];
+  weeklyAvailability: WeeklyAvailabilitySlot[];
+}
+
+const steps: SignupStep[] = [
+  {
+    title: "Perfil profissional",
+    subtitle: "Dados, formação e experiência",
+  },
+  {
+    title: "Agenda semanal",
+    subtitle: "Horários disponíveis para atendimento",
+  },
+];
+
+const states = [
+  "AC",
+  "AL",
+  "AP",
+  "AM",
+  "BA",
+  "CE",
+  "DF",
+  "ES",
+  "GO",
+  "MA",
+  "MT",
+  "MS",
+  "MG",
+  "PA",
+  "PB",
+  "PR",
+  "PE",
+  "PI",
+  "RJ",
+  "RN",
+  "RS",
+  "RO",
+  "RR",
+  "SC",
+  "SP",
+  "SE",
+  "TO",
+];
+
+const degreeTypes = [
+  { value: "graduacao", label: "Graduação" },
+  { value: "pos-graduacao", label: "Pós-graduação" },
+  { value: "especializacao", label: "Especialização" },
+  { value: "mestrado", label: "Mestrado" },
+  { value: "doutorado", label: "Doutorado" },
+  { value: "curso-livre", label: "Curso livre / certificação" },
+];
+
+const durationOptions = [
+  { value: "30", label: "30 minutos" },
+  { value: "45", label: "45 minutos" },
+  { value: "60", label: "60 minutos" },
+  { value: "75", label: "75 minutos" },
+  { value: "90", label: "90 minutos" },
+  { value: "120", label: "120 minutos" },
+];
+
+const dayOfWeekToNumber: Record<string, number> = {
+  segunda: 0,
+  terca: 1,
+  quarta: 2,
+  quinta: 3,
+  sexta: 4,
+  sabado: 5,
+  domingo: 6,
+};
+
+function mapDayOfWeek(dayOfWeek: string): number {
+  const value = dayOfWeekToNumber[dayOfWeek];
+  if (value === undefined) {
+    throw new Error(`Dia da semana inválido: ${dayOfWeek}`);
+  }
+  return value;
+}
+
+const createEmptyFormation = (): AcademicFormation => ({
+  degreeType: "",
+  courseName: "",
+  institution: "",
+  completionYear: "",
+});
+
+const createEmptyExperience = (): ProfessionalExperience => ({
+  institution: "",
+  role: "",
+  responsibilities: "",
+  periodFrom: "",
+  periodTo: "",
+  currentPosition: false,
+});
+
+const extractDigits = (value: string, maxLength: number): string =>
+  value.replace(/\D/g, "").slice(0, maxLength);
+
+const formatPhoneMask = (value: string): string => {
+  const digits = extractDigits(value, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)} ${digits.slice(7)}`;
+};
+
+const formatCpfMask = (value: string): string => {
+  const digits = extractDigits(value, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
+const normalizeEmailInput = (value: string): string => value.replace(/\s+/g, "");
+
+const canonicalizeEmail = (value: string): string => normalizeEmailInput(value).toLowerCase();
+const PROFESSIONAL_REGISTRATION_DEFAULT = "12345";
+
+const isValidEmail = (value: string): boolean => {
+  const normalized = canonicalizeEmail(value);
+  if (!normalized) return false;
+
+  const parts = normalized.split("@");
+  if (parts.length !== 2) return false;
+
+  const [localPart, domainPart] = parts;
+  if (!localPart || !domainPart || domainPart.startsWith(".") || domainPart.endsWith(".")) {
+    return false;
+  }
+
+  const labels = domainPart.split(".");
+  if (labels.length < 2) return false;
+
+  const tld = labels[labels.length - 1];
+  if (!/^[A-Za-z]{2,}$/.test(tld)) return false;
+
+  return labels.every(
+    (label) =>
+      label.length > 0 &&
+      /^[A-Za-z0-9-]+$/.test(label) &&
+      !label.startsWith("-") &&
+      !label.endsWith("-"),
+  );
+};
+
+export default function TeacherPrivateSignup() {
+  const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [honeypot, setHoneypot] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [specialtyInput, setSpecialtyInput] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState<TeacherSignupFormData>({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    phone: "",
+    cpf: "",
+    city: "",
+    state: "",
+    modality: "",
+    miniBio: "",
+    hourlyRate: "",
+    lessonDuration: "",
+    profilePhoto: null,
+    requestExperienceAnonymity: false,
+    acceptTerms: false,
+    specialties: [],
+    formations: [createEmptyFormation()],
+    experiences: [],
+    weeklyAvailability: [],
+  });
+  const captchaEnabledFlag = import.meta.env.VITE_SIGNUP_CAPTCHA_ENABLED === "true";
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || "";
+  const isCaptchaConfigured = Boolean(turnstileSiteKey);
+  const requireCaptcha = captchaEnabledFlag && isCaptchaConfigured;
+
+  const setField = (
+    field: keyof TeacherSignupFormData,
+    value: string | File | null | string[] | boolean,
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: value as never }));
+  };
+
+  const handleEmailChange = (value: string) => {
+    const normalized = normalizeEmailInput(value);
+    setField("email", normalized);
+    setErrors((prev) => {
+      if (!prev.email) return prev;
+      const next = { ...prev };
+      if (!normalized) {
+        next.email = "Informe o e-mail.";
+      } else if (!isValidEmail(normalized)) {
+        next.email = "Informe um e-mail válido no formato email@dominio.ext.";
+      } else {
+        delete next.email;
+      }
+      return next;
+    });
+  };
+
+  const handleEmailBlur = () => {
+    const canonicalEmail = canonicalizeEmail(formData.email);
+    if (canonicalEmail !== formData.email) {
+      setField("email", canonicalEmail);
+    }
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (!canonicalEmail) {
+        next.email = "Informe o e-mail.";
+      } else if (!isValidEmail(canonicalEmail)) {
+        next.email = "Informe um e-mail válido no formato email@dominio.ext.";
+      } else {
+        delete next.email;
+      }
+      return next;
+    });
+  };
+
+  const addSpecialty = (rawValue: string) => {
+    const value = rawValue.trim();
+    if (!value) return;
+
+    const exists = formData.specialties.some(
+      (specialty) => specialty.toLowerCase() === value.toLowerCase(),
+    );
+    if (exists) return;
+
+    setFormData((prev) => ({ ...prev, specialties: [...prev.specialties, value] }));
+    setSpecialtyInput("");
+  };
+
+  const removeSpecialty = (specialtyToRemove: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      specialties: prev.specialties.filter((specialty) => specialty !== specialtyToRemove),
+    }));
+  };
+
+  const handleSpecialtyKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addSpecialty(specialtyInput.replace(",", ""));
+    }
+  };
+
+  const updateFormation = (index: number, field: keyof AcademicFormation, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      formations: prev.formations.map((formation, formationIndex) =>
+        formationIndex === index ? { ...formation, [field]: value } : formation,
+      ),
+    }));
+  };
+
+  const addFormation = () => {
+    setFormData((prev) => ({
+      ...prev,
+      formations: [...prev.formations, createEmptyFormation()],
+    }));
+  };
+
+  const removeFormation = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      formations: prev.formations.filter((_, formationIndex) => formationIndex !== index),
+    }));
+  };
+
+  const updateExperience = (
+    index: number,
+    field: keyof ProfessionalExperience,
+    value: string | boolean,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      experiences: prev.experiences.map((experience, experienceIndex) =>
+        experienceIndex === index ? { ...experience, [field]: value } : experience,
+      ),
+    }));
+  };
+
+  const addExperience = () => {
+    setFormData((prev) => ({
+      ...prev,
+      experiences: [...prev.experiences, createEmptyExperience()],
+    }));
+  };
+
+  const removeExperience = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      experiences: prev.experiences.filter((_, experienceIndex) => experienceIndex !== index),
+    }));
+  };
+
+  const validateStep = (step: number) => {
+    const nextErrors: Record<string, string> = {};
+
+    if (step === 0) {
+      const email = canonicalizeEmail(formData.email);
+
+      if (!formData.firstName.trim()) nextErrors.firstName = "Informe o nome.";
+      if (!formData.lastName.trim()) nextErrors.lastName = "Informe o sobrenome.";
+      if (!email) nextErrors.email = "Informe o e-mail.";
+      if (email && !isValidEmail(email)) {
+        nextErrors.email = "Informe um e-mail válido no formato email@dominio.ext.";
+      }
+      if (!formData.password) nextErrors.password = "Crie uma senha.";
+      if (formData.password && formData.password.length < 8) {
+        nextErrors.password = "A senha deve ter pelo menos 8 caracteres.";
+      }
+      if (!formData.confirmPassword) nextErrors.confirmPassword = "Repita a senha.";
+      if (
+        formData.password &&
+        formData.confirmPassword &&
+        formData.password !== formData.confirmPassword
+      ) {
+        nextErrors.confirmPassword = "As senhas não coincidem.";
+      }
+      if (!formData.phone.trim()) nextErrors.phone = "Informe o telefone.";
+      if (formData.phone && formData.phone.length < 11) {
+        nextErrors.phone = "Informe o telefone completo com DDD.";
+      }
+      if (!formData.cpf.trim()) nextErrors.cpf = "Informe o CPF.";
+      if (formData.cpf && formData.cpf.length < 11) {
+        nextErrors.cpf = "Informe o CPF completo.";
+      }
+      if (!formData.city.trim()) nextErrors.city = "Informe a cidade.";
+      if (!formData.state) nextErrors.state = "Selecione a UF.";
+      if (!formData.modality) nextErrors.modality = "Selecione a modalidade.";
+      if (!formData.lessonDuration) nextErrors.lessonDuration = "Selecione a duração média da aula.";
+      if (!formData.hourlyRate.trim()) nextErrors.hourlyRate = "Informe o custo por hora.";
+      if (!formData.profilePhoto) nextErrors.profilePhoto = "Adicione uma foto de perfil.";
+      if (!formData.miniBio.trim()) nextErrors.miniBio = "Informe uma minibio profissional.";
+      if (formData.specialties.length === 0) {
+        nextErrors.specialties = "Adicione pelo menos uma especialidade.";
+      }
+      if (!formData.acceptTerms) {
+        nextErrors.acceptTerms = "Você precisa aceitar os termos e condições.";
+      }
+      if (captchaEnabledFlag && !isCaptchaConfigured) {
+        nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
+      }
+      if (requireCaptcha && !captchaToken) {
+        nextErrors.captcha = "Confirme que você não é um robô.";
+      }
+
+      formData.formations.forEach((formation, index) => {
+        const prefix = `formations.${index}`;
+        if (!formation.degreeType) nextErrors[`${prefix}.degreeType`] = "Selecione o tipo.";
+        if (!formation.courseName.trim()) nextErrors[`${prefix}.courseName`] = "Informe o curso.";
+        if (!formation.institution.trim()) nextErrors[`${prefix}.institution`] = "Informe a instituição.";
+      });
+
+      formData.experiences.forEach((experience, index) => {
+        const prefix = `experiences.${index}`;
+        if (!experience.institution.trim()) nextErrors[`${prefix}.institution`] = "Informe a escola/instituição.";
+        if (!experience.role.trim()) nextErrors[`${prefix}.role`] = "Informe o cargo.";
+        if (!experience.periodFrom) nextErrors[`${prefix}.periodFrom`] = "Informe o início.";
+        if (!experience.currentPosition && !experience.periodTo) {
+          nextErrors[`${prefix}.periodTo`] = "Informe o término.";
+        }
+        if (!experience.responsibilities.trim()) {
+          nextErrors[`${prefix}.responsibilities`] = "Descreva o que fazia.";
+        }
+      });
+    }
+
+    if (step === 1) {
+      if (formData.weeklyAvailability.length === 0) {
+        nextErrors.weeklyAvailability = "Adicione pelo menos um horário semanal.";
+      }
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleNextStep = () => {
+    if (!validateStep(currentStep)) return;
+    setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+  };
+
+  const handleBackStep = () => {
+    setErrors({});
+    setCurrentStep((prev) => Math.max(prev - 1, 0));
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitError("");
+
+    if (currentStep < steps.length - 1) {
+      handleNextStep();
+      return;
+    }
+
+    if (!validateStep(currentStep)) return;
+
+    setIsLoading(true);
+
+    try {
+      const email = canonicalizeEmail(formData.email);
+      const buildTeacherProfilePayload = (profilePhotoFileName: string | null) => ({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phone,
+        cpf: formData.cpf,
+        professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
+        city: formData.city,
+        state: formData.state,
+        modality: formData.modality,
+        mini_bio: formData.miniBio,
+        hourly_rate: Number(formData.hourlyRate),
+        lesson_duration_minutes: Number(formData.lessonDuration),
+        profile_photo_file_name: profilePhotoFileName,
+        request_experience_anonymity: formData.requestExperienceAnonymity,
+        specialties_ops: {
+          add: formData.specialties,
+          remove: [],
+        },
+        formations_ops: {
+          upsert: formData.formations.map((formation) => ({
+            degree_type: formation.degreeType,
+            course_name: formation.courseName,
+            institution: formation.institution,
+            completion_year: formation.completionYear || null,
+          })),
+          delete_ids: [],
+        },
+        experiences_ops: {
+          upsert: formData.experiences.map((experience) => ({
+            institution: experience.institution,
+            role: experience.role,
+            responsibilities: experience.responsibilities,
+            period_from: experience.periodFrom,
+            period_to: experience.currentPosition ? null : experience.periodTo || null,
+            current_position: experience.currentPosition,
+          })),
+          delete_ids: [],
+        },
+        availability_ops: {
+          upsert: formData.weeklyAvailability.map((slot) => ({
+            day_of_week: mapDayOfWeek(slot.dayOfWeek),
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+          })),
+          delete_ids: [],
+        },
+      });
+
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+      const result = await signUpWithBackend({
+        email,
+        password: formData.password,
+        full_name: fullName,
+        role: "teacher",
+        teacher_profile: buildTeacherProfilePayload(null),
+        captcha_token: captchaToken || undefined,
+        honeypot,
+        metadata: {
+          signup_source: "teacher_private_invite",
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: formData.phone,
+          cpf: formData.cpf,
+          professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
+          city: formData.city,
+          state: formData.state,
+          modality: formData.modality,
+          mini_bio: formData.miniBio,
+          hourly_rate: Number(formData.hourlyRate),
+          lesson_duration_minutes: Number(formData.lessonDuration),
+          profile_photo_file_name: null,
+          request_experience_anonymity: formData.requestExperienceAnonymity,
+          specialties: formData.specialties,
+          formations: formData.formations,
+          experiences: formData.experiences,
+          weekly_availability: formData.weeklyAvailability,
+        },
+      });
+
+      applyBackendSignupSession({
+        role: result.role,
+        email,
+        fullName,
+        accessToken: result.access_token ?? undefined,
+        refreshToken: result.refresh_token ?? undefined,
+        expiresIn: result.expires_in ?? undefined,
+        tokenType: result.token_type ?? undefined,
+      });
+
+      if (result.email_confirmation_required) {
+        const params = new URLSearchParams();
+        params.set("email", email);
+        params.set("notice", "check-email");
+        params.set("role", "teacher");
+        navigate(`/login?${params.toString()}`);
+        return;
+      }
+
+      const accessToken = result.access_token || undefined;
+      if (!accessToken) {
+        throw new Error("Conta criada no Auth, mas token não encontrado para salvar o perfil.");
+      }
+
+      if (formData.profilePhoto) {
+        await uploadTeacherProfilePhoto(accessToken, formData.profilePhoto);
+      }
+
+      navigate(TEACHER_CONTROL_CENTER_PATH);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Não foi possível criar o cadastro da professora.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background px-6 py-8">
+      <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+        <Link
+          to={ROOT_PATH}
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span>Voltar</span>
+        </Link>
+      </motion.div>
+
+      <motion.header
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="mt-8"
+      >
+        <h1 className="font-display text-3xl font-bold text-foreground">
+          Cadastro privado de professoras
+        </h1>
+      </motion.header>
+
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="mt-6"
+      >
+        <SignupStepCarousel steps={steps} currentStep={currentStep} />
+      </motion.div>
+
+      <motion.form
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="mt-6 pb-8 space-y-5"
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        {currentStep === 0 && (
+          <>
+            <section className="card-kidario p-5 space-y-4">
+              <h2 className="font-display text-xl font-semibold text-foreground">Dados básicos</h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Nome">
+                  <Input
+                    value={formData.firstName}
+                    onChange={(event) => setField("firstName", event.target.value)}
+                    placeholder="Nome"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.firstName} />
+                </FormField>
+
+                <FormField label="Sobrenome">
+                  <Input
+                    value={formData.lastName}
+                    onChange={(event) => setField("lastName", event.target.value)}
+                    placeholder="Sobrenome"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.lastName} />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="E-mail">
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={(event) => handleEmailChange(event.target.value)}
+                    onBlur={handleEmailBlur}
+                    placeholder="email@exemplo.com"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.email} />
+                </FormField>
+
+                <FormField label="Telefone / WhatsApp">
+                  <Input
+                    value={formatPhoneMask(formData.phone)}
+                    onChange={(event) => setField("phone", extractDigits(event.target.value, 11))}
+                    placeholder="(11) 99999 9999"
+                    inputMode="numeric"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.phone} />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Senha">
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={formData.password}
+                      onChange={(event) => setField("password", event.target.value)}
+                      placeholder="Mínimo 8 caracteres"
+                      className="h-12 rounded-xl bg-muted/50 pr-12"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="Mostrar ou ocultar senha"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  <FieldError message={errors.password} />
+                </FormField>
+
+                <FormField label="Repetir senha">
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={formData.confirmPassword}
+                      onChange={(event) => setField("confirmPassword", event.target.value)}
+                      placeholder="Repita a senha"
+                      className="h-12 rounded-xl bg-muted/50 pr-12"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="Mostrar ou ocultar repetição da senha"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  <FieldError message={errors.confirmPassword} />
+                </FormField>
+              </div>
+
+              <FormField label="CPF">
+                <Input
+                  value={formatCpfMask(formData.cpf)}
+                  onChange={(event) => setField("cpf", extractDigits(event.target.value, 11))}
+                  placeholder="000.000.000-00"
+                  inputMode="numeric"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.cpf} />
+              </FormField>
+
+              <FormField label="Foto de perfil">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  className="h-12 rounded-xl bg-muted/50 file:mr-4 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-primary"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setField("profilePhoto", file);
+                  }}
+                />
+                {formData.profilePhoto && (
+                  <p className="text-xs text-muted-foreground">
+                    Arquivo selecionado: {formData.profilePhoto.name}
+                  </p>
+                )}
+                <FieldError message={errors.profilePhoto} />
+              </FormField>
+            </section>
+
+            <section className="card-kidario p-5 space-y-4">
+              <h2 className="font-display text-xl font-semibold text-foreground">Perfil profissional</h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Cidade">
+                  <Input
+                    value={formData.city}
+                    onChange={(event) => setField("city", event.target.value)}
+                    placeholder="Cidade"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.city} />
+                </FormField>
+
+                <FormField label="Estado (UF)">
+                  <Select value={formData.state} onValueChange={(value) => setField("state", value)}>
+                    <SelectTrigger className="h-12 rounded-xl bg-muted/50">
+                      <SelectValue placeholder="Selecione a UF" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {states.map((uf) => (
+                        <SelectItem key={uf} value={uf}>
+                          {uf}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={errors.state} />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Custo por hora (R$)">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formData.hourlyRate}
+                    onChange={(event) => setField("hourlyRate", event.target.value)}
+                    placeholder="Ex.: 320"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.hourlyRate} />
+                </FormField>
+
+                <FormField label="Duração média da aula">
+                  <Select
+                    value={formData.lessonDuration}
+                    onValueChange={(value) => setField("lessonDuration", value)}
+                  >
+                    <SelectTrigger className="h-12 rounded-xl bg-muted/50">
+                      <SelectValue placeholder="Selecione a duração" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {durationOptions.map((duration) => (
+                        <SelectItem key={duration.value} value={duration.value}>
+                          {duration.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={errors.lessonDuration} />
+                </FormField>
+              </div>
+
+              <FormField label="Modalidade de atendimento">
+                <Select value={formData.modality} onValueChange={(value) => setField("modality", value)}>
+                  <SelectTrigger className="h-12 rounded-xl bg-muted/50">
+                    <SelectValue placeholder="Selecione a modalidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="online">Online</SelectItem>
+                    <SelectItem value="presencial">Presencial</SelectItem>
+                    <SelectItem value="hibrido">Híbrido</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FieldError message={errors.modality} />
+              </FormField>
+
+              <FormField label="Especialidades (tags)">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    value={specialtyInput}
+                    onChange={(event) => setSpecialtyInput(event.target.value)}
+                    onKeyDown={handleSpecialtyKeyDown}
+                    placeholder="Digite e pressione Enter"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <KidarioButton
+                    type="button"
+                    variant="outline"
+                    size="default"
+                    onClick={() => addSpecialty(specialtyInput)}
+                  >
+                    Adicionar
+                  </KidarioButton>
+                </div>
+
+                {formData.specialties.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {formData.specialties.map((specialty) => (
+                      <button
+                        key={specialty}
+                        type="button"
+                        onClick={() => removeSpecialty(specialty)}
+                        className="group"
+                      >
+                        <Chip variant="mint" size="md" className="gap-2 cursor-pointer">
+                          {specialty}
+                          <X className="h-3.5 w-3.5 opacity-70 group-hover:opacity-100" />
+                        </Chip>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <FieldError message={errors.specialties} />
+              </FormField>
+
+              <FormField label="Mini bio profissional">
+                <Textarea
+                  value={formData.miniBio}
+                  onChange={(event) => setField("miniBio", event.target.value)}
+                  placeholder="Resumo da experiência e abordagem pedagógica."
+                  className="min-h-[110px] rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.miniBio} />
+              </FormField>
+            </section>
+
+            <section className="card-kidario p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-display text-xl font-semibold text-foreground">Formação acadêmica</h2>
+                <KidarioButton type="button" variant="outline" size="sm" onClick={addFormation}>
+                  <Plus className="h-4 w-4" />
+                  Adicionar
+                </KidarioButton>
+              </div>
+
+              {formData.formations.map((formation, index) => (
+                <div key={index} className="card-kidario p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium text-foreground">Formação {index + 1}</p>
+                    {formData.formations.length > 1 && (
+                      <KidarioButton
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeFormation(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Remover
+                      </KidarioButton>
+                    )}
+                  </div>
+
+                  <FormField label="Tipo">
+                    <Select
+                      value={formation.degreeType}
+                      onValueChange={(value) => updateFormation(index, "degreeType", value)}
+                    >
+                      <SelectTrigger className="h-12 rounded-xl bg-muted/50">
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {degreeTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FieldError message={errors[`formations.${index}.degreeType`]} />
+                  </FormField>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField label="Curso">
+                      <Input
+                        value={formation.courseName}
+                        onChange={(event) => updateFormation(index, "courseName", event.target.value)}
+                        placeholder="Ex.: Pedagogia"
+                        className="h-12 rounded-xl bg-muted/50"
+                      />
+                      <FieldError message={errors[`formations.${index}.courseName`]} />
+                    </FormField>
+
+                    <FormField label="Instituição">
+                      <Input
+                        value={formation.institution}
+                        onChange={(event) => updateFormation(index, "institution", event.target.value)}
+                        placeholder="Ex.: USP"
+                        className="h-12 rounded-xl bg-muted/50"
+                      />
+                      <FieldError message={errors[`formations.${index}.institution`]} />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Ano de conclusão (opcional)">
+                    <Input
+                      type="number"
+                      min={1950}
+                      max={2100}
+                      value={formation.completionYear}
+                      onChange={(event) => updateFormation(index, "completionYear", event.target.value)}
+                      placeholder="Ex.: 2020"
+                      className="h-12 rounded-xl bg-muted/50"
+                    />
+                  </FormField>
+                </div>
+              ))}
+            </section>
+
+            <section className="card-kidario p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-display text-xl font-semibold text-foreground">
+                  Experiência profissional
+                </h2>
+                <KidarioButton type="button" variant="outline" size="sm" onClick={addExperience}>
+                  <Plus className="h-4 w-4" />
+                  Adicionar
+                </KidarioButton>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="anonimato-experiencia"
+                    checked={formData.requestExperienceAnonymity}
+                    onCheckedChange={(checked) => {
+                      setField("requestExperienceAnonymity", checked === true);
+                    }}
+                  />
+                  <label
+                    htmlFor="anonimato-experiencia"
+                    className="text-sm text-foreground cursor-pointer"
+                  >
+                    Solicitar anonimato na experiência profissional
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se marcado, seus dados de experiência poderão ser exibidos com anonimato na plataforma.
+                </p>
+              </div>
+
+              {formData.experiences.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  A experiência profissional é opcional neste momento. Recém-graduadas podem seguir sem preencher.
+                </div>
+              )}
+
+              {formData.experiences.map((experience, index) => (
+                <div key={index} className="card-kidario p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium text-foreground">Experiência {index + 1}</p>
+                    <KidarioButton
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeExperience(index)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Remover
+                    </KidarioButton>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField label="Escola / instituição">
+                      <Input
+                        value={experience.institution}
+                        onChange={(event) => updateExperience(index, "institution", event.target.value)}
+                        placeholder="Nome da escola ou instituição"
+                        className="h-12 rounded-xl bg-muted/50"
+                      />
+                      <FieldError message={errors[`experiences.${index}.institution`]} />
+                    </FormField>
+
+                    <FormField label="Cargo">
+                      <Input
+                        value={experience.role}
+                        onChange={(event) => updateExperience(index, "role", event.target.value)}
+                        placeholder="Ex.: Professora titular"
+                        className="h-12 rounded-xl bg-muted/50"
+                      />
+                      <FieldError message={errors[`experiences.${index}.role`]} />
+                    </FormField>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 pt-6 sm:pt-8">
+                        <Checkbox
+                          id={`experiencia-atual-${index}`}
+                          checked={experience.currentPosition}
+                          onCheckedChange={(checked) => {
+                            const isCurrent = checked === true;
+                            updateExperience(index, "currentPosition", isCurrent);
+                            if (isCurrent) {
+                              updateExperience(index, "periodTo", "");
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`experiencia-atual-${index}`}
+                          className="text-sm text-foreground cursor-pointer"
+                        >
+                          Posição atual
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField label="Período - início">
+                      <Input
+                        type="month"
+                        value={experience.periodFrom}
+                        onChange={(event) => updateExperience(index, "periodFrom", event.target.value)}
+                        className="h-12 rounded-xl bg-muted/50"
+                      />
+                      <FieldError message={errors[`experiences.${index}.periodFrom`]} />
+                    </FormField>
+                    <FormField label="Período - término">
+                      <Input
+                        type="month"
+                        value={experience.periodTo}
+                        onChange={(event) => updateExperience(index, "periodTo", event.target.value)}
+                        className="h-12 rounded-xl bg-muted/50"
+                        disabled={experience.currentPosition}
+                      />
+                      {experience.currentPosition && (
+                        <p className="text-xs text-muted-foreground">
+                          Como está marcado como posição atual, o término não é obrigatório.
+                        </p>
+                      )}
+                      <FieldError message={errors[`experiences.${index}.periodTo`]} />
+                    </FormField>
+                  </div>
+
+                  <FormField label="O que fazia nessa função">
+                    <Textarea
+                      value={experience.responsibilities}
+                      onChange={(event) => updateExperience(index, "responsibilities", event.target.value)}
+                      placeholder="Descreva funções e resultados."
+                      className="min-h-[90px] rounded-xl bg-muted/50"
+                    />
+                    <FieldError message={errors[`experiences.${index}.responsibilities`]} />
+                  </FormField>
+                </div>
+              ))}
+            </section>
+
+            <section className="card-kidario p-5 space-y-3">
+              <div className="absolute -left-[9999px] top-auto h-0 w-0 overflow-hidden opacity-0">
+                <label htmlFor="teacher-signup-company">Company</label>
+                <input
+                  id="teacher-signup-company"
+                  name="company"
+                  type="text"
+                  value={honeypot}
+                  onChange={(event) => setHoneypot(event.target.value)}
+                  autoComplete="off"
+                  tabIndex={-1}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="aceite-termos-professora"
+                  checked={formData.acceptTerms}
+                  onCheckedChange={(checked) => {
+                    setField("acceptTerms", checked === true);
+                  }}
+                />
+                <label
+                  htmlFor="aceite-termos-professora"
+                  className="text-sm text-foreground cursor-pointer"
+                >
+                  Li e aceito os termos e condições da plataforma
+                </label>
+              </div>
+              <FieldError message={errors.acceptTerms} />
+
+              {captchaEnabledFlag && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Verificação de segurança</p>
+                  {isCaptchaConfigured ? (
+                    <TurnstileWidget
+                      siteKey={turnstileSiteKey}
+                      onTokenChange={(token) => {
+                        setCaptchaToken(token);
+                        setErrors((prev) => {
+                          if (!prev.captcha) return prev;
+                          const next = { ...prev };
+                          if (token) {
+                            delete next.captcha;
+                          }
+                          return next;
+                        });
+                      }}
+                      onError={(errorCode) => {
+                        const suffix = errorCode ? ` (${errorCode})` : "";
+                        setErrors((prev) => ({
+                          ...prev,
+                          captcha: `Falha na verificação anti-spam${suffix}. Tente novamente.`,
+                        }));
+                      }}
+                    />
+                  ) : (
+                    <p className="text-xs text-destructive">
+                      Não foi possível carregar a verificação anti-spam.
+                    </p>
+                  )}
+                  <FieldError message={errors.captcha} />
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {currentStep === 1 && (
+          <section className="card-kidario p-5 space-y-4">
+            <h2 className="font-display text-xl font-semibold text-foreground">Agenda semanal</h2>
+            <FieldError message={errors.weeklyAvailability} />
+            <WeeklyAvailabilityCalendar
+              value={formData.weeklyAvailability}
+              slotDurationMinutes={Number(formData.lessonDuration) || 60}
+              onChange={(slots) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  weeklyAvailability: slots,
+                }));
+              }}
+            />
+          </section>
+        )}
+
+        <div className="card-kidario p-4">
+          <div className="flex items-center justify-between gap-3">
+            <KidarioButton
+              type="button"
+              variant="ghost"
+              size="lg"
+              onClick={handleBackStep}
+              disabled={currentStep === 0}
+            >
+              Voltar
+            </KidarioButton>
+
+            {currentStep < steps.length - 1 ? (
+              <KidarioButton type="submit" variant="hero" size="lg">
+                Continuar
+              </KidarioButton>
+            ) : (
+              <KidarioButton type="submit" variant="hero" size="lg" disabled={isLoading}>
+                {isLoading ? "Criando conta..." : "Criar conta"}
+              </KidarioButton>
+            )}
+          </div>
+
+          {submitError && <p className="text-sm text-destructive mt-3">{submitError}</p>}
+        </div>
+      </motion.form>
+    </div>
+  );
+}
+
+function FormField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-foreground">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-xs text-destructive">{message}</p>;
+}

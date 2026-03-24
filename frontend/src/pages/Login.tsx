@@ -6,9 +6,10 @@ import { KidarioButton } from "@/components/ui/KidarioButton";
 import { getSupabaseAccessToken, saveAuthSession, signInWithEmailPassword } from "@/lib/authSession";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 import { syncPendingProfileIfNeeded } from "@/lib/pendingProfileSync";
-import { TEACHER_CONTROL_CENTER_PATH } from "@/domains/teacher/lib/teacherRoutes";
-import { getAdminAccess } from "@/lib/backendAdmin";
-import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/lib/privateRoutes";
+import { getAdminAccess } from "@/data/api/admin";
+import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/routes/admin";
+import { EXPLORE_PATH, SIGNUP_PATH } from "@/routes/paths";
+import { TEACHER_CONTROL_CENTER_PATH } from "@/routes/teacher";
 
 export default function Login() {
   const [searchParams] = useSearchParams();
@@ -34,7 +35,7 @@ export default function Login() {
   })();
 
   const authQuery = searchParams.toString();
-  const signupLink = authQuery ? `/cadastro?${authQuery}` : "/cadastro";
+  const signupLink = authQuery ? `${SIGNUP_PATH}?${authQuery}` : SIGNUP_PATH;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,11 +90,11 @@ export default function Login() {
       }
 
       if (resolvedSession.role === "parent") {
-        navigate("/explorar");
+        navigate(EXPLORE_PATH);
         return;
       }
 
-      navigate("/explorar");
+      navigate(EXPLORE_PATH);
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Não foi possível entrar. Tente novamente.",

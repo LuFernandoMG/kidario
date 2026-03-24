@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
-import Chat from "@/pages/Chat";
+import Chat from "@/pages/parent/Chat";
 
 const mockGetAuthSession = vi.fn();
 const mockGetSupabaseAccessToken = vi.fn();
@@ -13,7 +13,7 @@ vi.mock("@/lib/authSession", () => ({
   getSupabaseAccessToken: () => mockGetSupabaseAccessToken(),
 }));
 
-vi.mock("@/lib/backendChat", () => ({
+vi.mock("@/data/api/chat", () => ({
   getChatThread: (...args: unknown[]) => mockGetChatThread(...args),
   getChatMessages: (...args: unknown[]) => mockGetChatMessages(...args),
   sendChatMessage: vi.fn(),

@@ -17,8 +17,8 @@ import {
   type AdminTeacherRecord,
   getAdminDashboard,
   patchTeacherActivation,
-} from "@/lib/backendAdmin";
-import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/lib/privateRoutes";
+} from "@/data/api/admin";
+import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/routes/admin";
 
 const bookingStatusLabel: Record<string, string> = {
   pendente: "Pendente",

@@ -62,7 +62,7 @@ export function toDateIso(date: Date) {
 
 export function formatRelativeDateLabel(date: Date, dayOffset: number) {
   if (dayOffset === 0) return "Hoje";
-  if (dayOffset === 1) return "Amanha";
+  if (dayOffset === 1) return "Amanhã";
 
   return date.toLocaleDateString("pt-BR", {
     weekday: "short",

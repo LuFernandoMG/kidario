@@ -1,9 +1,11 @@
 import os
 from contextlib import AbstractContextManager
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import SQLAlchemyError
 
 os.environ.setdefault("KIDARIO_SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault(
@@ -247,6 +249,31 @@ def test_get_teacher_profile_returns_ok(client: TestClient, monkeypatch: pytest.
     body = response.json()
     assert body["profile"]["role"] == "teacher"
     assert body["specialties"] == ["alfabetizacao"]
+
+
+def test_get_parent_profile_returns_503_when_parent_cpf_migration_is_missing(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exc = SQLAlchemyError(
+        '(psycopg.errors.UndefinedColumn) column "cpf" does not exist\n'
+        "LINE 2: select profile_id, phone, cpf, birth_date, address, bio\n"
+        "from parent_profiles"
+    )
+    exc.orig = SimpleNamespace(sqlstate="42703")
+
+    def _fake_get_parent_profile(db, user):
+        raise exc
+
+    monkeypatch.setattr(profiles_endpoints, "get_parent_profile", _fake_get_parent_profile)
+
+    response = client.get("/api/v1/profiles/parent")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Database schema is outdated. Missing column parent_profiles.cpf. "
+        "Run backend/sql/011_add_parent_cpf.sql in Supabase SQL Editor."
+    )
 
 
 def test_upload_teacher_photo_returns_created(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

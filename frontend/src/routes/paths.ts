@@ -1,0 +1,17 @@
+export const ROOT_PATH = "/";
+export const LOGIN_PATH = "/login";
+export const RECOVER_PASSWORD_PATH = "/recuperar-senha";
+export const RESET_PASSWORD_PATH = "/redefinir-senha";
+export const SIGNUP_PATH = "/cadastro";
+export const EXPLORE_PATH = "/explorar";
+export const TEACHER_PROFILE_PATH = "/professora/:id";
+export const BOOKING_SCHEDULER_PATH = "/agendar/:id";
+export const CHECKOUT_PATH = "/checkout/:id";
+export const BOOKING_CONFIRMATION_PATH = "/confirmacao-reserva/:bookingId";
+export const BOOKING_DETAIL_PATH = "/aula/:bookingId";
+export const CHAT_PATH = "/chat/:threadId";
+export const AGENDA_PATH = "/agenda";
+export const PROGRESS_PATH = "/progresso";
+export const PROFILE_PATH = "/perfil";
+export const PARENT_PROFILE_SETTINGS_PATH = "/perfil/responsavel";
+export const TEACHER_PROFILE_SETTINGS_PATH = "/perfil/professora";

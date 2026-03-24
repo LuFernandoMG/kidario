@@ -8,41 +8,69 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 // Pages
 import Welcome from "./pages/Welcome";
 import Login from "./pages/Login";
-import Signup from "./domains/parent/pages/ParentSignupPage";
 import RecoverPassword from "./pages/RecoverPassword";
 import ResetPassword from "./pages/ResetPassword";
-import Explore from "./pages/Explore";
-import TeacherProfile from "./pages/TeacherProfile";
 import AdminHiddenDashboard from "./pages/AdminHiddenDashboard";
-import BookingScheduler from "./pages/BookingScheduler";
-import Checkout from "./pages/Checkout";
-import BookingConfirmation from "./pages/BookingConfirmation";
-import BookingDetail from "./pages/BookingDetail";
-import Chat from "./pages/Chat";
-import Agenda from "./pages/Agenda";
-import Progress from "./pages/Progress";
-import Profile from "./domains/profile/pages/ProfileRedirectPage";
-import ParentProfileSettings from "./domains/parent/pages/ParentProfileSettingsPage";
-import TeacherProfileSettings from "./domains/teacher/pages/TeacherProfileSettingsPage";
 import NotFound from "./pages/NotFound";
-import TeacherPrivateSignup from "./domains/teacher/pages/TeacherPrivateSignupPage";
-import { ADMIN_HIDDEN_DASHBOARD_PATH, TEACHER_PRIVATE_SIGNUP_PATH } from "./lib/privateRoutes";
+import Signup from "./pages/parent/Signup";
+import Explore from "./pages/parent/Explore";
+import TeacherProfile from "./pages/parent/TeacherProfile";
+import BookingScheduler from "./pages/parent/BookingScheduler";
+import Checkout from "./pages/parent/Checkout";
+import BookingConfirmation from "./pages/parent/BookingConfirmation";
+import BookingDetail from "./pages/parent/BookingDetail";
+import Chat from "./pages/parent/Chat";
+import Agenda from "./pages/parent/Agenda";
+import Progress from "./pages/parent/Progress";
+import Profile from "./pages/parent/Profile";
+import ParentProfileSettings from "./pages/parent/ProfileSettings";
+import TeacherControlCenterPage from "./pages/teacher/ControlCenter";
+import TeacherAgendaPage from "./pages/teacher/Agenda";
+import TeacherStudentsPage from "./pages/teacher/Students";
+import TeacherPlanningPage from "./pages/teacher/Planning";
+import TeacherFinancePage from "./pages/teacher/Finance";
+import TeacherLessonClosurePage from "./pages/teacher/LessonClosure";
+import TeacherPrivateSignup from "./pages/teacher/PrivateSignup";
+import TeacherProfileSettings from "./pages/teacher/ProfileSettings";
 import { RequireRoleRoute } from "@/components/auth/RequireRoleRoute";
-import TeacherControlCenterPage from "@/domains/teacher/pages/TeacherControlCenterPage";
-import TeacherAgendaPage from "@/domains/teacher/pages/TeacherAgendaPage";
-import TeacherStudentsPage from "@/domains/teacher/pages/TeacherStudentsPage";
-import TeacherPlanningPage from "@/domains/teacher/pages/TeacherPlanningPage";
-import TeacherFinancePage from "@/domains/teacher/pages/TeacherFinancePage";
-import TeacherLessonClosurePage from "@/domains/teacher/pages/TeacherLessonClosurePage";
 import { getAuthSession } from "@/lib/authSession";
+import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/routes/admin";
+import {
+  TEACHER_AGENDA_LEGACY_PATH,
+  TEACHER_CONTROL_CENTER_LEGACY_PATHS,
+  TEACHER_FINANCE_LEGACY_PATH,
+  TEACHER_PLANNING_LEGACY_PATH,
+  TEACHER_PRIVATE_SIGNUP_LEGACY_PATH,
+  TEACHER_STUDENTS_LEGACY_PATH,
+} from "@/routes/legacy";
+import {
+  AGENDA_PATH,
+  BOOKING_CONFIRMATION_PATH,
+  BOOKING_DETAIL_PATH,
+  BOOKING_SCHEDULER_PATH,
+  CHAT_PATH,
+  CHECKOUT_PATH,
+  EXPLORE_PATH,
+  LOGIN_PATH,
+  PARENT_PROFILE_SETTINGS_PATH,
+  PROFILE_PATH,
+  PROGRESS_PATH,
+  RECOVER_PASSWORD_PATH,
+  RESET_PASSWORD_PATH,
+  ROOT_PATH,
+  SIGNUP_PATH,
+  TEACHER_PROFILE_PATH,
+  TEACHER_PROFILE_SETTINGS_PATH,
+} from "@/routes/paths";
 import {
   TEACHER_AGENDA_PATH,
   TEACHER_CONTROL_CENTER_PATH,
   TEACHER_FINANCE_PATH,
   TEACHER_LESSON_CLOSURE_PATH,
   TEACHER_PLANNING_PATH,
+  TEACHER_PRIVATE_SIGNUP_PATH,
   TEACHER_STUDENTS_PATH,
-} from "@/domains/teacher/lib/teacherRoutes";
+} from "@/routes/teacher";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,38 +105,38 @@ const App = () => (
         <AdminSessionGuard />
         <Routes>
           {/* Auth Flow */}
-          <Route path="/" element={<Welcome />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/recuperar-senha" element={<RecoverPassword />} />
-          <Route path="/redefinir-senha" element={<ResetPassword />} />
-          <Route path="/cadastro" element={<Signup />} />
+          <Route path={ROOT_PATH} element={<Welcome />} />
+          <Route path={LOGIN_PATH} element={<Login />} />
+          <Route path={RECOVER_PASSWORD_PATH} element={<RecoverPassword />} />
+          <Route path={RESET_PASSWORD_PATH} element={<ResetPassword />} />
+          <Route path={SIGNUP_PATH} element={<Signup />} />
           <Route path={ADMIN_HIDDEN_DASHBOARD_PATH} element={<AdminHiddenDashboard />} />
-          <Route path="/escolher-perfil" element={<Navigate to="/cadastro" replace />} />
-          <Route path="/escolher-professora" element={<Navigate to={TEACHER_PRIVATE_SIGNUP_PATH} replace />} />
+          <Route path={TEACHER_PRIVATE_SIGNUP_LEGACY_PATH} element={<Navigate to={TEACHER_PRIVATE_SIGNUP_PATH} replace />} />
           <Route path={TEACHER_PRIVATE_SIGNUP_PATH} element={<TeacherPrivateSignup />} />
           {/* Parent Flow */}
-          <Route path="/explorar" element={<Explore />} />
-          <Route path="/professora/centro" element={<Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />} />
-          <Route path="/professora/inicio" element={<Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />} />
-          <Route path="/professora/agenda" element={<Navigate to={TEACHER_AGENDA_PATH} replace />} />
-          <Route path="/professora/alunos" element={<Navigate to={TEACHER_STUDENTS_PATH} replace />} />
-          <Route path="/professora/planejamento" element={<Navigate to={TEACHER_PLANNING_PATH} replace />} />
-          <Route path="/professora/financeiro" element={<Navigate to={TEACHER_FINANCE_PATH} replace />} />
-          <Route path="/professora/:id" element={<TeacherProfile />} />
-          <Route path="/agendar/:id" element={<BookingScheduler />} />
-          <Route path="/checkout/:id" element={<Checkout />} />
-          <Route path="/confirmacao-reserva/:bookingId" element={<BookingConfirmation />} />
+          <Route path={EXPLORE_PATH} element={<Explore />} />
+          {TEACHER_CONTROL_CENTER_LEGACY_PATHS.map((path) => (
+            <Route key={path} path={path} element={<Navigate to={TEACHER_CONTROL_CENTER_PATH} replace />} />
+          ))}
+          <Route path={TEACHER_AGENDA_LEGACY_PATH} element={<Navigate to={TEACHER_AGENDA_PATH} replace />} />
+          <Route path={TEACHER_STUDENTS_LEGACY_PATH} element={<Navigate to={TEACHER_STUDENTS_PATH} replace />} />
+          <Route path={TEACHER_PLANNING_LEGACY_PATH} element={<Navigate to={TEACHER_PLANNING_PATH} replace />} />
+          <Route path={TEACHER_FINANCE_LEGACY_PATH} element={<Navigate to={TEACHER_FINANCE_PATH} replace />} />
+          <Route path={TEACHER_PROFILE_PATH} element={<TeacherProfile />} />
+          <Route path={BOOKING_SCHEDULER_PATH} element={<BookingScheduler />} />
+          <Route path={CHECKOUT_PATH} element={<Checkout />} />
+          <Route path={BOOKING_CONFIRMATION_PATH} element={<BookingConfirmation />} />
           <Route
-            path="/aula/:bookingId"
+            path={BOOKING_DETAIL_PATH}
             element={(
               <RequireRoleRoute allowedRoles={["parent"]}>
                 <BookingDetail />
               </RequireRoleRoute>
             )}
           />
-          <Route path="/chat/:threadId" element={<Chat />} />
+          <Route path={CHAT_PATH} element={<Chat />} />
           <Route
-            path="/agenda"
+            path={AGENDA_PATH}
             element={(
               <RequireRoleRoute allowedRoles={["parent", "teacher"]}>
                 <RoleAwareAgendaRoute />
@@ -116,16 +144,16 @@ const App = () => (
             )}
           />
           <Route
-            path="/progresso"
+            path={PROGRESS_PATH}
             element={(
               <RequireRoleRoute allowedRoles={["parent"]}>
                 <Progress />
               </RequireRoleRoute>
             )}
           />
-          <Route path="/perfil" element={<Profile />} />
+          <Route path={PROFILE_PATH} element={<Profile />} />
           <Route
-            path="/perfil/responsavel"
+            path={PARENT_PROFILE_SETTINGS_PATH}
             element={(
               <RequireRoleRoute allowedRoles={["parent"]}>
                 <ParentProfileSettings />
@@ -133,7 +161,7 @@ const App = () => (
             )}
           />
           <Route
-            path="/perfil/professora"
+            path={TEACHER_PROFILE_SETTINGS_PATH}
             element={(
               <RequireRoleRoute allowedRoles={["teacher"]}>
                 <TeacherProfileSettings />

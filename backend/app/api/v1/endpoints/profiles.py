@@ -37,6 +37,16 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database schema not initialized. Run backend/sql/001_init_profiles.sql in Supabase SQL Editor.",
         ) from exc
+    if sqlstate == "42703":
+        error_text = str(exc)
+        if 'column "cpf" does not exist' in error_text and "from parent_profiles" in error_text:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Database schema is outdated. Missing column parent_profiles.cpf. "
+                    "Run backend/sql/011_add_parent_cpf.sql in Supabase SQL Editor."
+                ),
+            ) from exc
 
     settings = get_settings()
     detail = "Database error."
