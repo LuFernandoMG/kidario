@@ -80,6 +80,12 @@ Stories:
 
 - `MOB-030` onward
 
+Current decision:
+
+- the first extracted flow is the unauthenticated mobile entry surface
+- it stays behind `EXPO_PUBLIC_NATIVE_ENTRY_FLOW_ENABLED`
+- wrapped frontend routes remain the source of truth for all product behavior after entry
+
 ## Guardrails
 
 - `frontend` remains the main source of truth

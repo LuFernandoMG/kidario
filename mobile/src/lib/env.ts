@@ -31,3 +31,7 @@ export function getSupabaseAnonKey(): string {
 export function isSignupCaptchaEnabled(): boolean {
   return readEnv("EXPO_PUBLIC_SIGNUP_CAPTCHA_ENABLED") === "true";
 }
+
+export function isNativeEntryFlowEnabled(): boolean {
+  return readEnv("EXPO_PUBLIC_NATIVE_ENTRY_FLOW_ENABLED") !== "false";
+}

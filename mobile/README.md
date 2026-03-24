@@ -21,6 +21,7 @@ Current status:
 - `/mobile` is now a wrapper over the existing web frontend.
 - The current goal is to keep `frontend` as the main product surface.
 - Native capabilities will be added only where product value justifies them.
+- The first selective native extraction is the unauthenticated mobile entry flow.
 
 ## Setup
 
@@ -48,6 +49,7 @@ Create `.env` from `.env.example` and define:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_SIGNUP_CAPTCHA_ENABLED`
+- `EXPO_PUBLIC_NATIVE_ENTRY_FLOW_ENABLED`
 
 For local web shell development, the default frontend URL is:
 
@@ -83,3 +85,5 @@ The current validation matrix is documented in:
 - [mobile-shell-limitations.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-shell-limitations.md)
 - [mobile-upload-bridge.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-upload-bridge.md)
 - [mobile-push-notifications-evaluation.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-push-notifications-evaluation.md)
+- [mobile-native-extraction-candidates.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-native-extraction-candidates.md)
+- [mobile-native-extraction-decision.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-native-extraction-decision.md)
