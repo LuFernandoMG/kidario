@@ -4,31 +4,31 @@ import { Screen } from "@/components/common/Screen";
 import { theme } from "@/theme";
 
 interface FrontendShellStatusProps {
-  eyebrow?: string;
   title: string;
   message: string;
   targetUrl: string;
   note?: string;
   retryLabel?: string;
   onRetry?: () => void;
+  showDebugUrl?: boolean;
 }
 
 export function FrontendShellStatus({
-  eyebrow = "Mobile Shell",
   title,
   message,
   targetUrl,
   note,
   retryLabel = "Retry",
   onRetry,
+  showDebugUrl = false,
 }: FrontendShellStatusProps) {
   return (
     <Screen contentStyle={styles.screenContent}>
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>{eyebrow}</Text>
+        <Text style={styles.eyebrow}>Kidario</Text>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{message}</Text>
-        <Text style={styles.url}>{targetUrl}</Text>
+        {showDebugUrl ? <Text style={styles.url}>{targetUrl}</Text> : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         <View style={styles.actions}>
           {onRetry ? (
@@ -80,6 +80,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body.fontSize,
     lineHeight: theme.typography.body.lineHeight,
     color: theme.colors.accent,
+    textAlign: "center",
   },
   note: {
     fontSize: theme.typography.body.fontSize,

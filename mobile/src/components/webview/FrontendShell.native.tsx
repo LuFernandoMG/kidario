@@ -107,10 +107,9 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
   if (status === "error" || status === "offline") {
     return (
       <FrontendShellStatus
-        eyebrow="Native Shell"
         title={status === "offline" ? "Frontend unavailable" : "Shell load failed"}
         message={message}
-        note="Keep the frontend server running separately while developing the shell."
+        note="Try again in a moment."
         targetUrl={targetUrl}
         onRetry={handleRetry}
       />

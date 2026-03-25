@@ -18,8 +18,14 @@ const config: ExpoConfig = {
   web: {
     bundler: "metro",
   },
+  ios: {
+    bundleIdentifier: "com.leikvir.kidario",
+  },
   extra: {
     appEnv: process.env.EXPO_PUBLIC_APP_ENV ?? "development",
+    eas: {
+      projectId: "3c4e45d3-e92a-4c86-87c9-012e68e5e7da",
+    },
   },
 };
 

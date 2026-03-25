@@ -6,7 +6,7 @@ This document records the current product limitations of the WebView-first mobil
 
 - Authentication state is still owned by the wrapped frontend.
 - The shell does not yet implement a native session bridge.
-- Password reset and recovery can be opened from the shell, but deep-link ownership is still a future bridge item.
+- Password reset and recovery can already be opened through mobile deep links, but the authenticated session itself is still frontend-owned.
 - Physical devices cannot use `localhost` for the frontend target; the shell URL must point to a reachable host on the same network or a deployed environment.
 
 ## Storage
@@ -18,8 +18,9 @@ This document records the current product limitations of the WebView-first mobil
 ## File Upload
 
 - File upload flows still depend on what the wrapped frontend can do inside the WebView.
-- Camera, image picker and native file-system integration are not bridged yet.
-- Teacher profile photo and any browser-dependent upload UX should be treated as provisional inside the shell.
+- A native document-picker bridge now exists in `/mobile`, but the frontend still has to consume that contract explicitly.
+- Camera and richer image capture flows are still not bridged.
+- Teacher profile photo and any browser-dependent upload UX should still be treated as provisional until the frontend consumes the native upload event.
 
 ## CAPTCHA and Browser-Specific UX
 
@@ -30,7 +31,12 @@ This document records the current product limitations of the WebView-first mobil
 
 - External links are opened outside the shell on native.
 - Internal route ownership stays in the frontend.
-- Native deep-link routing for password reset and internal product destinations is still scheduled for milestone 4.
+- Native deep-link routing now exists for password reset and selected internal product destinations.
+
+## Web Debugging
+
+- On Expo web, the shell redirects directly to the frontend instead of rendering an iframe.
+- This is intentional: it preserves the same browser session and storage behavior as the real frontend.
 
 ## Product Decision
 

@@ -7,20 +7,22 @@ interface FrontendShellLoadingProps {
   message: string;
   targetUrl?: string;
   mode?: "fullscreen" | "inline";
+  showDebugUrl?: boolean;
 }
 
 export function FrontendShellLoading({
   message,
   targetUrl,
   mode = "fullscreen",
+  showDebugUrl = false,
 }: FrontendShellLoadingProps) {
   const content = (
     <View style={styles.content}>
-      <Text style={styles.eyebrow}>WebView First</Text>
+      <Text style={styles.eyebrow}>Kidario</Text>
       <ActivityIndicator size="large" color={theme.colors.accent} />
-      <Text style={styles.title}>Loading Kidario</Text>
+      <Text style={styles.title}>Opening Kidario</Text>
       <Text style={styles.body}>{message}</Text>
-      {targetUrl ? <Text style={styles.url}>{targetUrl}</Text> : null}
+      {showDebugUrl && targetUrl ? <Text style={styles.url}>{targetUrl}</Text> : null}
     </View>
   );
 

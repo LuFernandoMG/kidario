@@ -39,6 +39,9 @@ cd ../frontend
 npm run dev
 ```
 
+On Expo web, the shell now redirects directly to the frontend instead of embedding it in an `iframe`.
+This preserves the same browser session and storage behavior as the real frontend during web debugging.
+
 ## Environment
 
 Create `.env` from `.env.example` and define:
