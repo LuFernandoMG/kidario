@@ -52,6 +52,40 @@ export const frontendBridgeBootstrapScript = `
       window.dispatchEvent(new CustomEvent("${UPLOAD_RESULT_EVENT}", { detail: result }));
     };
 
+    function installLayoutInset() {
+      try {
+        var doc = window.document;
+        if (!doc || !doc.head) {
+          return;
+        }
+
+        if (!doc.getElementById("kidario-mobile-layout-inset")) {
+          var style = doc.createElement("style");
+          style.id = "kidario-mobile-layout-inset";
+          style.textContent = [
+            ":root { --kidario-mobile-top-inset: calc(env(safe-area-inset-top, 0px) + 1.25em); }",
+            "html, body, #root { min-height: 100%; }",
+            "body { min-height: 100vh; }",
+            "body > #root { min-height: inherit; }",
+            "body.kidario-mobile-shell .min-h-screen.bg-background > main.min-h-screen { padding-top: var(--kidario-mobile-top-inset) !important; box-sizing: border-box; }",
+            ".page-container { padding-top: calc(var(--kidario-mobile-top-inset) + 1rem) !important; }",
+            ".min-h-screen.bg-background.px-6.py-8 { padding-top: calc(var(--kidario-mobile-top-inset) + 2rem) !important; }",
+            ".relative.z-10.flex.min-h-screen.flex-col.justify-between > .flex-1.px-6.pt-14 { padding-top: calc(var(--kidario-mobile-top-inset) + 0.5rem) !important; }"
+          ].join("");
+          doc.head.appendChild(style);
+        }
+
+        if (doc.body) {
+          doc.body.classList.add("kidario-mobile-shell");
+        }
+      } catch (error) {
+        console.warn("Kidario mobile layout inset injection failed", error);
+      }
+    }
+
+    installLayoutInset();
+    document.addEventListener("DOMContentLoaded", installLayoutInset, { once: true });
+
     window.dispatchEvent(new CustomEvent("${BRIDGE_READY_EVENT}"));
   })();
   true;

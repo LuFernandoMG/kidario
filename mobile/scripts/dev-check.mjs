@@ -5,11 +5,6 @@ import { spawnSync } from "node:child_process";
 const root = process.cwd();
 const envFiles = [".env.local", ".env"];
 const defaultFrontendWebUrl = "http://localhost:8080";
-const requiredPublicEnv = [
-  "EXPO_PUBLIC_BACKEND_API_URL",
-  "EXPO_PUBLIC_SUPABASE_URL",
-  "EXPO_PUBLIC_SUPABASE_ANON_KEY",
-];
 const timeoutMultiplier = Number(process.env.DEV_CHECK_TIMEOUT_MULTIPLIER || "1");
 
 function printSection(title) {
@@ -136,14 +131,6 @@ if (!Number.isNaN(nodeMajor) && nodeMajor >= 24) {
 
 const env = loadEnv();
 let envOk = true;
-for (const name of requiredPublicEnv) {
-  if (!env[name]) {
-    envOk = false;
-    console.log(`WARN missing ${name} in .env or .env.local`);
-  } else {
-    console.log(`OK   ${name}`);
-  }
-}
 
 const frontendUrl = env.EXPO_PUBLIC_FRONTEND_WEB_URL || defaultFrontendWebUrl;
 if (!env.EXPO_PUBLIC_FRONTEND_WEB_URL) {
@@ -163,6 +150,7 @@ if (frontendUrl && !isValidHttpUrl(frontendUrl)) {
 
 printSection("Tooling");
 const checks = [
+  runCheck("Route contract", "node", ["./scripts/check-route-contract.mjs"], 8000),
   runCheck("Expo config", "./node_modules/.bin/expo", ["config", "--type", "public"], 30000),
   runCheck("TypeScript", "./node_modules/.bin/tsc", ["--noEmit", "--pretty", "false"], 45000),
   runCheck("ESLint", "./node_modules/.bin/eslint", ["app", "src", "app.config.ts", "expo-env.d.ts"], 30000),

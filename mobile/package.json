@@ -11,8 +11,9 @@
     "web": "expo start --web",
     "lint": "eslint app src app.config.ts expo-env.d.ts",
     "typecheck": "tsc --noEmit",
+    "test:routes": "node ./scripts/check-route-contract.mjs",
     "dev:check": "node ./scripts/dev-check.mjs",
-    "check": "npm run dev:check"
+    "check": "npm run test:routes && npm run dev:check"
   },
   "dependencies": {
     "@react-native-community/netinfo": "^11.5.2",

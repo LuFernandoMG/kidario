@@ -1,4 +1,4 @@
-import { buildFrontendChatPath, frontendRoutes } from "@/routes/frontend";
+import { ROOT_PATH, RESET_PASSWORD_PATH, buildChatPath, isBlockedMobilePath, normalizeFrontendPath } from "@/routes/frontend";
 
 function safelyParseUrl(url: string): URL | null {
   try {
@@ -36,37 +36,22 @@ export function resolveShellHrefFromDeepLink(url: string): string | null {
     return null;
   }
 
-  const normalizedPath = normalizeIncomingPath(parsed);
+  const normalizedPath = normalizeFrontendPath(normalizeIncomingPath(parsed));
   const query = buildShellQuery(parsed);
 
-  if (normalizedPath === frontendRoutes.shared.root) return `/${query}`;
-  if (normalizedPath === frontendRoutes.shared.login) return `/login${query}`;
-  if (normalizedPath === frontendRoutes.shared.recoverPassword) return `/recover-password${query}`;
-  if (normalizedPath === frontendRoutes.shared.resetPassword || normalizedPath === "/reset-password") {
-    return `/reset-password${query}`;
+  if (isBlockedMobilePath(normalizedPath)) {
+    return ROOT_PATH;
   }
 
-  if (normalizedPath === frontendRoutes.parent.signup) return `/signup${query}`;
-  if (normalizedPath === frontendRoutes.parent.explore) return `/explore${query}`;
-  if (normalizedPath === frontendRoutes.parent.profile) return `/profile${query}`;
-  if (normalizedPath === frontendRoutes.parent.agenda) return `/agenda${query}`;
-
-  if (normalizedPath === frontendRoutes.teacher.home) return `/home${query}`;
-  if (normalizedPath === frontendRoutes.teacher.students) return `/students${query}`;
-  if (normalizedPath === frontendRoutes.teacher.planning) return `/planning${query}`;
-  if (normalizedPath === frontendRoutes.teacher.finance) return `/finance${query}`;
-  if (normalizedPath === frontendRoutes.teacher.privateSignup) return `/private-signup${query}`;
-
-  const chatMatch = normalizedPath.match(/^\/chat\/([^/]+)$/);
-  if (chatMatch) {
-    return `/chat/${encodeURIComponent(chatMatch[1])}${query}`;
+  if (normalizedPath === "/reset-password") {
+    return `${RESET_PASSWORD_PATH}${query}`;
   }
 
-  return null;
+  return `${normalizedPath}${query}`;
 }
 
 export function buildInternalDeepLink(frontendPath: string): string {
-  return `kidario-mobile://open?path=${encodeURIComponent(frontendPath)}`;
+  return `kidario-mobile://open?path=${encodeURIComponent(normalizeFrontendPath(frontendPath))}`;
 }
 
 export function buildResetPasswordDeepLink(searchParams?: Record<string, string>) {
@@ -75,5 +60,5 @@ export function buildResetPasswordDeepLink(searchParams?: Record<string, string>
 }
 
 export function buildChatDeepLink(threadId: string) {
-  return buildInternalDeepLink(buildFrontendChatPath(threadId));
+  return buildInternalDeepLink(buildChatPath(threadId));
 }

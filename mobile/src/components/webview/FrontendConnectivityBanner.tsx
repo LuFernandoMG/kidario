@@ -16,8 +16,8 @@ export function FrontendConnectivityBanner({ status }: FrontendConnectivityBanne
     <View style={[styles.banner, status === "offline" ? styles.offline : styles.reconnecting]}>
       <Text style={styles.text}>
         {status === "offline"
-          ? "You are offline. The wrapped frontend may stop updating until the connection returns."
-          : "Connection restored. Reloading the wrapped frontend."}
+          ? "Sem conexão"
+          : "Conexão restabelecida"}
       </Text>
     </View>
   );

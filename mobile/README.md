@@ -1,27 +1,18 @@
 # Kidario Mobile
 
-Initial Expo Router scaffold for the Kidario mobile app.
+# Kidario Mobile
 
-Current strategy: WebView-first.
+Native container for the real `frontend`.
 
-This folder was created as part of `MOB-001` and currently contains:
+Current strategy: full route fidelity with the public surface of [`frontend/src/App.tsx`](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/src/App.tsx), excluding Admin.
 
-- Expo Router entry setup
-- TypeScript configuration
-- ESLint configuration
-- Environment variable scaffold
-- Mobile shell that loads the existing `frontend`
-- dedicated shell entry screens for shared, parent and teacher routes
-- development diagnostics for frontend reachability and WebView prerequisites
-- validation coverage for wrapped auth, parent and teacher flows
-- a native boot splash while the shell initializes
+`/mobile` does not implement a parallel product UI. It only provides:
 
-Current status:
-
-- `/mobile` is now a wrapper over the existing web frontend.
-- The current goal is to keep `frontend` as the main product surface.
-- Native capabilities will be added only where product value justifies them.
-- The first selective native extraction is the unauthenticated mobile entry flow.
+- full-screen `WebView` on iOS/Android
+- direct handoff to the real frontend on Expo web
+- deep links into frontend routes
+- native file picker bridge for existing frontend forms
+- connectivity handling and minimal shell fallback states
 
 ## Setup
 
@@ -39,22 +30,16 @@ cd ../frontend
 npm run dev
 ```
 
-On Expo web, the shell now redirects directly to the frontend instead of embedding it in an `iframe`.
-This preserves the same browser session and storage behavior as the real frontend during web debugging.
+On Expo web, the shell redirects directly to the real frontend instead of embedding it in an `iframe`.
+This preserves the same browser session and storage behavior during web debugging.
 
 ## Environment
 
 Create `.env` from `.env.example` and define:
 
-- `EXPO_PUBLIC_APP_ENV`
 - `EXPO_PUBLIC_FRONTEND_WEB_URL`
-- `EXPO_PUBLIC_BACKEND_API_URL`
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `EXPO_PUBLIC_SIGNUP_CAPTCHA_ENABLED`
-- `EXPO_PUBLIC_NATIVE_ENTRY_FLOW_ENABLED`
 
-For local web shell development, the default frontend URL is:
+For local development, the default frontend URL is:
 
 ```bash
 http://localhost:8080
@@ -76,17 +61,11 @@ DEV_CHECK_TIMEOUT_MULTIPLIER=2 npm run dev:check
 
 The development check now also validates:
 
+- route contract fidelity against `frontend/src/routes`
 - the shell URL configured in `EXPO_PUBLIC_FRONTEND_WEB_URL`
 - that the local frontend responds over HTTP
 - that `react-native-webview` is installed
 
 ## Validation Coverage
 
-The current validation matrix is documented in:
-
-- [mobile-shell-validation.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-shell-validation.md)
-- [mobile-shell-limitations.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-shell-limitations.md)
-- [mobile-upload-bridge.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-upload-bridge.md)
-- [mobile-push-notifications-evaluation.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-push-notifications-evaluation.md)
-- [mobile-native-extraction-candidates.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-native-extraction-candidates.md)
-- [mobile-native-extraction-decision.md](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/docs/mobile-native-extraction-decision.md)
+Current validation docs remain in `frontend/docs`, but the mobile implementation target is now route fidelity rather than selective native extraction.

@@ -18,9 +18,8 @@ export function FrontendShellLoading({
 }: FrontendShellLoadingProps) {
   const content = (
     <View style={styles.content}>
-      <Text style={styles.eyebrow}>Kidario</Text>
       <ActivityIndicator size="large" color={theme.colors.accent} />
-      <Text style={styles.title}>Opening Kidario</Text>
+      <Text style={styles.title}>Abrindo Kidario</Text>
       <Text style={styles.body}>{message}</Text>
       {showDebugUrl && targetUrl ? <Text style={styles.url}>{targetUrl}</Text> : null}
     </View>
@@ -44,14 +43,6 @@ const styles = StyleSheet.create({
   content: {
     alignItems: "center",
     gap: theme.spacing.md,
-  },
-  eyebrow: {
-    fontSize: theme.typography.eyebrow.fontSize,
-    lineHeight: theme.typography.eyebrow.lineHeight,
-    fontWeight: theme.typography.eyebrow.fontWeight,
-    letterSpacing: theme.typography.eyebrow.letterSpacing,
-    textTransform: "uppercase",
-    color: theme.colors.eyebrow,
   },
   title: {
     fontSize: theme.typography.title.fontSize,

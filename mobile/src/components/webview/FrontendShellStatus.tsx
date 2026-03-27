@@ -18,14 +18,13 @@ export function FrontendShellStatus({
   message,
   targetUrl,
   note,
-  retryLabel = "Retry",
+  retryLabel = "Tentar novamente",
   onRetry,
   showDebugUrl = false,
 }: FrontendShellStatusProps) {
   return (
     <Screen contentStyle={styles.screenContent}>
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>Kidario</Text>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{message}</Text>
         {showDebugUrl ? <Text style={styles.url}>{targetUrl}</Text> : null}
@@ -37,7 +36,7 @@ export function FrontendShellStatus({
             </Pressable>
           ) : null}
           <Pressable onPress={() => void Linking.openURL(targetUrl)} style={[styles.button, styles.secondaryButton]}>
-            <Text style={styles.buttonText}>Open in Browser</Text>
+            <Text style={styles.buttonText}>Abrir no navegador</Text>
           </Pressable>
         </View>
       </View>
@@ -56,14 +55,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
-  },
-  eyebrow: {
-    fontSize: theme.typography.eyebrow.fontSize,
-    lineHeight: theme.typography.eyebrow.lineHeight,
-    fontWeight: theme.typography.eyebrow.fontWeight,
-    letterSpacing: theme.typography.eyebrow.letterSpacing,
-    textTransform: "uppercase",
-    color: theme.colors.eyebrow,
   },
   title: {
     fontSize: theme.typography.title.fontSize,

@@ -32,7 +32,7 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
 
   function handleRetry() {
     setStatus("loading");
-    setMessage("Retrying the current Kidario frontend.");
+    setMessage("Tentando novamente.");
     setReloadKey((current) => current + 1);
   }
 
@@ -49,17 +49,17 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
   }
 
   function handleWebViewError(event: WebViewErrorEvent) {
-    handleShellError(event.nativeEvent.description || "The mobile shell could not load the frontend.");
+    handleShellError(event.nativeEvent.description || "Nao foi possivel abrir o Kidario.");
   }
 
   function handleWebViewHttpError(event: WebViewHttpErrorEvent) {
-    handleShellError(`The frontend responded with HTTP ${event.nativeEvent.statusCode}.`);
+    handleShellError(`O Kidario respondeu com HTTP ${event.nativeEvent.statusCode}.`);
   }
 
   useEffect(() => {
     if (networkStatus === "reconnecting" && status !== "ready") {
       handleRetry();
-      setMessage("Connection restored. Reloading the wrapped frontend.");
+      setMessage("Conexao restabelecida.");
     }
   }, [networkStatus, status]);
 
@@ -97,7 +97,7 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
         ),
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "The native document picker failed.";
+      const message = error instanceof Error ? error.message : "Nao foi possivel abrir o seletor de arquivos.";
       webViewRef.current?.injectJavaScript(
         createUploadResultScript(createUploadErrorResult(payload.requestId, message)),
       );
@@ -107,11 +107,12 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
   if (status === "error" || status === "offline") {
     return (
       <FrontendShellStatus
-        title={status === "offline" ? "Frontend unavailable" : "Shell load failed"}
+        title={status === "offline" ? "Sem conexao" : "Falha ao abrir"}
         message={message}
-        note="Try again in a moment."
+        note="Tente novamente em instantes."
         targetUrl={targetUrl}
         onRetry={handleRetry}
+        retryLabel="Tentar novamente"
       />
     );
   }
@@ -132,7 +133,7 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
         }}
         onLoadStart={() => {
           setStatus("loading");
-          setMessage("Loading the current Kidario frontend.");
+          setMessage("Carregando.");
         }}
         onMessage={(event) => {
           void handleWebViewMessage(event);

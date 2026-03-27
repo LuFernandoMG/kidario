@@ -25,5 +25,5 @@ export function FrontendShell({ path = "/" }: FrontendShellProps) {
     return undefined;
   }, [targetUrl]);
 
-  return <FrontendShellLoading message="Handing off to the current frontend." targetUrl={targetUrl} />;
+  return <FrontendShellLoading message="Redirecionando." targetUrl={targetUrl} />;
 }
