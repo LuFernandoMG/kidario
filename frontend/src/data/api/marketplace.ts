@@ -44,6 +44,23 @@ export interface MarketplaceTeacherDetailResponse {
   bio?: string | null;
   city?: string | null;
   state?: string | null;
+  request_experience_anonymity: boolean;
+  formations: {
+    id: string;
+    degree_type: string;
+    course_name: string;
+    institution: string;
+    completion_year?: string | null;
+  }[];
+  experiences: {
+    id: string;
+    institution: string;
+    role: string;
+    responsibilities: string;
+    period_from: string;
+    period_to?: string | null;
+    current_position: boolean;
+  }[];
   lesson_duration_minutes: number;
   next_slots: MarketplaceTeacherSlotsDayResponse[];
 }
@@ -116,6 +133,23 @@ export function mapMarketplaceTeacherDetail(
       nextAvailability: undefined,
       experience: response.experience_label,
       bio: response.bio || undefined,
+      requestExperienceAnonymity: response.request_experience_anonymity,
+      formationEntries: (response.formations || []).map((formation) => ({
+        id: formation.id,
+        degreeType: formation.degree_type,
+        courseName: formation.course_name,
+        institution: formation.institution,
+        completionYear: formation.completion_year || undefined,
+      })),
+      experienceEntries: (response.experiences || []).map((experience) => ({
+        id: experience.id,
+        institution: experience.institution,
+        role: experience.role,
+        responsibilities: experience.responsibilities,
+        periodFrom: experience.period_from,
+        periodTo: experience.period_to || undefined,
+        currentPosition: experience.current_position,
+      })),
     },
     nextSlots: response.next_slots.map((slot) => ({
       dateIso: slot.date_iso,

@@ -30,6 +30,24 @@ class MarketplaceTeacherSlotsDay(BaseModel):
     times: list[str]
 
 
+class MarketplaceTeacherExperience(BaseModel):
+    id: UUID
+    institution: str
+    role: str
+    responsibilities: str
+    period_from: str
+    period_to: str | None = None
+    current_position: bool
+
+
+class MarketplaceTeacherFormation(BaseModel):
+    id: UUID
+    degree_type: str
+    course_name: str
+    institution: str
+    completion_year: str | None = None
+
+
 class MarketplaceTeacherDetail(BaseModel):
     id: UUID
     name: str
@@ -42,8 +60,11 @@ class MarketplaceTeacherDetail(BaseModel):
     is_online: bool
     is_presential: bool
     experience_label: str
+    request_experience_anonymity: bool = False
     bio: str | None = None
     city: str | None = None
     state: str | None = None
+    formations: list[MarketplaceTeacherFormation] = []
+    experiences: list[MarketplaceTeacherExperience] = []
     lesson_duration_minutes: int
     next_slots: list[MarketplaceTeacherSlotsDay]

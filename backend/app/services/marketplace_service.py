@@ -288,6 +288,50 @@ def get_marketplace_teacher_detail(db: Session, teacher_profile_id: UUID) -> dic
         .all()
     )
 
+    experiences_rows = (
+        db.execute(
+            text(
+                """
+                select
+                  id,
+                  institution,
+                  role,
+                  responsibilities,
+                  period_from,
+                  period_to,
+                  current_position
+                from teacher_experiences
+                where profile_id = :profile_id
+                order by created_at desc
+                """
+            ),
+            {"profile_id": str(teacher_profile_id)},
+        )
+        .mappings()
+        .all()
+    )
+
+    formations_rows = (
+        db.execute(
+            text(
+                """
+                select
+                  id,
+                  degree_type,
+                  course_name,
+                  institution,
+                  completion_year
+                from teacher_formations
+                where profile_id = :profile_id
+                order by created_at asc
+                """
+            ),
+            {"profile_id": str(teacher_profile_id)},
+        )
+        .mappings()
+        .all()
+    )
+
     booked_rows = (
         db.execute(
             text(
@@ -337,9 +381,14 @@ def get_marketplace_teacher_detail(db: Session, teacher_profile_id: UUID) -> dic
         "is_online": is_online,
         "is_presential": is_presential,
         "experience_label": experience_label,
+        "request_experience_anonymity": bool(row["request_experience_anonymity"]),
         "bio": row["mini_bio"],
         "city": row["city"],
         "state": row["state"],
+        "formations": [dict(item) for item in formations_rows],
+        "experiences": []
+        if bool(row["request_experience_anonymity"])
+        else [dict(item) for item in experiences_rows],
         "lesson_duration_minutes": lesson_duration,
         "next_slots": preview_slots,
     }

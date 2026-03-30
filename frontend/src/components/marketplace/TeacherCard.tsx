@@ -21,6 +21,23 @@ export interface Teacher {
   nextAvailability?: string;
   experience: string;
   bio?: string;
+  formationEntries?: {
+    id?: string;
+    degreeType: string;
+    courseName: string;
+    institution: string;
+    completionYear?: string | null;
+  }[];
+  experienceEntries?: {
+    id?: string;
+    institution: string;
+    role: string;
+    responsibilities: string;
+    periodFrom: string;
+    periodTo?: string | null;
+    currentPosition: boolean;
+  }[];
+  requestExperienceAnonymity?: boolean;
 }
 
 interface TeacherCardProps {

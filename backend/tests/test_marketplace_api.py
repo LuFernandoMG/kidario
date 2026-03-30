@@ -87,3 +87,65 @@ def test_get_marketplace_teacher_detail_returns_404(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Teacher not found in marketplace."
+
+
+def test_get_marketplace_teacher_detail_returns_academic_history_and_experiences(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_get_marketplace_teacher_detail(db, teacher_profile_id):
+        return {
+            "id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
+            "name": "Ana Carolina Silva",
+            "avatar_url": "https://example.com/avatar.jpg",
+            "rating": 4.9,
+            "review_count": 28,
+            "price_per_class": 120.0,
+            "specialties": ["Alfabetizacao"],
+            "is_verified": True,
+            "is_online": True,
+            "is_presential": False,
+            "experience_label": "2 experiencias registradas",
+            "request_experience_anonymity": False,
+            "bio": "Pedagoga com foco em alfabetizacao.",
+            "city": "Sao Paulo",
+            "state": "SP",
+            "formations": [
+                {
+                    "id": "8e6fb361-8746-4484-b5c1-83059678e9e5",
+                    "degree_type": "mestrado",
+                    "course_name": "Psicopedagogia",
+                    "institution": "Universidade Exemplo",
+                    "completion_year": "2022",
+                }
+            ],
+            "experiences": [
+                {
+                    "id": "5e657790-cf40-4d82-99df-f77b47ce1ad4",
+                    "institution": "Colegio Exemplo",
+                    "role": "Professora alfabetizadora",
+                    "responsibilities": "Acompanhamento individual de leitura e escrita.",
+                    "period_from": "2021-01",
+                    "period_to": None,
+                    "current_position": True,
+                }
+            ],
+            "lesson_duration_minutes": 60,
+            "next_slots": [],
+        }
+
+    monkeypatch.setattr(
+        marketplace_endpoints,
+        "get_marketplace_teacher_detail",
+        _fake_get_marketplace_teacher_detail,
+    )
+
+    response = client.get("/api/v1/marketplace/teachers/3472def4-1d03-4350-b2c2-20c7fa27d430")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["request_experience_anonymity"] is False
+    assert len(body["formations"]) == 1
+    assert body["formations"][0]["course_name"] == "Psicopedagogia"
+    assert len(body["experiences"]) == 1
+    assert body["experiences"][0]["role"] == "Professora alfabetizadora"

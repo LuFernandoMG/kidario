@@ -15,6 +15,31 @@ import { getMarketplaceTeacherDetail } from "@/data/api/marketplace";
 import { DEFAULT_TEACHER_AVATAR } from "@/lib/avatarUrl";
 import { useToast } from "@/hooks/use-toast";
 
+function formatExperiencePeriod(periodFrom: string, periodTo?: string | null, currentPosition?: boolean) {
+  if (currentPosition) {
+    return `${periodFrom} - Atual`;
+  }
+
+  if (periodTo) {
+    return `${periodFrom} - ${periodTo}`;
+  }
+
+  return periodFrom;
+}
+
+const degreeTypeLabels: Record<string, string> = {
+  graduacao: "Graduação",
+  "pos-graduacao": "Pós-graduação",
+  especializacao: "Especialização",
+  mestrado: "Mestrado",
+  doutorado: "Doutorado",
+  "curso-livre": "Curso livre / certificação",
+};
+
+function formatDegreeType(degreeType: string) {
+  return degreeTypeLabels[degreeType] || degreeType;
+}
+
 export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -141,7 +166,7 @@ export default function TeacherProfile() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
+          transition={{ delay: 0.16 }}
           className="flex justify-center gap-6 mt-6"
         >
           <div className="text-center">
@@ -160,7 +185,7 @@ export default function TeacherProfile() {
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
+          transition={{ delay: 0.2 }}
           className="mt-8"
         >
           <h2 className="section-title">Sobre</h2>
@@ -169,11 +194,90 @@ export default function TeacherProfile() {
           </p>
         </motion.section>
 
+        {/* Professional Experience */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.23 }}
+          className="mt-6"
+        >
+          <h2 className="section-title">Experiência profissional</h2>
+          {teacher.experienceEntries && teacher.experienceEntries.length > 0 ? (
+            <div className="space-y-3">
+              {teacher.experienceEntries.map((experience, index) => (
+                <div key={experience.id || `${experience.institution}-${index}`} className="card-kidario p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-medium text-foreground">{experience.role}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{experience.institution}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground text-right">
+                      {formatExperiencePeriod(
+                        experience.periodFrom,
+                        experience.periodTo,
+                        experience.currentPosition,
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground/90 mt-3 leading-relaxed">
+                    {experience.responsibilities}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="card-kidario p-4">
+              <p className="text-foreground">{teacher.experience}</p>
+              {teacher.requestExperienceAnonymity ? (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Os detalhes institucionais foram ocultados a pedido da professora, mas a experiência foi validada pela plataforma.
+                </p>
+              ) : null}
+            </div>
+          )}
+        </motion.section>
+
+        {/* Academic History */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.26 }}
+          className="mt-6"
+        >
+          <h2 className="section-title">História acadêmica</h2>
+          {teacher.formationEntries && teacher.formationEntries.length > 0 ? (
+            <div className="space-y-3">
+              {teacher.formationEntries.map((formation, index) => (
+                <div key={formation.id || `${formation.institution}-${index}`} className="card-kidario p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-medium text-foreground">{formation.courseName}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{formation.institution}</p>
+                    </div>
+                    {formation.completionYear ? (
+                      <span className="text-xs text-muted-foreground text-right">
+                        {formation.completionYear}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-foreground/90 mt-3 leading-relaxed">
+                    {formatDegreeType(formation.degreeType)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="card-kidario p-4">
+              <p className="text-foreground">Formação acadêmica não informada.</p>
+            </div>
+          )}
+        </motion.section>
+
         {/* Specialties */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.3 }}
           className="mt-6"
         >
           <h2 className="section-title">Especialidades</h2>
@@ -193,7 +297,7 @@ export default function TeacherProfile() {
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
+          transition={{ delay: 0.3 }}
           className="mt-6"
         >
           <h2 className="section-title">Próximos horários</h2>
@@ -232,7 +336,7 @@ export default function TeacherProfile() {
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.35 }}
           className="mt-6"
         >
           <h2 className="section-title">Avaliações</h2>
