@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg
+  version="1.1"
+  xmlns="http://www.w3.org/2000/svg"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="68"
+  height="68"
+  viewBox="0 0 80 80"
+  xml:space="preserve"
+>
+  <title>Kidario Logo</title>
+  <desc>Logotipo vetorial com formas curvas em estilo folha.</desc>
+  <rect x="2" y="2" width="76" height="76" rx="22" fill="#182B22" fill-opacity="1" />
+  <path
+    d="M40 62 C40 62 16 56 16 34 C16 22 26 16 40 24 Z"
+    fill="#36D399"
+    fill-opacity="1"
+  />
+  <path
+    d="M40 62 C40 62 64 56 64 34 C64 22 54 16 40 24 Z"
+    fill="#1FAF76"
+    fill-opacity="1"
+  />
+  <path
+    d="M40 24 L40 62"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="1.2"
+    stroke-linecap="round"
+    stroke-opacity="0.15"
+  />
+  <circle cx="40" cy="14" r="5" fill="#36D399" />
+  <circle cx="40" cy="14" r="8.5" fill="none" stroke="#36D399" stroke-width="1" stroke-opacity="0.3" />
+  <path
+    d="M40 19 L40 24"
+    fill="none"
+    stroke="#36D399"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-opacity="0.7"
+  />
+</svg>
