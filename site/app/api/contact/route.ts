@@ -5,6 +5,7 @@ import { CONTACT_EMAIL, SITE_URL } from "../../../lib/site-config";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 5;
+const DEFAULT_DEV_FROM_EMAIL = "Kidario <onboarding@resend.dev>";
 
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
@@ -41,6 +42,7 @@ function isRateLimited(ip: string) {
 }
 
 export async function POST(request: Request) {
+  const isProduction = process.env.NODE_ENV === "production";
   const ip = getClientIp(request);
 
   if (isRateLimited(ip)) {
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
   if (
     origin &&
     !allowedOrigins.includes(origin) &&
-    process.env.NODE_ENV === "production"
+    isProduction
   ) {
     return NextResponse.json({ message: "Origem não permitida." }, { status: 403 });
   }
@@ -106,7 +108,9 @@ export async function POST(request: Request) {
   }
 
   const resendApiKey = process.env.RESEND_API_KEY?.trim();
-  const contactFromEmail = process.env.CONTACT_FROM_EMAIL?.trim();
+  const contactFromEmail =
+    process.env.CONTACT_FROM_EMAIL?.trim() ||
+    (!isProduction ? DEFAULT_DEV_FROM_EMAIL : "");
 
   if (!CONTACT_EMAIL || !resendApiKey || !contactFromEmail) {
     return NextResponse.json(
@@ -118,35 +122,76 @@ export async function POST(request: Request) {
     );
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: contactFromEmail,
-      to: [CONTACT_EMAIL],
-      reply_to: email,
-      subject: `[Kidario] ${subject} - ${name}`,
-      text: [
-        `Nome: ${name}`,
-        `E-mail: ${email}`,
-        `Assunto: ${subject}`,
-        "",
-        message,
-      ].join("\n"),
-    }),
-  });
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: contactFromEmail,
+        to: [CONTACT_EMAIL],
+        reply_to: email,
+        subject: `[Kidario] ${subject} - ${name}`,
+        text: [
+          `Nome: ${name}`,
+          `E-mail: ${email}`,
+          `Assunto: ${subject}`,
+          "",
+          message,
+        ].join("\n"),
+      }),
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      const responseText = await response.text();
+      let providerMessage = "Não foi possível enviar sua mensagem agora.";
+
+      try {
+        const parsed = JSON.parse(responseText) as {
+          message?: string;
+          error?: string;
+          name?: string;
+        };
+
+        providerMessage =
+          parsed.message || parsed.error || parsed.name || providerMessage;
+      } catch {
+        if (responseText.trim()) {
+          providerMessage = responseText.trim();
+        }
+      }
+
+      console.error("Contact form delivery failed", {
+        status: response.status,
+        providerMessage,
+      });
+
+      return NextResponse.json(
+        {
+          message: isProduction
+            ? "Não foi possível enviar sua mensagem agora."
+            : `Falha no provedor de e-mail: ${providerMessage}`,
+        },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json({
+      message:
+        "Mensagem enviada com sucesso. A equipe do Kidario responderá em breve.",
+    });
+  } catch (error) {
+    console.error("Contact form request failed", error);
+
     return NextResponse.json(
-      { message: "Não foi possível enviar sua mensagem agora." },
+      {
+        message: isProduction
+          ? "Não foi possível enviar sua mensagem agora."
+          : "Falha ao conectar com o provedor de e-mail. Verifique RESEND_API_KEY, conectividade e domínio remetente.",
+      },
       { status: 502 },
     );
   }
-
-  return NextResponse.json({
-    message: "Mensagem enviada com sucesso. A equipe do Kidario responderá em breve.",
-  });
 }

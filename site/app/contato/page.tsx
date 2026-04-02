@@ -16,7 +16,7 @@ export const metadata: Metadata = createPageMetadata({
 const contactFormEnabled = Boolean(
   CONTACT_EMAIL &&
     process.env.RESEND_API_KEY?.trim() &&
-    process.env.CONTACT_FROM_EMAIL?.trim(),
+    (process.env.CONTACT_FROM_EMAIL?.trim() || process.env.NODE_ENV !== "production"),
 );
 
 export default function ContatoPage() {
@@ -30,8 +30,9 @@ export default function ContatoPage() {
           <div className="contact-help-card">
             <p className="placeholder-card-label">Canal principal</p>
             <p>
-              O formulário já está preparado para envio por e-mail assim que a
-              área de negócio definir `CONTACT_EMAIL`.
+              O formulário envia por backend para o canal institucional e pode
+              operar com um remetente temporário em desenvolvimento até o
+              domínio de envio definitivo estar validado.
             </p>
             <ul className="page-list">
               <li>Famílias com dúvidas sobre a experiência.</li>
