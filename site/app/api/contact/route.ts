@@ -41,6 +41,41 @@ function isRateLimited(ip: string) {
   return false;
 }
 
+function normalizeOrigin(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getAllowedOrigins(request: Request) {
+  const envOrigins =
+    process.env.CONTACT_ALLOWED_ORIGINS?.split(",")
+      .map((value) => normalizeOrigin(value.trim()))
+      .filter(Boolean) || [];
+
+  const requestUrlOrigin = normalizeOrigin(request.url);
+  const siteOrigin = normalizeOrigin(SITE_URL);
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  const host = request.headers.get("host");
+  const forwardedOrigin = forwardedHost
+    ? normalizeOrigin(`${forwardedProto}://${forwardedHost}`)
+    : null;
+  const hostOrigin = host ? normalizeOrigin(`${forwardedProto}://${host}`) : null;
+
+  return new Set(
+    [siteOrigin, requestUrlOrigin, forwardedOrigin, hostOrigin, ...envOrigins].filter(
+      Boolean,
+    ) as string[],
+  );
+}
+
 export async function POST(request: Request) {
   const isProduction = process.env.NODE_ENV === "production";
   const ip = getClientIp(request);
@@ -53,17 +88,18 @@ export async function POST(request: Request) {
   }
 
   const origin = request.headers.get("origin");
-  const allowedOrigins = (
-    process.env.CONTACT_ALLOWED_ORIGINS?.split(",").map((value) => value.trim()) || [
-      new URL(SITE_URL).origin,
-    ]
-  ).filter(Boolean);
+  const normalizedOrigin = normalizeOrigin(origin);
+  const allowedOrigins = getAllowedOrigins(request);
 
-  if (
-    origin &&
-    !allowedOrigins.includes(origin) &&
-    isProduction
-  ) {
+  if (normalizedOrigin && !allowedOrigins.has(normalizedOrigin) && isProduction) {
+    console.error("Contact form origin blocked", {
+      origin: normalizedOrigin,
+      allowedOrigins: Array.from(allowedOrigins),
+      requestUrl: request.url,
+      forwardedHost: request.headers.get("x-forwarded-host"),
+      host: request.headers.get("host"),
+    });
+
     return NextResponse.json({ message: "Origem não permitida." }, { status: 403 });
   }
 
