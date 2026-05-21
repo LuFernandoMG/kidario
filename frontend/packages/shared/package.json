@@ -1,0 +1,15 @@
+{
+  "name": "@kidario/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./mobile/deepLinks": "./src/mobile/deepLinks.ts",
+    "./mobile/frontendWeb": "./src/mobile/frontendWeb.ts",
+    "./mobile/webviewBridge": "./src/mobile/webviewBridge.ts",
+    "./routes/frontend": "./src/routes/frontend.ts"
+  }
+}

@@ -3,8 +3,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = process.cwd();
-const frontendRoot = resolve(root, "..", "web", "src", "routes");
+const sharedRoutesPath = resolve(root, "..", "..", "packages", "shared", "src", "routes", "frontend.ts");
 const mobileManifestPath = resolve(root, "src", "routes", "frontend.ts");
+const webRouteFiles = [
+  resolve(root, "..", "web", "src", "routes", "paths.ts"),
+  resolve(root, "..", "web", "src", "routes", "teacher.ts"),
+  resolve(root, "..", "web", "src", "routes", "legacy.ts"),
+];
 
 const scalarRouteNames = [
   "ROOT_PATH",
@@ -25,6 +30,7 @@ const scalarRouteNames = [
   "PARENT_PROFILE_SETTINGS_PATH",
   "TEACHER_PROFILE_SETTINGS_PATH",
   "TEACHER_CONTROL_CENTER_PATH",
+  "TEACHER_AGENDA_PATH",
   "TEACHER_STUDENTS_PATH",
   "TEACHER_PLANNING_PATH",
   "TEACHER_FINANCE_PATH",
@@ -38,12 +44,6 @@ const scalarRouteNames = [
 ];
 
 const arrayRouteNames = ["TEACHER_CONTROL_CENTER_LEGACY_PATHS"];
-
-const frontendFiles = [
-  resolve(frontendRoot, "paths.ts"),
-  resolve(frontendRoot, "teacher.ts"),
-  resolve(frontendRoot, "legacy.ts"),
-];
 
 function readSource(path) {
   if (!existsSync(path)) {
@@ -70,29 +70,29 @@ function extractArray(source, name) {
   return [...match[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]);
 }
 
-function extractFromSources(sources, name, kind) {
-  for (const source of sources) {
-    if (source.includes(`export const ${name}`)) {
-      return kind === "array" ? extractArray(source, name) : extractScalar(source, name);
-    }
-  }
-
-  throw new Error(`Could not find ${name} in source set.`);
-}
-
-const frontendSources = frontendFiles.map(readSource);
+const sharedSource = readSource(sharedRoutesPath);
 const mobileSource = readSource(mobileManifestPath);
+const webRouteSources = webRouteFiles.map(readSource);
 
 for (const name of scalarRouteNames) {
-  const frontendValue = extractFromSources(frontendSources, name, "scalar");
-  const mobileValue = extractScalar(mobileSource, name);
-  assert.equal(mobileValue, frontendValue, `${name} does not match frontend.`);
+  assert.doesNotThrow(() => extractScalar(sharedSource, name), `Could not find ${name} in shared routes.`);
 }
 
 for (const name of arrayRouteNames) {
-  const frontendValue = extractFromSources(frontendSources, name, "array");
-  const mobileValue = extractArray(mobileSource, name);
-  assert.deepEqual(mobileValue, frontendValue, `${name} does not match frontend.`);
+  assert.doesNotThrow(() => extractArray(sharedSource, name), `Could not find ${name} in shared routes.`);
+}
+
+assert.match(
+  mobileSource,
+  /export \* from "@kidario\/shared\/routes\/frontend";/,
+  "mobile route manifest must re-export the shared frontend route contract.",
+);
+
+for (const source of webRouteSources) {
+  assert.ok(
+    source.includes('from "@kidario/shared/routes/frontend";'),
+    "web route modules must re-export the shared frontend route contract.",
+  );
 }
 
 assert.ok(

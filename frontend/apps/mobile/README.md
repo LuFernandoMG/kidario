@@ -60,10 +60,12 @@ DEV_CHECK_TIMEOUT_MULTIPLIER=2 npm run dev:check
 
 The development check now also validates:
 
-- route contract fidelity against `frontend/apps/web/src/routes`
+- route contract fidelity against `frontend/packages/shared/src/routes/frontend.ts`
 - the shell URL configured in `EXPO_PUBLIC_FRONTEND_WEB_URL`
 - that the local frontend responds over HTTP
 - that `react-native-webview` is installed
+
+Pure shell contracts for frontend URLs, deep links, and upload bridge messages live in `frontend/packages/shared/src/mobile`. The files under `frontend/apps/mobile/src/lib` keep the app-facing imports stable and adapt environment-specific values.
 
 ## Validation Coverage
 

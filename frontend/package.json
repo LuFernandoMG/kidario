@@ -3,7 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "workspaces": [
-    "apps/web"
+    "apps/web",
+    "packages/shared"
   ],
   "scripts": {
     "dev": "npm run dev --workspace @kidario/web",
@@ -17,6 +18,9 @@
     "test:e2e:ui": "npm run test:e2e:ui --workspace @kidario/web",
     "web:dev": "npm run dev --workspace @kidario/web",
     "web:build": "npm run build --workspace @kidario/web",
+    "web:lint": "npm run lint --workspace @kidario/web",
+    "web:test": "npm run test --workspace @kidario/web",
+    "shared:typecheck": "npm run typecheck --workspace @kidario/shared",
     "mobile:start": "npm --prefix apps/mobile run start",
     "mobile:start:clear": "npm --prefix apps/mobile run start:clear",
     "mobile:ios": "npm --prefix apps/mobile run ios",
@@ -25,6 +29,7 @@
     "mobile:lint": "npm --prefix apps/mobile run lint",
     "mobile:typecheck": "npm --prefix apps/mobile run typecheck",
     "mobile:test:routes": "npm --prefix apps/mobile run test:routes",
-    "mobile:check": "npm --prefix apps/mobile run check"
+    "mobile:check": "npm --prefix apps/mobile run check",
+    "check": "npm run shared:typecheck && npm run web:lint && npm run web:test && npm run web:build && npm run mobile:test:routes && npm run mobile:typecheck"
   }
 }

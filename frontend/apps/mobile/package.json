@@ -16,6 +16,7 @@
     "check": "npm run test:routes && npm run dev:check"
   },
   "dependencies": {
+    "@kidario/shared": "file:../../packages/shared",
     "@react-native-community/netinfo": "^11.5.2",
     "expo": "~55.0.8",
     "expo-constants": "~55.0.9",

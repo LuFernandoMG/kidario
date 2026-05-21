@@ -2,7 +2,7 @@
 
 ## Goal
 
-Keep `frontend/apps/web` consistent, route-driven, and ready to serve as the reference scope for the `apps/mobile` shell.
+Keep `frontend/apps/web` and `frontend/apps/mobile` under one frontend workspace, with shared platform-neutral contracts in `frontend/packages/shared`.
 
 ## Source Of Truth
 
@@ -24,15 +24,27 @@ If a module talks to the backend, it belongs in `data/api`.
 
 ### Routes
 
-- `apps/web/src/routes/paths.ts`: shared canonical routes
-- `apps/web/src/routes/teacher.ts`: teacher canonical routes and builders
+- `packages/shared/src/routes/frontend.ts`: canonical frontend route contract consumed by web and mobile
+- `apps/web/src/routes/paths.ts`: web-facing re-exports for shared canonical routes
+- `apps/web/src/routes/teacher.ts`: web-facing re-exports for teacher canonical routes and builders
 - `apps/web/src/routes/admin.ts`: hidden admin path
-- `apps/web/src/routes/legacy.ts`: supported legacy aliases
+- `apps/web/src/routes/legacy.ts`: web-facing re-exports for supported legacy aliases
+- `apps/mobile/src/routes/frontend.ts`: mobile-facing re-export of the shared frontend route contract
 
 Do not spread route strings through the app when a reusable constant already exists.
 
+### Mobile Shell Contracts
+
+- `packages/shared/src/mobile/frontendWeb.ts`: frontend base URL normalization and URL classification
+- `packages/shared/src/mobile/deepLinks.ts`: Kidario mobile deep-link parsing and builders
+- `packages/shared/src/mobile/webviewBridge.ts`: WebView upload bridge message contract and bootstrap script
+- `apps/mobile/src/lib`: mobile-facing wrappers around these shared contracts
+
+Keep native modules, Expo APIs, React Native components, and WebView component wiring inside `apps/mobile`. Shared mobile shell contracts must stay platform-neutral.
+
 ### Types
 
+- `packages/shared/src`: platform-neutral contracts and helpers that can run in web, React Native, and Node scripts
 - `apps/web/src/types`: shared references for cross-module types
 
 Keep one-off component prop types colocated. Shared business or transport types belong in `types` or are re-exported through `types`.
@@ -56,10 +68,13 @@ Examples:
 
 ## Import Rules
 
+- Cross-platform modules must live in `packages/shared` and avoid browser-only, React DOM-only, or React Native-only APIs.
+- Mobile shell helpers that are pure TypeScript should live under `packages/shared/src/mobile`; `apps/mobile/src/lib` should only adapt them to Expo environment variables or keep backward-compatible imports.
 - Route components in `App.tsx` must import from `apps/web/src/pages` and `apps/web/src/routes`.
 - Page components may import from `components`, `data`, `routes`, `hooks`, `lib`, and `types`.
 - `data/queries` may import from `data/api`, `lib`, and `types`.
 - `data/api` should not import from `pages`.
+- Mobile route wrappers must import route constants from `apps/mobile/src/routes/frontend`, which re-exports `@kidario/shared/routes/frontend`.
 
 ## Active Flows
 
@@ -126,6 +141,6 @@ Removed:
 This structure is the reference baseline for `apps/mobile`:
 
 - pages define the real frontend scope
-- routes define the stable URL contract
+- `packages/shared/src/routes/frontend.ts` defines the stable URL contract
 - data/api defines reusable backend contracts
 - shared types are no longer hidden inside domain folders
