@@ -5,45 +5,40 @@ import { resolve } from "node:path";
 const root = process.cwd();
 const sharedRoutesPath = resolve(root, "..", "..", "packages", "shared", "src", "routes", "frontend.ts");
 const mobileManifestPath = resolve(root, "src", "routes", "frontend.ts");
-const webRouteFiles = [
-  resolve(root, "..", "web", "src", "routes", "paths.ts"),
-  resolve(root, "..", "web", "src", "routes", "teacher.ts"),
-  resolve(root, "..", "web", "src", "routes", "legacy.ts"),
-];
 
-const scalarRouteNames = [
-  "ROOT_PATH",
-  "LOGIN_PATH",
-  "RECOVER_PASSWORD_PATH",
-  "RESET_PASSWORD_PATH",
-  "SIGNUP_PATH",
-  "EXPLORE_PATH",
-  "TEACHER_PROFILE_PATH",
-  "BOOKING_SCHEDULER_PATH",
-  "CHECKOUT_PATH",
-  "BOOKING_CONFIRMATION_PATH",
-  "BOOKING_DETAIL_PATH",
-  "CHAT_PATH",
-  "AGENDA_PATH",
-  "PROGRESS_PATH",
-  "PROFILE_PATH",
-  "PARENT_PROFILE_SETTINGS_PATH",
-  "TEACHER_PROFILE_SETTINGS_PATH",
-  "TEACHER_CONTROL_CENTER_PATH",
-  "TEACHER_AGENDA_PATH",
-  "TEACHER_STUDENTS_PATH",
-  "TEACHER_PLANNING_PATH",
-  "TEACHER_FINANCE_PATH",
-  "TEACHER_LESSON_CLOSURE_PATH",
-  "TEACHER_PRIVATE_SIGNUP_PATH",
-  "TEACHER_PRIVATE_SIGNUP_LEGACY_PATH",
-  "TEACHER_AGENDA_LEGACY_PATH",
-  "TEACHER_STUDENTS_LEGACY_PATH",
-  "TEACHER_PLANNING_LEGACY_PATH",
-  "TEACHER_FINANCE_LEGACY_PATH",
+const expectedWrapperContracts = [
+  { file: "app/index.tsx", exports: ["ROOT_PATH"] },
+  { file: "app/login.tsx", exports: ["LOGIN_PATH"] },
+  { file: "app/recuperar-senha.tsx", exports: ["RECOVER_PASSWORD_PATH"] },
+  { file: "app/redefinir-senha.tsx", exports: ["RESET_PASSWORD_PATH"] },
+  { file: "app/cadastro.tsx", exports: ["SIGNUP_PATH"] },
+  { file: "app/explorar.tsx", exports: ["EXPLORE_PATH"] },
+  { file: "app/professora/[id].tsx", exports: ["buildTeacherProfilePath"] },
+  { file: "app/agendar/[id].tsx", exports: ["buildBookingSchedulerPath"] },
+  { file: "app/checkout/[id].tsx", exports: ["buildCheckoutPath"] },
+  { file: "app/confirmacao-reserva/[bookingId].tsx", exports: ["buildBookingConfirmationPath"] },
+  { file: "app/aula/[bookingId].tsx", exports: ["buildBookingDetailPath"] },
+  { file: "app/chat/[threadId].tsx", exports: ["buildChatPath"] },
+  { file: "app/agenda.tsx", exports: ["AGENDA_PATH"] },
+  { file: "app/progresso.tsx", exports: ["PROGRESS_PATH"] },
+  { file: "app/perfil/index.tsx", exports: ["PROFILE_PATH"] },
+  { file: "app/perfil/responsavel.tsx", exports: ["PARENT_PROFILE_SETTINGS_PATH"] },
+  { file: "app/perfil/professora.tsx", exports: ["TEACHER_PROFILE_SETTINGS_PATH"] },
+  { file: "app/inicio.tsx", exports: ["TEACHER_CONTROL_CENTER_PATH"] },
+  { file: "app/alunos.tsx", exports: ["TEACHER_STUDENTS_PATH"] },
+  { file: "app/planejamento.tsx", exports: ["TEACHER_PLANNING_PATH"] },
+  { file: "app/financeiro.tsx", exports: ["TEACHER_FINANCE_PATH"] },
+  { file: "app/aulas/[bookingId]/cierre.tsx", exports: ["buildTeacherLessonClosurePath"] },
+  { file: "app/convites/professoras/cadastro-privado-kidario-a8k3m2.tsx", exports: ["TEACHER_PRIVATE_SIGNUP_PATH"] },
+  { file: "app/escolher-professora.tsx", exports: ["TEACHER_PRIVATE_SIGNUP_LEGACY_PATH"] },
+  { file: "app/professora/centro.tsx", exports: ["TEACHER_CONTROL_CENTER_LEGACY_PATHS"] },
+  { file: "app/professora/inicio.tsx", exports: ["TEACHER_CONTROL_CENTER_LEGACY_PATHS"] },
+  { file: "app/professora/agenda.tsx", exports: ["TEACHER_AGENDA_LEGACY_PATH"] },
+  { file: "app/professora/alunos.tsx", exports: ["TEACHER_STUDENTS_LEGACY_PATH"] },
+  { file: "app/professora/planejamento.tsx", exports: ["TEACHER_PLANNING_LEGACY_PATH"] },
+  { file: "app/professora/financeiro.tsx", exports: ["TEACHER_FINANCE_LEGACY_PATH"] },
+  { file: "app/[...path].tsx", exports: ["ROOT_PATH", "buildFrontendPathFromSegments", "isBlockedMobilePath"] },
 ];
-
-const arrayRouteNames = ["TEACHER_CONTROL_CENTER_LEGACY_PATHS"];
 
 function readSource(path) {
   if (!existsSync(path)) {
@@ -53,34 +48,28 @@ function readSource(path) {
   return readFileSync(path, "utf8");
 }
 
-function extractScalar(source, name) {
-  const match = source.match(new RegExp(`export const ${name}\\s*=\\s*"([^"]+)"`, "m"));
-  if (!match) {
-    throw new Error(`Could not extract ${name}`);
-  }
-  return match[1];
+function hasSharedExport(source, name) {
+  return new RegExp(`export\\s+(?:const|function)\\s+${name}\\b`, "m").test(source);
 }
 
-function extractArray(source, name) {
-  const match = source.match(new RegExp(`export const ${name}\\s*=\\s*\\[(.*?)\\]\\s*as const;`, "ms"));
-  if (!match) {
-    throw new Error(`Could not extract ${name}`);
+function importedRouteExports(source) {
+  const names = new Set();
+  const matches = source.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']@\/routes\/frontend["'];/g);
+
+  for (const match of matches) {
+    for (const item of match[1].split(",")) {
+      const name = item.trim().split(/\s+as\s+/)[0]?.trim();
+      if (name) {
+        names.add(name);
+      }
+    }
   }
 
-  return [...match[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]);
+  return names;
 }
 
 const sharedSource = readSource(sharedRoutesPath);
 const mobileSource = readSource(mobileManifestPath);
-const webRouteSources = webRouteFiles.map(readSource);
-
-for (const name of scalarRouteNames) {
-  assert.doesNotThrow(() => extractScalar(sharedSource, name), `Could not find ${name} in shared routes.`);
-}
-
-for (const name of arrayRouteNames) {
-  assert.doesNotThrow(() => extractArray(sharedSource, name), `Could not find ${name} in shared routes.`);
-}
 
 assert.match(
   mobileSource,
@@ -88,55 +77,30 @@ assert.match(
   "mobile route manifest must re-export the shared frontend route contract.",
 );
 
-for (const source of webRouteSources) {
-  assert.ok(
-    source.includes('from "@kidario/shared/routes/frontend";'),
-    "web route modules must re-export the shared frontend route contract.",
-  );
-}
-
 assert.ok(
   !mobileSource.includes("ADMIN_HIDDEN_DASHBOARD_PATH"),
   "mobile route manifest must not expose admin path constants.",
 );
 
-const expectedWrapperFiles = [
-  "app/index.tsx",
-  "app/login.tsx",
-  "app/recuperar-senha.tsx",
-  "app/redefinir-senha.tsx",
-  "app/cadastro.tsx",
-  "app/explorar.tsx",
-  "app/professora/[id].tsx",
-  "app/professora/centro.tsx",
-  "app/professora/inicio.tsx",
-  "app/professora/agenda.tsx",
-  "app/professora/alunos.tsx",
-  "app/professora/planejamento.tsx",
-  "app/professora/financeiro.tsx",
-  "app/agendar/[id].tsx",
-  "app/checkout/[id].tsx",
-  "app/confirmacao-reserva/[bookingId].tsx",
-  "app/aula/[bookingId].tsx",
-  "app/chat/[threadId].tsx",
-  "app/agenda.tsx",
-  "app/progresso.tsx",
-  "app/perfil/index.tsx",
-  "app/perfil/responsavel.tsx",
-  "app/perfil/professora.tsx",
-  "app/inicio.tsx",
-  "app/alunos.tsx",
-  "app/planejamento.tsx",
-  "app/financeiro.tsx",
-  "app/aulas/[bookingId]/cierre.tsx",
-  "app/escolher-professora.tsx",
-  "app/convites/professoras/cadastro-privado-kidario-a8k3m2.tsx",
-  "app/[...path].tsx",
-];
+assert.ok(
+  !/export\s+const\s+\w+_PATH\s*=/.test(mobileSource),
+  "mobile route manifest must not duplicate shared route constants.",
+);
 
-for (const relativePath of expectedWrapperFiles) {
+for (const { file: relativePath, exports } of expectedWrapperContracts) {
   const absolutePath = resolve(root, relativePath);
   assert.ok(existsSync(absolutePath), `Missing wrapper file: ${relativePath}`);
+
+  const wrapperSource = readSource(absolutePath);
+  const importedNames = importedRouteExports(wrapperSource);
+
+  for (const name of exports) {
+    assert.ok(hasSharedExport(sharedSource, name), `Missing shared route export ${name} for ${relativePath}.`);
+    assert.ok(
+      importedNames.has(name),
+      `${relativePath} must import ${name} from "@/routes/frontend".`,
+    );
+  }
 }
 
 console.log("Route contract passed.");
