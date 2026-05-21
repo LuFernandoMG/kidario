@@ -125,7 +125,7 @@ Create `.env.local` from `.env.example` and set:
 - `VITE_SIGNUP_CAPTCHA_ENABLED`
 - `VITE_TURNSTILE_SITE_KEY`
 
-The frontend expects the backend API on `http://localhost:8000/api/v1` by default.
+The frontend expects the backend API through `/api/v1` in local Vite dev. Vite proxies that path to `VITE_BACKEND_PROXY_TARGET`, which defaults to `http://127.0.0.1:8000`.
 
 ## Scripts
 

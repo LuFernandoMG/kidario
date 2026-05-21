@@ -19,6 +19,7 @@ export default function Explore() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [remoteTeachers, setRemoteTeachers] = useState<Teacher[]>([]);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -28,10 +29,12 @@ export default function Explore() {
       .then((teachers) => {
         if (!isMounted) return;
         setRemoteTeachers(teachers);
+        setLoadError("");
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isMounted) return;
         setRemoteTeachers([]);
+        setLoadError(error instanceof Error ? error.message : "Não foi possível carregar as professoras.");
       })
       .finally(() => {
         if (!isMounted) return;
@@ -126,6 +129,14 @@ export default function Explore() {
               index={index}
             />
           ))
+        ) : loadError ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+          >
+            <p className="text-muted-foreground">{loadError}</p>
+          </motion.div>
         ) : (
           <motion.div
             initial={{ opacity: 0 }}

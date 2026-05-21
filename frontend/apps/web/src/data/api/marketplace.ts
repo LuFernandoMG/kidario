@@ -97,20 +97,36 @@ async function marketplaceRequest<TResponse>(path: string): Promise<TResponse> {
   return payload as TResponse;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractMarketplaceTeachersPayload(payload: unknown): MarketplaceTeacherSummaryResponse[] {
+  if (isRecord(payload) && Array.isArray(payload.teachers)) {
+    return payload.teachers as MarketplaceTeacherSummaryResponse[];
+  }
+
+  if (Array.isArray(payload)) {
+    return payload as MarketplaceTeacherSummaryResponse[];
+  }
+
+  throw new Error("Resposta inválida do marketplace de professoras.");
+}
+
 function toTeacherModel(response: MarketplaceTeacherSummaryResponse): Teacher {
   return {
     id: response.id,
-    name: response.name,
+    name: response.name || "Professora Kidario",
     avatar: resolveTeacherAvatarUrl(response.avatar_url),
-    rating: response.rating,
-    reviewCount: response.review_count,
-    pricePerClass: Math.round(response.price_per_class),
-    specialties: response.specialties,
-    isVerified: response.is_verified,
-    isOnline: response.is_online,
-    isPresential: response.is_presential,
+    rating: Number(response.rating || 0),
+    reviewCount: Number(response.review_count || 0),
+    pricePerClass: Math.round(Number(response.price_per_class || 0)),
+    specialties: Array.isArray(response.specialties) ? response.specialties : [],
+    isVerified: Boolean(response.is_verified),
+    isOnline: Boolean(response.is_online),
+    isPresential: Boolean(response.is_presential),
     nextAvailability: response.next_availability || undefined,
-    experience: response.experience_label,
+    experience: response.experience_label || "Experiência validada pela plataforma",
     bio: response.bio_snippet || undefined,
   };
 }
@@ -163,8 +179,8 @@ export function mapMarketplaceTeacherDetail(
 }
 
 export async function getMarketplaceTeachers(): Promise<Teacher[]> {
-  const response = await marketplaceRequest<MarketplaceTeachersResponse>("/marketplace/teachers");
-  return response.teachers.map((teacher) => toTeacherModel(teacher));
+  const response = await marketplaceRequest<unknown>("/marketplace/teachers");
+  return extractMarketplaceTeachersPayload(response).map((teacher) => toTeacherModel(teacher));
 }
 
 export async function getMarketplaceTeacherDetail(teacherId: string): Promise<MarketplaceTeacherDetailMapped> {
