@@ -1,6 +1,6 @@
 # Mobile Implementation Backlog
 
-This backlog defines the implementation work required to build `/mobile` as a WebView-first Expo app that wraps the current [`/frontend`](../README.md) and keeps the web app as the main product surface.
+This backlog defines the implementation work required to build `apps/mobile` as a WebView-first Expo app that wraps the current [`apps/web`](../apps/web/README.md) and keeps the web app as the main product surface.
 
 ## Strategy
 
@@ -9,25 +9,25 @@ The active strategy is no longer "duplicate the frontend as a native app".
 The active strategy is:
 
 - keep `frontend` as the single source of truth for product behavior
-- use `/mobile` as a thin shell around the current web app
+- use `apps/mobile` as a thin shell around the current web app
 - add native bridges only when they solve a real mobile product gap
 - postpone selective native rewrites until the mobile wrapper proves product value
 
 Paused path:
 
-- a fully parallel `mobile/src/data/api` + `queries` + `session` stack is not part of the active roadmap
+- a fully parallel `apps/mobile/src/data/api` + `queries` + `session` stack is not part of the active roadmap
 
 ## Milestone 1: Foundation
 
 Goal:
 
-- `/mobile` exists, builds as an Expo app and has a basic route structure.
+- `apps/mobile` exists, builds as an Expo app and has a basic route structure.
 
 Stories:
 
 | ID | Priority | Estimate | Story |
 | --- | --- | --- | --- |
-| MOB-001 | P0 | M | Create `/mobile` Expo Router app with TypeScript, linting, env setup and base scripts. |
+| MOB-001 | P0 | M | Create `apps/mobile` Expo Router app with TypeScript, linting, env setup and base scripts. |
 | MOB-002 | P0 | S | Add root app layout, not-found screen and route groups for `shared`, `parent` and `teacher`. |
 | MOB-003 | P0 | M | Create the mobile theme layer (`colors`, `spacing`, `typography`) and base `Screen` container. |
 | MOB-004 | P1 | M | Port a minimal shared `types` layer that can support future bridges without driving a parallel app architecture. |
@@ -50,7 +50,7 @@ Stories:
 
 Acceptance criteria:
 
-- `/mobile` can open the current frontend root
+- `apps/mobile` can open the current frontend root
 - shared, parent and teacher entry routes can target matching frontend URLs
 - local development works with the frontend running separately
 - the mobile shell does not require duplicating product logic already present in `frontend`
@@ -103,7 +103,7 @@ Stories:
 
 A story is done only if:
 
-- the capability exists in `/mobile`
+- the capability exists in `apps/mobile`
 - it reduces duplication instead of increasing it
 - the wrapped frontend behavior remains the source of truth
 - development and debugging instructions are documented

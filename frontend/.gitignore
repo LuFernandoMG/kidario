@@ -10,11 +10,13 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.vite
 playwright-report
 test-results
 *.local
+*.timestamp-*.mjs
 .env
-/public/email-confirmation-template.html
+apps/web/public/email-confirmation-template.html
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

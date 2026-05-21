@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
+const workspaceRoot = resolve(root, "..", "..");
 const envFiles = [".env.local", ".env"];
 const defaultFrontendWebUrl = "http://localhost:8080";
 const timeoutMultiplier = Number(process.env.DEV_CHECK_TIMEOUT_MULTIPLIER || "1");
@@ -83,6 +84,29 @@ function checkFile(label, path) {
   return false;
 }
 
+function dependencyPackagePath(packageName) {
+  return resolve(root, "node_modules", packageName, "package.json");
+}
+
+function workspaceDependencyPackagePath(packageName) {
+  return resolve(workspaceRoot, "node_modules", packageName, "package.json");
+}
+
+function checkDependency(label, packageName) {
+  const localPath = dependencyPackagePath(packageName);
+  const workspacePath = workspaceDependencyPackagePath(packageName);
+
+  if (existsSync(localPath) || existsSync(workspacePath)) {
+    console.log(`OK   ${label}`);
+    return true;
+  }
+
+  console.log(`FAIL ${label}`);
+  console.log(`Missing: ${localPath}`);
+  console.log(`Missing: ${workspacePath}`);
+  return false;
+}
+
 async function checkFrontendAvailability(url) {
   if (!url || !isValidHttpUrl(url)) {
     console.log("FAIL Frontend shell URL");
@@ -151,16 +175,16 @@ if (frontendUrl && !isValidHttpUrl(frontendUrl)) {
 printSection("Tooling");
 const checks = [
   runCheck("Route contract", "node", ["./scripts/check-route-contract.mjs"], 8000),
-  runCheck("Expo config", "./node_modules/.bin/expo", ["config", "--type", "public"], 30000),
-  runCheck("TypeScript", "./node_modules/.bin/tsc", ["--noEmit", "--pretty", "false"], 45000),
-  runCheck("ESLint", "./node_modules/.bin/eslint", ["app", "src", "app.config.ts", "expo-env.d.ts"], 30000),
+  runCheck("Expo config", "expo", ["config", "--type", "public"], 30000),
+  runCheck("TypeScript", "tsc", ["--noEmit", "--pretty", "false"], 45000),
+  runCheck("ESLint", "eslint", ["app", "src", "app.config.ts", "expo-env.d.ts"], 30000),
 ];
 
 printSection("Shell");
 const shellChecks = [
-  checkFile("react-native-webview", resolve(root, "node_modules/react-native-webview/package.json")),
-  checkFile("expo-document-picker", resolve(root, "node_modules/expo-document-picker/package.json")),
-  checkFile("@react-native-community/netinfo", resolve(root, "node_modules/@react-native-community/netinfo/package.json")),
+  checkDependency("react-native-webview", "react-native-webview"),
+  checkDependency("expo-document-picker", "expo-document-picker"),
+  checkDependency("@react-native-community/netinfo", "@react-native-community/netinfo"),
   await checkFrontendAvailability(frontendUrl),
 ];
 

@@ -18,7 +18,7 @@ This document records the current product limitations of the WebView-first mobil
 ## File Upload
 
 - File upload flows still depend on what the wrapped frontend can do inside the WebView.
-- A native document-picker bridge now exists in `/mobile`, but the frontend still has to consume that contract explicitly.
+- A native document-picker bridge now exists in `apps/mobile`, but the frontend still has to consume that contract explicitly.
 - Camera and richer image capture flows are still not bridged.
 - Teacher profile photo and any browser-dependent upload UX should still be treated as provisional until the frontend consumes the native upload event.
 

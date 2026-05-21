@@ -2,49 +2,49 @@
 
 ## Goal
 
-Keep `frontend` consistent, route-driven, and ready to serve as the reference scope for the future `mobile` app.
+Keep `frontend/apps/web` consistent, route-driven, and ready to serve as the reference scope for the `apps/mobile` shell.
 
 ## Source Of Truth
 
 ### Pages
 
-- `src/pages` root: shared pages only
-- `src/pages/parent`: parent-only journey
-- `src/pages/teacher`: teacher-only journey
+- `apps/web/src/pages` root: shared pages only
+- `apps/web/src/pages/parent`: parent-only journey
+- `apps/web/src/pages/teacher`: teacher-only journey
 
 Pages are route entries. They should not be wrappers around files in another feature tree.
 
 ### Data
 
-- `src/data/api`: backend clients and HTTP contracts
-- `src/data/queries`: TanStack Query hooks
-- `src/data/mock`: mock datasets
+- `apps/web/src/data/api`: backend clients and HTTP contracts
+- `apps/web/src/data/queries`: TanStack Query hooks
+- `apps/web/src/data/mock`: mock datasets
 
 If a module talks to the backend, it belongs in `data/api`.
 
 ### Routes
 
-- `src/routes/paths.ts`: shared canonical routes
-- `src/routes/teacher.ts`: teacher canonical routes and builders
-- `src/routes/admin.ts`: hidden admin path
-- `src/routes/legacy.ts`: supported legacy aliases
+- `apps/web/src/routes/paths.ts`: shared canonical routes
+- `apps/web/src/routes/teacher.ts`: teacher canonical routes and builders
+- `apps/web/src/routes/admin.ts`: hidden admin path
+- `apps/web/src/routes/legacy.ts`: supported legacy aliases
 
 Do not spread route strings through the app when a reusable constant already exists.
 
 ### Types
 
-- `src/types`: shared references for cross-module types
+- `apps/web/src/types`: shared references for cross-module types
 
 Keep one-off component prop types colocated. Shared business or transport types belong in `types` or are re-exported through `types`.
 
 ### Components
 
-- `src/components`: shared and feature UI
-- `src/components/teacher`: teacher-specific UI blocks
+- `apps/web/src/components`: shared and feature UI
+- `apps/web/src/components/teacher`: teacher-specific UI blocks
 
 ### Lib
 
-- `src/lib`: cross-cutting helpers only
+- `apps/web/src/lib`: cross-cutting helpers only
 
 Examples:
 
@@ -56,7 +56,7 @@ Examples:
 
 ## Import Rules
 
-- Route components in `App.tsx` must import from `src/pages` and `src/routes`.
+- Route components in `App.tsx` must import from `apps/web/src/pages` and `apps/web/src/routes`.
 - Page components may import from `components`, `data`, `routes`, `hooks`, `lib`, and `types`.
 - `data/queries` may import from `data/api`, `lib`, and `types`.
 - `data/api` should not import from `pages`.
@@ -116,14 +116,14 @@ Removed:
 
 ## Explicit Non-Goals
 
-- No `src/domains`
+- No `apps/web/src/domains`
 - No page re-export wrappers
 - No teacher flow hidden behind placeholders
 - No UI redesign in this cleanup phase
 
 ## Mobile Preparation
 
-This structure is the reference baseline for a future `mobile/` app:
+This structure is the reference baseline for `apps/mobile`:
 
 - pages define the real frontend scope
 - routes define the stable URL contract

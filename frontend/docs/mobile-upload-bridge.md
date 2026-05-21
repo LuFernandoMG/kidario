@@ -40,4 +40,4 @@ Result shape:
 
 ## Current Limitation
 
-The bridge exists in `/mobile`, but the web frontend does not consume it yet. This is intentional: the mobile shell can now support native selection when the frontend is ready to listen for the event.
+The bridge exists in `apps/mobile`, but the web frontend does not consume it yet. This is intentional: the mobile shell can now support native selection when the frontend is ready to listen for the event.

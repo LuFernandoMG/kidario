@@ -1,145 +1,33 @@
 # Kidario Frontend
 
-Kidario `frontend` is the mobile-first web app for parents and teachers. It keeps the current backend contracts and now follows a single folder convention without `domains`.
+This directory is the frontend workspace for Kidario.
 
-## Current Scope
-
-### Shared pages
-
-- `/` welcome
-- `/login`
-- `/recuperar-senha`
-- `/redefinir-senha`
-- hidden admin dashboard path
-
-### Parent flow
-
-- `/cadastro`
-- `/explorar`
-- `/professora/:id`
-- `/agendar/:id`
-- `/checkout/:id`
-- `/confirmacao-reserva/:bookingId`
-- `/aula/:bookingId`
-- `/chat/:threadId`
-- `/agenda`
-- `/progresso`
-- `/perfil`
-- `/perfil/responsavel`
-
-### Teacher flow
-
-- `/inicio`
-- `/agenda` when the authenticated role is `teacher`
-- `/alunos`
-- `/planejamento`
-- `/financeiro`
-- `/aulas/:bookingId/cierre`
-- `/perfil/professora`
-- `/convites/professoras/cadastro-privado-kidario-a8k3m2`
-
-### Legacy redirects still supported
-
-- `/escolher-professora`
-- `/professora/centro`
-- `/professora/inicio`
-- `/professora/agenda`
-- `/professora/alunos`
-- `/professora/planejamento`
-- `/professora/financeiro`
-
-Removed:
-
-- `/escolher-perfil`
-- `ChooseProfile.tsx`
-
-## Folder Layout
+## Layout
 
 ```text
-src/
-  pages/
-    parent/
-    teacher/
-  components/
-    teacher/
-  data/
-    api/
-    queries/
-    mock/
-  routes/
-  types/
-  hooks/
-  lib/
+apps/
+  web/        Vite React web app
+  mobile/     Expo React Native shell app
+docs/         frontend architecture and mobile shell notes
 ```
 
-Rules:
-
-- `src/pages` root contains only cross-role pages.
-- `src/pages/parent` contains the parent journey.
-- `src/pages/teacher` contains the teacher journey.
-- `src/data/api` contains all backend clients.
-- `src/data/queries` contains TanStack Query hooks.
-- `src/data/mock` contains mocks such as [`src/data/mock/mockTeachers.ts`](./src/data/mock/mockTeachers.ts).
-- `src/routes` is the single source of truth for route constants, builders, and legacy aliases.
-- `src/types` is the shared type reference layer.
-- `src/domains` is no longer part of the frontend architecture.
-
-More detail lives in [`docs/architecture.md`](./docs/architecture.md).
-
-## Stack
-
-- React 18
-- TypeScript
-- Vite 5
-- React Router
-- TanStack Query
-- Tailwind CSS + shadcn/ui
-- Framer Motion
-- Vitest + Testing Library
-- Playwright
-
-## Setup
-
-Requirements:
-
-- Node.js 18+
-- npm
-
-Install and run:
-
-```bash
-npm install
-npm run dev
-```
-
-## Environment
-
-Create `.env.local` from `.env.example` and set:
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `VITE_BACKEND_API_URL`
-- `VITE_SIGNUP_CAPTCHA_ENABLED`
-- `VITE_TURNSTILE_SITE_KEY`
-
-The frontend expects the backend API on `http://localhost:8000/api/v1` by default.
+The current web product lives in `apps/web`. The mobile WebView shell lives in `apps/mobile`. Future shared code should live under `packages/` rather than inside a platform app.
 
 ## Scripts
 
+Run from this directory:
+
 ```bash
+npm install
+npm --prefix apps/mobile install
 npm run dev
 npm run build
-npm run build:dev
-npm run preview
-npm run lint
 npm run test
-npm run test:watch
-npm run test:e2e
+npm run mobile:check
 ```
 
-## Notes
+The default root scripts forward to `apps/web`; `mobile:*` scripts forward to `apps/mobile`. Mobile keeps its own lockfile for now, so install its dependencies with `npm --prefix apps/mobile install`.
 
-- The app keeps the existing backend and auth flow.
-- Parent and teacher web flows are both active.
-- The marketplace still falls back to mock data in some scenarios.
-- The local dependency tree is currently unhealthy: `npm run build` fails because `frontend/node_modules/rollup/dist/es/package.json` is invalid. That blocks full build verification until dependencies are repaired.
+## Architecture
+
+More detail lives in [`docs/architecture.md`](./docs/architecture.md).

@@ -17,15 +17,15 @@ export const metadata: Metadata = createPageMetadata({
 });
 
 const familyFlow = [
-  "A família informa a disciplina, o formato e o momento da criança.",
-  "O Kidario apresenta perfis com mais clareza para apoiar a decisão.",
-  "A reserva acontece com menos atrito e mais visibilidade sobre a cobrança.",
+  "A família informa a disciplina, o formato e a necessidade da criança.",
+  "O Kidario apresenta perfis de professores para apoiar a escolha.",
+  "A reserva acontece com mais facilidade e transparência sobre a cobrança.",
 ] as const;
 
 const educatorFlow = [
-  "O educador se cadastra com contexto sobre sua prática e disponibilidade.",
+  "O educador se cadastra, conta sobre sua prática e apresenta a sua disponibilidade.",
   "A plataforma organiza a apresentação do perfil para famílias.",
-  "As reservas passam a acontecer com uma estrutura mais clara de operação.",
+  "As reservas passam a acontecer de maneira estruturada.",
 ] as const;
 
 const operations = [
@@ -48,8 +48,8 @@ export default function ComoFuncionaPage() {
     <main className="page-main">
       <PageHero
         eyebrow="Como funciona"
-        title="Uma experiência mais clara para famílias e educadores."
-        description="O Kidario procura organizar a jornada dos dois lados da plataforma com menos opacidade, menos ruído operacional e mais foco na aprendizagem."
+        title="Uma experiência mais estruturada."
+        description="O Kidario apoia a organização da rotina de famílias e educadores, facilitando o acompanhamento e mantendo o foco no desenvolvimento."
         actions={[
           { href: "/familias", label: "Ver página para famílias", variant: "ghost" },
           { href: "/educadores", label: "Ver página para educadores", variant: "ghost" },
@@ -63,7 +63,7 @@ export default function ComoFuncionaPage() {
           <PageSectionIntro
             eyebrow="Fluxo da família"
             title="Buscar, escolher e reservar."
-            description="O fluxo para famílias foi pensado para apoiar uma decisão melhor sem acrescentar etapas difíceis de entender."
+            description="O fluxo para famílias foi pensado para facilitar a tomada de decisão sem acrescentar etapas difíceis de entender."
           />
           <ul className="page-list">
             {familyFlow.map((item) => (
@@ -78,7 +78,7 @@ export default function ComoFuncionaPage() {
           <PageSectionIntro
             eyebrow="Fluxo do educador"
             title="Entrar, apresentar e atender."
-            description="O processo do lado dos educadores busca dar mais estrutura ao perfil e à experiência de reserva."
+            description="O processo do lado dos educadores busca dar mais estrutura para uma melhor experiência de reserva."
             dark
           />
           <ul className="page-list page-list-dark">

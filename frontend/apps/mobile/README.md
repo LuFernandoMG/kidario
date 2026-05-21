@@ -1,12 +1,10 @@
 # Kidario Mobile
 
-# Kidario Mobile
-
 Native container for the real `frontend`.
 
-Current strategy: full route fidelity with the public surface of [`frontend/src/App.tsx`](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/src/App.tsx), excluding Admin.
+Current strategy: full route fidelity with the public surface of [`frontend/apps/web/src/App.tsx`](/Users/luisfernando/Documents/Independiente/Projects/kidario_app/frontend/apps/web/src/App.tsx), excluding Admin.
 
-`/mobile` does not implement a parallel product UI. It only provides:
+`frontend/apps/mobile` does not implement a parallel product UI. It only provides:
 
 - full-screen `WebView` on iOS/Android
 - direct handoff to the real frontend on Expo web
@@ -17,16 +15,17 @@ Current strategy: full route fidelity with the public surface of [`frontend/src/
 ## Setup
 
 ```bash
-cd mobile
+cd frontend
 npm install
-npm run start
-npm run dev:check
+npm --prefix apps/mobile install
+npm run mobile:start
+npm run mobile:check
 ```
 
 For local shell debugging, keep the frontend running separately:
 
 ```bash
-cd ../frontend
+cd frontend
 npm run dev
 ```
 
@@ -61,7 +60,7 @@ DEV_CHECK_TIMEOUT_MULTIPLIER=2 npm run dev:check
 
 The development check now also validates:
 
-- route contract fidelity against `frontend/src/routes`
+- route contract fidelity against `frontend/apps/web/src/routes`
 - the shell URL configured in `EXPO_PUBLIC_FRONTEND_WEB_URL`
 - that the local frontend responds over HTTP
 - that `react-native-webview` is installed

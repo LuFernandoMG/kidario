@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = process.cwd();
-const frontendRoot = resolve(root, "..", "frontend", "src", "routes");
+const frontendRoot = resolve(root, "..", "web", "src", "routes");
 const mobileManifestPath = resolve(root, "src", "routes", "frontend.ts");
 
 const scalarRouteNames = [

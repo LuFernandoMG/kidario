@@ -18,7 +18,7 @@ Reasoning:
 
 What this means:
 
-- `/mobile` becomes a shell, not a second full product implementation
+- `apps/mobile` becomes a shell, not a second full product implementation
 - the active roadmap favors reuse of `frontend` over native reimplementation
 - native-only work will be added only when it solves a concrete mobile gap
 
@@ -89,7 +89,7 @@ Current decision:
 ## Guardrails
 
 - `frontend` remains the main source of truth
-- avoid parallel domain logic in `/mobile`
+- avoid parallel domain logic in `apps/mobile`
 - do not build a second complete product surface unless roadmap explicitly changes again
 - prefer shell improvements and small native bridges over broad rewrites
 

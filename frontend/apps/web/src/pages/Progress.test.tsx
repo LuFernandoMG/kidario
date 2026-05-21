@@ -9,6 +9,7 @@ const mockGetParentAgenda = vi.fn();
 const mockGetBookingDetail = vi.fn();
 
 vi.mock("@/lib/authSession", () => ({
+  getAuthSession: () => ({ isAuthenticated: true, role: "parent", email: "parent@example.com" }),
   getSupabaseAccessToken: () => mockGetSupabaseAccessToken(),
 }));
 
@@ -103,7 +104,7 @@ describe("Progress page", () => {
     );
 
     expect(await screen.findByText("Evolucao consistente em leitura.")).toBeInTheDocument();
-    expect(screen.getByText(/Proximos passos:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Próximos passos:/i)).toBeInTheDocument();
     expect(screen.getByText("Ana Carolina Silva")).toBeInTheDocument();
   });
 });

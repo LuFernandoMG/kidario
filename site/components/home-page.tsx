@@ -41,34 +41,34 @@ const heroMetrics = [
 
 const valuePillars = [
   {
-    title: "Rotina leve",
-    body: "Menos atrito para encontrar apoio e mais fluidez para encaixar as aulas no ritmo da família.",
+    title: "Flexibilidade",
+    body: "Menos obstáculos para encontrar apoio e mais facilidade para integrar as aulas à rotina da família.",
   },
   {
-    title: "Sob medida",
-    body: "Cada aula parte do momento da criança, com objetivos mais claros e espaço real para evolução.",
+    title: "Ensino individualizado",
+    body: "Planejamento centrado na criança, com objetivos claros e intervenções ajustadas para promover avanços consistentes.",
   },
   {
-    title: "Confiança real",
-    body: "Verificação, transparência e uma jornada pensada para inspirar segurança sem soar burocrática.",
+    title: "Confiança no processo",
+    body: "Acompanhamento e comunicação transparentes, com uma proposta organizada para dar segurança às famílias.",
   },
 ] as const;
 
 const journeySteps = [
   {
     index: "01",
-    title: "Diga o que precisa",
-    body: "Disciplina, formato e momento da criança. O ponto de partida é sempre a necessidade real da família.",
+    title: "Informe a necessidade",
+    body: "A família informa a disciplina, o formato e a necessidade da criança.",
   },
   {
     index: "02",
-    title: "Escolha com calma",
-    body: "Compare perfis verificados, entenda a proposta de cada educador e veja o encaixe com a rotina.",
+    title: "Escolha com apoio",
+    body: "O Kidario apresenta perfis de professores para apoiar a escolha.",
   },
   {
     index: "03",
-    title: "Reserve e acompanhe",
-    body: "A reserva acontece com mais clareza e a experiência continua organizada antes, durante e depois da aula.",
+    title: "Reserve com clareza",
+    body: "A reserva acontece com mais facilidade e transparência sobre a cobrança.",
   },
 ] as const;
 
@@ -372,10 +372,10 @@ export function HomePage() {
             </div>
 
             <div data-reveal className="section-support-note">
-              <span className="support-card-label">O que muda nesta direção</span>
+              <span className="support-card-label">Segurança ao escolher</span>
               <p>
-                Mais espaço entre blocos, superfícies claras para descanso visual
-                e um scroll com mais presença, sem cair em efeitos excessivos.
+                Uma proposta organizada para reduzir incertezas, apresentar o
+                apoio com mais contexto e facilitar a decisão das famílias.
               </p>
             </div>
           </div>
@@ -393,32 +393,6 @@ export function HomePage() {
               </article>
             ))}
           </div>
-
-          <div className="value-highlight">
-            <div className="value-editorial-line" data-line-reveal />
-            <div className="value-visual-card">
-              <div className="value-visual-copy">
-                <span data-reveal className="support-card-label">
-                  Experiência mais humana
-                </span>
-                <h3 data-reveal>A plataforma apoia a relação entre família e educador.</h3>
-                <p>
-                  O foco continua sendo a criança, o ritmo de aprendizagem e a
-                  construção de confiança desde o primeiro contato.
-                </p>
-              </div>
-
-              <div data-mask-reveal className="value-visual-media">
-                <Image
-                  src="/images/interactive-learning.jpg"
-                  alt="Criança participando de uma atividade de aprendizagem interativa"
-                  fill
-                  sizes="(max-width: 1080px) 100vw, 36vw"
-                  className="value-visual-image media-cover-image media-focus-top"
-                />
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -427,14 +401,15 @@ export function HomePage() {
           <div className="section-intro section-intro-dark">
             <div data-reveal className="section-intro-copy">
               <p className="section-eyebrow">Como funciona</p>
-              <h2 className="section-heading-light">Buscar. Reservar. Aprender.</h2>
+              <h2 className="section-heading-light">Uma experiência mais estruturada.</h2>
             </div>
 
             <div data-reveal className="section-support-note section-support-note-dark">
-              <span className="support-card-label">Jornada da família</span>
+              <span className="support-card-label">Rotina e acompanhamento</span>
               <p>
-                O processo foi pensado para simplificar a tomada de decisão sem
-                esvaziar o cuidado pedagógico.
+                O Kidario apoia a organização da rotina de famílias e
+                educadores, facilitando o acompanhamento e mantendo o foco no
+                desenvolvimento.
               </p>
             </div>
           </div>
@@ -454,12 +429,11 @@ export function HomePage() {
           <div className="process-editorial">
             <div className="process-editorial-grid">
               <div data-reveal className="process-editorial-copy">
-                <span className="support-card-label">Mais transparência</span>
-                <h3>Menos etapas opacas. Mais segurança para escolher.</h3>
+                <span className="support-card-label">Buscar, escolher e reservar</span>
+                <h3>Uma jornada para decidir sem etapas difíceis de entender.</h3>
                 <p>
-                  A família entende o que vai acontecer em cada passo, com uma
-                  experiência mais direta para buscar, reservar e organizar as
-                  aulas.
+                  O fluxo para famílias foi pensado para facilitar a tomada de
+                  decisão sem acrescentar etapas difíceis de entender.
                 </p>
                 <Link href="/como-funciona" className="button button-ghost">
                   Ver fluxo completo

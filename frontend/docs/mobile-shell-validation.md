@@ -4,13 +4,13 @@ This document defines the validation scope for milestone 3 of the WebView-first 
 
 ## Goal
 
-Confirm that the current [`/frontend`](../README.md) can be reached from `/mobile` through explicit shell entry points, without rebuilding the same product logic natively.
+Confirm that the current [`apps/web`](../apps/web/README.md) can be reached from [`apps/mobile`](../apps/mobile/README.md) through explicit shell entry points, without rebuilding the same product logic natively.
 
 ## Preconditions
 
 1. Run the frontend separately.
-2. Set `EXPO_PUBLIC_FRONTEND_WEB_URL` in [`/mobile/.env.example`](../../mobile/.env.example) or rely on the default `http://localhost:8080`.
-3. Start the mobile shell from [`/mobile`](../../mobile/README.md).
+2. Set `EXPO_PUBLIC_FRONTEND_WEB_URL` in [`apps/mobile/.env.example`](../apps/mobile/.env.example) or rely on the default `http://localhost:8080`.
+3. Start the mobile shell from [`apps/mobile`](../apps/mobile/README.md), or run `npm run mobile:start` from `frontend`.
 
 ## Shared Auth Flows
 
@@ -62,7 +62,7 @@ Validation expectations:
 
 ## Current Result
 
-Milestone 3 route coverage now exists in `/mobile` for:
+Milestone 3 route coverage now exists in `apps/mobile` for:
 
 - shared auth routes
 - parent core entry routes
