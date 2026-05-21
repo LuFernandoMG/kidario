@@ -7,6 +7,7 @@ Platform-neutral frontend contracts shared by `apps/web` and `apps/mobile`.
 - `src/routes/frontend.ts`: canonical frontend route contract and route builders.
 - `src/mobile/frontendWeb.ts`: frontend URL normalization and URL classification.
 - `src/mobile/deepLinks.ts`: Kidario mobile deep-link parsing and builders.
+- `src/mobile/networkStatus.ts`: shared network status type and pure state transitions.
 - `src/mobile/webviewBridge.ts`: WebView upload bridge message types and injected script builders.
 
 ## Rules

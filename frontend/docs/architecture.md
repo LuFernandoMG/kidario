@@ -37,6 +37,7 @@ Do not spread route strings through the app when a reusable constant already exi
 
 - `packages/shared/src/mobile/frontendWeb.ts`: frontend base URL normalization and URL classification
 - `packages/shared/src/mobile/deepLinks.ts`: Kidario mobile deep-link parsing and builders
+- `packages/shared/src/mobile/networkStatus.ts`: shared network status type and pure state transitions
 - `packages/shared/src/mobile/webviewBridge.ts`: WebView upload bridge message contract and bootstrap script
 - `apps/mobile/src/lib`: mobile-facing wrappers around these shared contracts
 

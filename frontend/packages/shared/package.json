@@ -9,6 +9,7 @@
   "exports": {
     "./mobile/deepLinks": "./src/mobile/deepLinks.ts",
     "./mobile/frontendWeb": "./src/mobile/frontendWeb.ts",
+    "./mobile/networkStatus": "./src/mobile/networkStatus.ts",
     "./mobile/webviewBridge": "./src/mobile/webviewBridge.ts",
     "./routes/frontend": "./src/routes/frontend.ts"
   }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import NetInfo from "@react-native-community/netinfo";
 
-export type NetworkStatus = "online" | "offline" | "reconnecting";
+import { resolveNetworkStatusTransition, type NetworkStatus } from "@kidario/shared/mobile/networkStatus";
 
 export function useNetworkStatus(): NetworkStatus {
   const [status, setStatus] = useState<NetworkStatus>("online");
@@ -12,15 +12,17 @@ export function useNetworkStatus(): NetworkStatus {
       const isOnline = Boolean(state.isConnected) && state.isInternetReachable !== false;
 
       setStatus((current) => {
-        if (!isOnline) {
+        const nextStatus = resolveNetworkStatusTransition(current, isOnline);
+
+        if (nextStatus === "offline") {
           if (reconnectTimerRef.current) {
             clearTimeout(reconnectTimerRef.current);
             reconnectTimerRef.current = null;
           }
-          return "offline";
+          return nextStatus;
         }
 
-        if (current === "offline") {
+        if (current === "offline" && nextStatus === "reconnecting") {
           if (reconnectTimerRef.current) {
             clearTimeout(reconnectTimerRef.current);
           }
@@ -30,10 +32,10 @@ export function useNetworkStatus(): NetworkStatus {
             reconnectTimerRef.current = null;
           }, 2000);
 
-          return "reconnecting";
+          return nextStatus;
         }
 
-        return current === "reconnecting" ? current : "online";
+        return nextStatus;
       });
     });
 
