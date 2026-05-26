@@ -2,71 +2,65 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 BookingModality = Literal["online", "presencial"]
 BookingStatus = Literal["pendente", "confirmada", "cancelada", "concluida"]
-PaymentMethod = Literal["cartao", "pix"]
-PaymentStatus = Literal["pendente", "pago", "falhou"]
+PaymentMethod = Literal["credit_card", "pix", "boleto"]
+PaymentOrderStatus = Literal[
+    "created",
+    "pending",
+    "paid",
+    "payment_failed",
+    "canceled",
+    "refunded",
+    "partially_refunded",
+]
 
 
-def _validate_hh_mm(value: str, field_name: str) -> str:
-    if len(value) != 5 or value[2] != ":":
-        raise ValueError(f"{field_name} must have format HH:mm.")
-
-    hours_part, minutes_part = value.split(":", maxsplit=1)
-    if not hours_part.isdigit() or not minutes_part.isdigit():
-        raise ValueError(f"{field_name} must have format HH:mm.")
-
-    hours = int(hours_part)
-    minutes = int(minutes_part)
-    if hours < 0 or hours > 23 or minutes < 0 or minutes > 59:
-        raise ValueError(f"{field_name} must have format HH:mm.")
-    return value
+class PaymentOrderView(BaseModel):
+    id: UUID
+    amount_cents: int
+    currency: str = "BRL"
+    status: PaymentOrderStatus
 
 
 class BookingCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    parent_profile_id: UUID | None = None
-    child_id: UUID | None = None
-    teacher_profile_id: UUID
-    date_iso: date
-    time: str
-    duration_minutes: int = Field(ge=15, le=300)
+    child_id: UUID
+    teacher_id: UUID
+    starts_at: datetime
+    duration_minutes: int | None = Field(default=None, ge=15, le=300)
     modality: BookingModality
     payment_method: PaymentMethod
+    package_id: UUID | None = None
     coupon_code: str | None = None
-
-    @field_validator("time")
-    @classmethod
-    def validate_time(cls, value: str) -> str:
-        return _validate_hh_mm(value, "time")
 
 
 class BookingCreateResponse(BaseModel):
     status: str = "ok"
     booking_id: UUID
     booking_status: BookingStatus
-    payment_status: PaymentStatus
+    payment_order: PaymentOrderView
 
 
 class ParentAgendaLesson(BaseModel):
     id: UUID
+    parent_id: UUID
     teacher_id: UUID
     teacher_name: str
     teacher_avatar_url: str | None = None
-    specialty: str | None = None
+    skill: str | None = None
     child_id: UUID
     child_name: str
-    date_iso: date
-    date_label: str
-    time: str
+    starts_at: datetime
+    duration_minutes: int
     modality: BookingModality
     status: BookingStatus
-    created_at_iso: datetime
-    updated_at_iso: datetime
+    created_at: datetime
+    updated_at: datetime
 
 
 class ParentAgendaResponse(BaseModel):
@@ -75,12 +69,11 @@ class ParentAgendaResponse(BaseModel):
 
 class TeacherAgendaLesson(BaseModel):
     id: UUID
-    parent_profile_id: UUID
+    parent_id: UUID
     child_id: UUID
     child_name: str
-    child_age: int | None = None
-    date_iso: date
-    time: str
+    child_birth_month_year: date | None = None
+    starts_at: datetime
     duration_minutes: int
     modality: BookingModality
     status: BookingStatus
@@ -110,25 +103,26 @@ class BookingActions(BaseModel):
     can_reschedule: bool
     can_cancel: bool
     can_complete: bool
+    can_review: bool = False
 
 
 class BookingDetailResponse(BaseModel):
     id: UUID
-    parent_profile_id: UUID
+    parent_id: UUID
     child_id: UUID
     child_name: str
     teacher_id: UUID
     teacher_name: str
     teacher_avatar_url: str | None = None
-    specialty: str | None = None
-    date_iso: date
-    date_label: str
-    time: str
+    skill: str | None = None
+    starts_at: datetime
     duration_minutes: int
     modality: BookingModality
     status: BookingStatus
-    price_total: float
+    amount_cents: int
     currency: str
+    payment_order: PaymentOrderView | None = None
+    package_id: UUID | None = None
     cancellation_reason: str | None = None
     latest_follow_up: BookingLatestFollowUp | None = None
     actions: BookingActions
@@ -137,23 +131,16 @@ class BookingDetailResponse(BaseModel):
 class BookingReschedulePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    new_date_iso: date
-    new_time: str
+    starts_at: datetime
     reason: str | None = None
-
-    @field_validator("new_time")
-    @classmethod
-    def validate_new_time(cls, value: str) -> str:
-        return _validate_hh_mm(value, "new_time")
 
 
 class BookingRescheduleResponse(BaseModel):
     status: str = "ok"
     booking_id: UUID
-    date_iso: date
-    time: str
+    starts_at: datetime
     booking_status: BookingStatus
-    updated_at_iso: datetime
+    updated_at: datetime
 
 
 class TeacherBookingDecisionPatch(BaseModel):
@@ -167,7 +154,7 @@ class TeacherBookingDecisionResponse(BaseModel):
     status: str = "ok"
     booking_id: UUID
     booking_status: BookingStatus
-    updated_at_iso: datetime
+    updated_at: datetime
     cancellation_reason: str | None = None
 
 
@@ -182,7 +169,7 @@ class BookingCancelResponse(BaseModel):
     booking_id: UUID
     booking_status: BookingStatus
     cancellation_reason: str
-    updated_at_iso: datetime
+    updated_at: datetime
 
 
 class BookingFollowUpPayload(BaseModel):
@@ -213,10 +200,8 @@ class TeacherFollowUpContextResponse(BaseModel):
     booking_id: UUID
     child_id: UUID
     child_name: str
-    child_age: int | None = None
-    date_iso: date
-    date_label: str
-    time: str
+    child_birth_month_year: date | None = None
+    starts_at: datetime
     duration_minutes: int
     modality: BookingModality
     status: BookingStatus
@@ -228,11 +213,10 @@ class TeacherFollowUpContextResponse(BaseModel):
 
 
 class TeacherAvailabilityDaySlots(BaseModel):
-    date_iso: date
-    date_label: str
-    times: list[str]
+    date: date
+    starts_at: list[datetime]
 
 
 class TeacherAvailabilitySlotsResponse(BaseModel):
-    teacher_profile_id: UUID
+    teacher_id: UUID
     slots: list[TeacherAvailabilityDaySlots]

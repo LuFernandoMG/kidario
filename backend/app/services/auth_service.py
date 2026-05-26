@@ -204,8 +204,9 @@ def signup_with_profile(db: Session, settings: Settings, payload: AuthSignupRequ
 
     return {
         "status": "ok",
-        "profile_id": UUID(str(profile_data["profile_id"])),
-        "auth_user_id": UUID(auth_user_id),
+        "user_id": UUID(auth_user_id),
+        "parent_id": profile_data.get("parent_id"),
+        "teacher_id": profile_data.get("teacher_id"),
         "role": payload.role,
         "email_confirmation_required": not has_session,
         "access_token": session.get("access_token"),

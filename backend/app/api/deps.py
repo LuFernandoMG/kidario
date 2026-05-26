@@ -63,10 +63,10 @@ def get_current_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
     return user
 
 
-def _get_profile_role(db: Session, profile_id: str) -> str | None:
+def _get_user_role(db: Session, user_id: str) -> str | None:
     return db.execute(
-        text("select role from profiles where id = :profile_id"),
-        {"profile_id": profile_id},
+        text("select role from users where id = :user_id"),
+        {"user_id": user_id},
     ).scalar()
 
 
@@ -74,7 +74,7 @@ def get_current_teacher_user(
     user: AuthUser = Security(get_current_user),
     db: Session = Depends(get_db),
 ) -> AuthUser:
-    role = _get_profile_role(db, user.user_id)
+    role = _get_user_role(db, user.user_id)
     if role != "teacher":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -87,7 +87,7 @@ def get_current_parent_user(
     user: AuthUser = Security(get_current_user),
     db: Session = Depends(get_db),
 ) -> AuthUser:
-    role = _get_profile_role(db, user.user_id)
+    role = _get_user_role(db, user.user_id)
     if role != "parent":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

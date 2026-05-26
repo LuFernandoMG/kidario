@@ -43,16 +43,17 @@ def test_get_marketplace_teachers_returns_list(client: TestClient, monkeypatch: 
             "teachers": [
                 {
                     "id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
+                    "user_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
                     "name": "Ana Carolina Silva",
                     "avatar_url": "https://example.com/avatar.jpg",
                     "rating": 4.9,
                     "review_count": 28,
-                    "price_per_class": 120.0,
-                    "specialties": ["Alfabetizacao"],
+                    "price_per_class_cents": 12000,
+                    "skills": ["Alfabetizacao"],
                     "is_verified": True,
                     "is_online": True,
                     "is_presential": False,
-                    "next_availability": "Hoje, 14h",
+                    "next_availability": "2026-06-25T14:00:00Z",
                     "experience_label": "Experiencia validada pela plataforma",
                     "bio_snippet": "Pedagoga com foco em alfabetizacao.",
                 }
@@ -74,7 +75,7 @@ def test_get_marketplace_teacher_detail_returns_404(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _fake_get_marketplace_teacher_detail(db, teacher_profile_id):
+    def _fake_get_marketplace_teacher_detail(db, teacher_id):
         raise MarketplaceNotFoundError("Teacher not found in marketplace.")
 
     monkeypatch.setattr(
@@ -93,26 +94,28 @@ def test_get_marketplace_teacher_detail_returns_academic_history_and_experiences
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _fake_get_marketplace_teacher_detail(db, teacher_profile_id):
+    def _fake_get_marketplace_teacher_detail(db, teacher_id):
         return {
             "id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
+            "user_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "name": "Ana Carolina Silva",
             "avatar_url": "https://example.com/avatar.jpg",
             "rating": 4.9,
             "review_count": 28,
-            "price_per_class": 120.0,
-            "specialties": ["Alfabetizacao"],
+            "price_per_class_cents": 12000,
+            "skills": ["Alfabetizacao"],
             "is_verified": True,
             "is_online": True,
             "is_presential": False,
             "experience_label": "2 experiencias registradas",
-            "request_experience_anonymity": False,
+            "hide_experience": False,
             "bio": "Pedagoga com foco em alfabetizacao.",
             "city": "Sao Paulo",
             "state": "SP",
-            "formations": [
+            "academic_records": [
                 {
                     "id": "8e6fb361-8746-4484-b5c1-83059678e9e5",
+                    "teacher_id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
                     "degree_type": "mestrado",
                     "course_name": "Psicopedagogia",
                     "institution": "Universidade Exemplo",
@@ -122,9 +125,10 @@ def test_get_marketplace_teacher_detail_returns_academic_history_and_experiences
             "experiences": [
                 {
                     "id": "5e657790-cf40-4d82-99df-f77b47ce1ad4",
+                    "teacher_id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
                     "institution": "Colegio Exemplo",
                     "role": "Professora alfabetizadora",
-                    "responsibilities": "Acompanhamento individual de leitura e escrita.",
+                    "description": "Acompanhamento individual de leitura e escrita.",
                     "period_from": "2021-01",
                     "period_to": None,
                     "current_position": True,
@@ -144,8 +148,8 @@ def test_get_marketplace_teacher_detail_returns_academic_history_and_experiences
 
     assert response.status_code == 200
     body = response.json()
-    assert body["request_experience_anonymity"] is False
-    assert len(body["formations"]) == 1
-    assert body["formations"][0]["course_name"] == "Psicopedagogia"
+    assert body["hide_experience"] is False
+    assert len(body["academic_records"]) == 1
+    assert body["academic_records"][0]["course_name"] == "Psicopedagogia"
     assert len(body["experiences"]) == 1
     assert body["experiences"][0]["role"] == "Professora alfabetizadora"

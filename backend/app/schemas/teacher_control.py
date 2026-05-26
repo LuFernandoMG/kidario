@@ -25,10 +25,8 @@ class TeacherAgendaControlLesson(BaseModel):
     id: UUID
     child_id: UUID
     child_name: str
-    parent_profile_id: UUID
-    date_iso: date
-    date_label: str
-    time: str
+    parent_id: UUID
+    starts_at: datetime
     duration_minutes: int
     modality: BookingModality
     status: BookingStatus
@@ -48,8 +46,7 @@ class TeacherChatPreview(BaseModel):
     booking_status: BookingStatus
     child_name: str
     parent_name: str
-    lesson_date_iso: date
-    lesson_time: str
+    lesson_starts_at: datetime
     last_message_at: datetime | None = None
     updated_at: datetime
 
@@ -57,10 +54,10 @@ class TeacherChatPreview(BaseModel):
 class TeacherStudentOverview(BaseModel):
     child_id: UUID
     child_name: str
-    child_age: int | None = None
+    child_birth_month_year: date | None = None
     total_lessons: int
     completed_lessons: int
-    latest_lesson_date: date | None = None
+    latest_lesson_at: datetime | None = None
     latest_follow_up_summary: str | None = None
     progress_status: Literal["sem_dados", "atencao", "consistente"]
 
@@ -79,9 +76,7 @@ class TeacherStudentTimelineEntry(BaseModel):
     booking_id: UUID
     child_id: UUID
     child_name: str
-    date_iso: date
-    date_label: str
-    time: str
+    starts_at: datetime
     summary: str | None = None
     recent_objectives: list[TeacherLessonObjective]
     has_follow_up: bool
@@ -97,9 +92,9 @@ class TeacherStudentTimelineResponse(BaseModel):
 
 class TeacherFinanceSummary(BaseModel):
     currency: str = "BRL"
-    gross_revenue_total: float
-    paid_total: float
-    pending_payment_total: float
+    gross_revenue_total_cents: int
+    paid_total_cents: int
+    pending_payment_total_cents: int
     completed_lessons_count: int
     paid_lessons_count: int
 

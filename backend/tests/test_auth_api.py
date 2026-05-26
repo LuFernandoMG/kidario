@@ -45,8 +45,9 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
     def _fake_signup_with_profile(db, settings, payload):
         return {
             "status": "ok",
-            "profile_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
-            "auth_user_id": UUID("b4f13a88-9e68-4d11-bd1b-5d03498ea5f0"),
+            "user_id": UUID("b4f13a88-9e68-4d11-bd1b-5d03498ea5f0"),
+            "parent_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "teacher_id": None,
             "role": "parent",
             "email_confirmation_required": False,
             "access_token": "access-token",
@@ -56,6 +57,7 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
         }
 
     monkeypatch.setattr(auth_endpoints, "signup_with_profile", _fake_signup_with_profile)
+    monkeypatch.setattr(auth_endpoints, "enforce_signup_protection", lambda settings, payload, client_ip: None)
 
     response = client.post(
         "/api/v1/auth/signup",
@@ -67,8 +69,16 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
                 "first_name": "Maria",
                 "last_name": "Silva",
                 "cpf": "12345678901",
+                "phone": "(11) 99999-9999",
+                "birth_date": "1987-10-01",
+                "address": {
+                    "street": "Rua A",
+                    "district": "Centro",
+                    "city": "Sao Paulo",
+                    "state": "SP",
+                },
                 "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04"}],
+                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
                     "delete_ids": [],
                 },
             },
@@ -87,6 +97,7 @@ def test_post_auth_signup_returns_conflict(client: TestClient, monkeypatch: pyte
         raise AuthSignupError("Este e-mail ja esta cadastrado.", status_code=409)
 
     monkeypatch.setattr(auth_endpoints, "signup_with_profile", _fake_signup_with_profile)
+    monkeypatch.setattr(auth_endpoints, "enforce_signup_protection", lambda settings, payload, client_ip: None)
 
     response = client.post(
         "/api/v1/auth/signup",
@@ -96,8 +107,17 @@ def test_post_auth_signup_returns_conflict(client: TestClient, monkeypatch: pyte
             "role": "parent",
             "parent_profile": {
                 "first_name": "Maria",
+                "phone": "(11) 99999-9999",
+                "cpf": "12345678901",
+                "birth_date": "1987-10-01",
+                "address": {
+                    "street": "Rua A",
+                    "district": "Centro",
+                    "city": "Sao Paulo",
+                    "state": "SP",
+                },
                 "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04"}],
+                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
                     "delete_ids": [],
                 },
             },
@@ -118,7 +138,7 @@ def test_post_auth_signup_requires_role_specific_payload(client: TestClient) -> 
             "parent_profile": {
                 "first_name": "Ana",
                 "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04"}],
+                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
                     "delete_ids": [],
                 },
             },
@@ -136,8 +156,9 @@ def test_post_auth_signup_rejects_honeypot(client: TestClient, monkeypatch: pyte
         called = True
         return {
             "status": "ok",
-            "profile_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
-            "auth_user_id": UUID("b4f13a88-9e68-4d11-bd1b-5d03498ea5f0"),
+            "user_id": UUID("b4f13a88-9e68-4d11-bd1b-5d03498ea5f0"),
+            "parent_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "teacher_id": None,
             "role": "parent",
             "email_confirmation_required": False,
             "access_token": "access-token",
@@ -159,8 +180,16 @@ def test_post_auth_signup_rejects_honeypot(client: TestClient, monkeypatch: pyte
                 "first_name": "Maria",
                 "last_name": "Silva",
                 "cpf": "12345678901",
+                "phone": "(11) 99999-9999",
+                "birth_date": "1987-10-01",
+                "address": {
+                    "street": "Rua A",
+                    "district": "Centro",
+                    "city": "Sao Paulo",
+                    "state": "SP",
+                },
                 "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04"}],
+                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
                     "delete_ids": [],
                 },
             },

@@ -1,5 +1,4 @@
 from collections import defaultdict
-from decimal import Decimal
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -12,12 +11,6 @@ def _build_full_name(first_name: str | None, last_name: str | None, email: str |
     if email and email.strip():
         return email.strip()
     return "Sem nome"
-
-
-def _to_float(value: Decimal | float | int | None) -> float | None:
-    if value is None:
-        return None
-    return float(value)
 
 
 def _format_formation(row: dict) -> str:
@@ -42,7 +35,6 @@ def _format_experience(row: dict) -> str:
     period_from = str(row.get("period_from") or "").strip()
     period_to = str(row.get("period_to") or "").strip()
     period_end_label = "Atual" if row.get("current_position") else (period_to or "N/D")
-
     main = " - ".join(part for part in [role, institution] if part).strip()
     if period_from or period_end_label:
         return f"{main} ({period_from or 'N/D'} a {period_end_label})".strip()
@@ -55,20 +47,22 @@ def get_admin_dashboard(db: Session) -> dict:
             text(
                 """
                 select
-                  tp.profile_id,
-                  p.first_name,
-                  p.last_name,
-                  p.email,
-                  tp.phone,
-                  tp.city,
-                  tp.state,
-                  tp.modality,
-                  tp.hourly_rate,
-                  tp.is_active_teacher,
-                  tp.created_at
-                from teacher_profiles tp
-                join profiles p on p.id = tp.profile_id
-                order by tp.created_at desc
+                  t.id as teacher_id,
+                  t.user_id,
+                  u.first_name,
+                  u.last_name,
+                  u.email,
+                  t.phone,
+                  a.city,
+                  a.state,
+                  t.modality,
+                  t.hourly_rate_cents,
+                  t.is_active,
+                  t.created_at
+                from teachers t
+                join users u on u.id = t.user_id
+                join addresses a on a.id = t.address_id
+                order by t.created_at desc
                 """
             )
         )
@@ -76,17 +70,12 @@ def get_admin_dashboard(db: Session) -> dict:
         .all()
     )
 
-    formation_rows = (
+    academic_rows = (
         db.execute(
             text(
                 """
-                select
-                  profile_id,
-                  degree_type,
-                  course_name,
-                  institution,
-                  completion_year
-                from teacher_formations
+                select teacher_id, degree_type, course_name, institution, completion_year
+                from teacher_academic_records
                 order by created_at desc
                 """
             )
@@ -99,13 +88,7 @@ def get_admin_dashboard(db: Session) -> dict:
         db.execute(
             text(
                 """
-                select
-                  profile_id,
-                  institution,
-                  role,
-                  period_from,
-                  period_to,
-                  current_position
+                select teacher_id, institution, role, period_from, period_to, current_position
                 from teacher_experiences
                 order by created_at desc
                 """
@@ -120,23 +103,26 @@ def get_admin_dashboard(db: Session) -> dict:
             text(
                 """
                 select
-                  pp.profile_id,
-                  p.first_name,
-                  p.last_name,
-                  p.email,
-                  pp.phone,
-                  pp.address,
-                  pp.bio,
-                  pp.created_at,
+                  p.id as parent_id,
+                  p.user_id,
+                  u.first_name,
+                  u.last_name,
+                  u.email,
+                  p.phone,
+                  a.city,
+                  a.state,
+                  p.bio,
+                  p.created_at,
                   coalesce(children.children_count, 0) as children_count
-                from parent_profiles pp
-                join profiles p on p.id = pp.profile_id
+                from parents p
+                join users u on u.id = p.user_id
+                join addresses a on a.id = p.address_id
                 left join (
-                  select profile_id, count(*) as children_count
-                  from parent_children
-                  group by profile_id
-                ) as children on children.profile_id = pp.profile_id
-                order by pp.created_at desc
+                  select parent_id, count(*) as children_count
+                  from children
+                  group by parent_id
+                ) as children on children.parent_id = p.id
+                order by p.created_at desc
                 """
             )
         )
@@ -150,31 +136,37 @@ def get_admin_dashboard(db: Session) -> dict:
                 """
                 select
                   b.id as booking_id,
-                  b.parent_profile_id,
-                  b.teacher_profile_id,
+                  b.parent_id,
+                  b.teacher_id,
                   b.child_id,
-                  pp_parent.first_name as parent_first_name,
-                  pp_parent.last_name as parent_last_name,
-                  pp_parent.email as parent_email,
-                  pp_teacher.first_name as teacher_first_name,
-                  pp_teacher.last_name as teacher_last_name,
-                  pp_teacher.email as teacher_email,
-                  pc.name as child_name,
-                  b.date_iso,
-                  b.time,
+                  u_parent.first_name as parent_first_name,
+                  u_parent.last_name as parent_last_name,
+                  u_parent.email as parent_email,
+                  u_teacher.first_name as teacher_first_name,
+                  u_teacher.last_name as teacher_last_name,
+                  u_teacher.email as teacher_email,
+                  c.name as child_name,
+                  b.starts_at,
                   b.duration_minutes,
                   b.modality,
                   b.status as booking_status,
-                  b.payment_method,
-                  b.payment_status,
-                  b.price_total,
-                  b.currency,
+                  coalesce(po.amount_cents, 0) as amount_cents,
+                  coalesce(po.currency, b.currency, 'BRL') as currency,
                   b.created_at
                 from bookings b
-                join profiles pp_parent on pp_parent.id = b.parent_profile_id
-                join profiles pp_teacher on pp_teacher.id = b.teacher_profile_id
-                join parent_children pc on pc.id = b.child_id
-                order by b.date_iso desc, b.time desc, b.created_at desc
+                join parents p on p.id = b.parent_id
+                join teachers t on t.id = b.teacher_id
+                join users u_parent on u_parent.id = p.user_id
+                join users u_teacher on u_teacher.id = t.user_id
+                join children c on c.id = b.child_id
+                left join lateral (
+                  select amount_cents, currency
+                  from payment_orders
+                  where booking_id = b.id
+                  order by created_at desc
+                  limit 1
+                ) po on true
+                order by b.starts_at desc, b.created_at desc
                 """
             )
         )
@@ -187,26 +179,38 @@ def get_admin_dashboard(db: Session) -> dict:
             text(
                 """
                 select
-                  b.id as booking_id,
-                  b.parent_profile_id,
-                  b.teacher_profile_id,
-                  pp_parent.first_name as parent_first_name,
-                  pp_parent.last_name as parent_last_name,
-                  pp_parent.email as parent_email,
-                  pp_teacher.first_name as teacher_first_name,
-                  pp_teacher.last_name as teacher_last_name,
-                  pp_teacher.email as teacher_email,
-                  b.payment_method,
-                  b.payment_status,
+                  po.id as payment_order_id,
+                  po.booking_id,
+                  po.package_id,
+                  po.parent_id,
+                  u_parent.first_name as parent_first_name,
+                  u_parent.last_name as parent_last_name,
+                  u_parent.email as parent_email,
+                  b.teacher_id,
+                  u_teacher.first_name as teacher_first_name,
+                  u_teacher.last_name as teacher_last_name,
+                  u_teacher.email as teacher_email,
+                  pc.payment_method,
+                  po.status as payment_status,
                   b.status as booking_status,
-                  b.price_total,
-                  b.currency,
-                  b.created_at,
-                  b.updated_at
-                from bookings b
-                join profiles pp_parent on pp_parent.id = b.parent_profile_id
-                join profiles pp_teacher on pp_teacher.id = b.teacher_profile_id
-                order by b.created_at desc
+                  po.amount_cents,
+                  po.currency,
+                  po.created_at,
+                  po.updated_at
+                from payment_orders po
+                join parents p on p.id = po.parent_id
+                join users u_parent on u_parent.id = p.user_id
+                left join bookings b on b.id = po.booking_id
+                left join teachers t on t.id = b.teacher_id
+                left join users u_teacher on u_teacher.id = t.user_id
+                left join lateral (
+                  select payment_method
+                  from payment_charges
+                  where payment_order_id = po.id
+                  order by created_at desc
+                  limit 1
+                ) pc on true
+                order by po.created_at desc
                 """
             )
         )
@@ -214,41 +218,69 @@ def get_admin_dashboard(db: Session) -> dict:
         .all()
     )
 
-    formations_by_profile_id: dict[str, list[str]] = defaultdict(list)
-    for row in formation_rows:
-        profile_id = str(row["profile_id"])
-        formations_by_profile_id[profile_id].append(_format_formation(dict(row)))
+    review_rows = (
+        db.execute(
+            text(
+                """
+                select
+                  br.id,
+                  br.booking_id,
+                  b.parent_id,
+                  b.teacher_id,
+                  br.rating,
+                  br.comment,
+                  br.is_public,
+                  br.status,
+                  br.submitted_at,
+                  br.created_at,
+                  br.updated_at
+                from booking_reviews br
+                join bookings b on b.id = br.booking_id
+                order by br.submitted_at desc
+                limit 100
+                """
+            )
+        )
+        .mappings()
+        .all()
+    )
 
-    experiences_by_profile_id: dict[str, list[str]] = defaultdict(list)
+    academics_by_teacher_id: dict[str, list[str]] = defaultdict(list)
+    for row in academic_rows:
+        academics_by_teacher_id[str(row["teacher_id"])].append(_format_formation(dict(row)))
+
+    experiences_by_teacher_id: dict[str, list[str]] = defaultdict(list)
     for row in experience_rows:
-        profile_id = str(row["profile_id"])
-        experiences_by_profile_id[profile_id].append(_format_experience(dict(row)))
+        experiences_by_teacher_id[str(row["teacher_id"])].append(_format_experience(dict(row)))
 
     return {
         "teachers": [
             {
-                "profile_id": row["profile_id"],
+                "teacher_id": row["teacher_id"],
+                "user_id": row["user_id"],
                 "full_name": _build_full_name(row["first_name"], row["last_name"], row["email"]),
                 "email": row["email"],
                 "phone": row["phone"],
                 "city": row["city"],
                 "state": row["state"],
                 "modality": row["modality"],
-                "hourly_rate": _to_float(row["hourly_rate"]),
-                "formations": formations_by_profile_id.get(str(row["profile_id"]), []),
-                "experiences": experiences_by_profile_id.get(str(row["profile_id"]), []),
-                "is_active_teacher": bool(row["is_active_teacher"]),
+                "hourly_rate_cents": row["hourly_rate_cents"],
+                "academic_records": academics_by_teacher_id.get(str(row["teacher_id"]), []),
+                "experiences": experiences_by_teacher_id.get(str(row["teacher_id"]), []),
+                "is_active": bool(row["is_active"]),
                 "created_at": row["created_at"],
             }
             for row in teacher_rows
         ],
         "parents": [
             {
-                "profile_id": row["profile_id"],
+                "parent_id": row["parent_id"],
+                "user_id": row["user_id"],
                 "full_name": _build_full_name(row["first_name"], row["last_name"], row["email"]),
                 "email": row["email"],
                 "phone": row["phone"],
-                "address": row["address"],
+                "city": row["city"],
+                "state": row["state"],
                 "bio": row["bio"],
                 "children_count": int(row["children_count"]),
                 "created_at": row["created_at"],
@@ -258,28 +290,17 @@ def get_admin_dashboard(db: Session) -> dict:
         "bookings": [
             {
                 "booking_id": row["booking_id"],
-                "parent_profile_id": row["parent_profile_id"],
-                "parent_name": _build_full_name(
-                    row["parent_first_name"],
-                    row["parent_last_name"],
-                    row["parent_email"],
-                ),
-                "teacher_profile_id": row["teacher_profile_id"],
-                "teacher_name": _build_full_name(
-                    row["teacher_first_name"],
-                    row["teacher_last_name"],
-                    row["teacher_email"],
-                ),
+                "parent_id": row["parent_id"],
+                "parent_name": _build_full_name(row["parent_first_name"], row["parent_last_name"], row["parent_email"]),
+                "teacher_id": row["teacher_id"],
+                "teacher_name": _build_full_name(row["teacher_first_name"], row["teacher_last_name"], row["teacher_email"]),
                 "child_id": row["child_id"],
                 "child_name": row["child_name"],
-                "date_iso": row["date_iso"],
-                "time": row["time"],
+                "starts_at": row["starts_at"],
                 "duration_minutes": int(row["duration_minutes"]),
                 "modality": row["modality"],
                 "booking_status": row["booking_status"],
-                "payment_method": row["payment_method"],
-                "payment_status": row["payment_status"],
-                "price_total": _to_float(row["price_total"]) or 0.0,
+                "amount_cents": int(row["amount_cents"] or 0),
                 "currency": row["currency"],
                 "created_at": row["created_at"],
             }
@@ -287,27 +308,28 @@ def get_admin_dashboard(db: Session) -> dict:
         ],
         "payments": [
             {
+                "payment_order_id": row["payment_order_id"],
                 "booking_id": row["booking_id"],
-                "parent_profile_id": row["parent_profile_id"],
-                "parent_name": _build_full_name(
-                    row["parent_first_name"],
-                    row["parent_last_name"],
-                    row["parent_email"],
-                ),
-                "teacher_profile_id": row["teacher_profile_id"],
+                "package_id": row["package_id"],
+                "parent_id": row["parent_id"],
+                "parent_name": _build_full_name(row["parent_first_name"], row["parent_last_name"], row["parent_email"]),
+                "teacher_id": row["teacher_id"],
                 "teacher_name": _build_full_name(
                     row["teacher_first_name"],
                     row["teacher_last_name"],
                     row["teacher_email"],
-                ),
+                )
+                if row["teacher_id"]
+                else None,
                 "payment_method": row["payment_method"],
                 "payment_status": row["payment_status"],
                 "booking_status": row["booking_status"],
-                "price_total": _to_float(row["price_total"]) or 0.0,
+                "amount_cents": int(row["amount_cents"] or 0),
                 "currency": row["currency"],
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
             }
             for row in payment_rows
         ],
+        "reviews": [dict(row) for row in review_rows],
     }

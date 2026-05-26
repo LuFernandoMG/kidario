@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from fastapi import APIRouter, Depends, File, HTTPException, Security, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -35,24 +37,27 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     if sqlstate == "42P01":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database schema not initialized. Run backend/sql/001_init_profiles.sql in Supabase SQL Editor.",
+            detail="Database schema not initialized. Run backend/sql migrations through 012.",
         ) from exc
-    if sqlstate == "42703":
-        error_text = str(exc)
-        if 'column "cpf" does not exist' in error_text and "from parent_profiles" in error_text:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    "Database schema is outdated. Missing column parent_profiles.cpf. "
-                    "Run backend/sql/011_add_parent_cpf.sql in Supabase SQL Editor."
-                ),
-            ) from exc
 
     settings = get_settings()
     detail = "Database error."
     if settings.env != "production":
         detail = f"{detail} Reason: {exc}"
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail) from exc
+
+
+def _run_write_transaction(db: Session, operation: Callable[[], dict]) -> dict:
+    if hasattr(db, "in_transaction") and db.in_transaction():
+        try:
+            data = operation()
+            db.commit()
+            return data
+        except Exception:
+            db.rollback()
+            raise
+    with db.begin():
+        return operation()
 
 
 @router.get("/me", response_model=MeResponse)
@@ -108,8 +113,7 @@ def patch_parent(
     db: Session = Depends(get_db),
 ) -> StatusResponse:
     try:
-        with db.begin():
-            data = patch_parent_profile(db, user, payload)
+        data = _run_write_transaction(db, lambda: patch_parent_profile(db, user, payload))
     except ProfileConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ProfileValidationError as exc:
@@ -126,8 +130,7 @@ def patch_teacher(
     db: Session = Depends(get_db),
 ) -> StatusResponse:
     try:
-        with db.begin():
-            data = patch_teacher_profile(db, user, payload)
+        data = _run_write_transaction(db, lambda: patch_teacher_profile(db, user, payload))
     except ProfileConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ProfileValidationError as exc:
@@ -145,15 +148,17 @@ async def upload_teacher_photo(
 ) -> TeacherProfilePhotoUploadResponse:
     file_bytes = await file.read()
     try:
-        with db.begin():
-            data = upload_teacher_profile_photo(
+        data = _run_write_transaction(
+            db,
+            lambda: upload_teacher_profile_photo(
                 db,
                 get_settings(),
                 user,
                 file_name=file.filename,
                 content_type=file.content_type,
                 file_bytes=file_bytes,
-            )
+            ),
+        )
     except ProfilePhotoUploadError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except ProfileConflictError as exc:

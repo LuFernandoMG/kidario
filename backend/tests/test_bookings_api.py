@@ -55,7 +55,12 @@ def test_post_booking_returns_created(client: TestClient, monkeypatch: pytest.Mo
             "status": "ok",
             "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
             "booking_status": "pendente",
-            "payment_status": "pago",
+            "payment_order": {
+                "id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "amount_cents": 12000,
+                "currency": "BRL",
+                "status": "pending",
+            },
         }
 
     monkeypatch.setattr(bookings_endpoints, "create_booking", _fake_create_booking)
@@ -63,12 +68,12 @@ def test_post_booking_returns_created(client: TestClient, monkeypatch: pytest.Mo
     response = client.post(
         "/api/v1/bookings",
         json={
-            "teacher_profile_id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
-            "date_iso": "2026-02-25",
-            "time": "14:00",
+            "teacher_id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
+            "child_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "starts_at": "2026-06-25T14:00:00-03:00",
             "duration_minutes": 60,
             "modality": "online",
-            "payment_method": "cartao",
+            "payment_method": "credit_card",
         },
     )
 
@@ -83,19 +88,19 @@ def test_get_parent_agenda_returns_lessons(client: TestClient, monkeypatch: pyte
             "lessons": [
                 {
                     "id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
+                    "parent_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
                     "teacher_id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
                     "teacher_name": "Ana Carolina Silva",
                     "teacher_avatar_url": "https://example.com/avatar.jpg",
-                    "specialty": "Alfabetizacao",
+                    "skill": "Alfabetizacao",
                     "child_id": "3472def4-1d03-4350-b2c2-20c7fa27d430",
                     "child_name": "Lucas",
-                    "date_iso": "2026-02-25",
-                    "date_label": "25/02/2026",
-                    "time": "14:00",
+                    "starts_at": "2026-06-25T14:00:00Z",
+                    "duration_minutes": 60,
                     "modality": "online",
                     "status": "confirmada",
-                    "created_at_iso": "2026-02-20T10:00:00Z",
-                    "updated_at_iso": "2026-02-20T10:00:00Z",
+                    "created_at": "2026-02-20T10:00:00Z",
+                    "updated_at": "2026-02-20T10:00:00Z",
                 }
             ]
         }
@@ -153,7 +158,7 @@ def test_patch_teacher_booking_decision_returns_ok(
             "status": "ok",
             "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
             "booking_status": "confirmada",
-            "updated_at_iso": "2026-02-25T10:00:00Z",
+            "updated_at": "2026-02-25T10:00:00Z",
             "cancellation_reason": None,
         }
 
@@ -178,10 +183,9 @@ def test_patch_teacher_booking_reschedule_returns_ok(
         return {
             "status": "ok",
             "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
-            "date_iso": "2026-03-03",
-            "time": "16:00",
+            "starts_at": "2026-06-03T16:00:00Z",
             "booking_status": "confirmada",
-            "updated_at_iso": "2026-02-25T10:00:00Z",
+            "updated_at": "2026-02-25T10:00:00Z",
         }
 
     monkeypatch.setattr(bookings_endpoints, "teacher_reschedule_booking", _fake_teacher_reschedule_booking)
@@ -189,16 +193,14 @@ def test_patch_teacher_booking_reschedule_returns_ok(
     response = client.patch(
         "/api/v1/bookings/3472def4-1d03-4350-b2c2-20c7fa27d430/teacher/reschedule",
         json={
-            "new_date_iso": "2026-03-03",
-            "new_time": "16:00",
+            "starts_at": "2026-06-03T16:00:00Z",
         },
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["date_iso"] == "2026-03-03"
-    assert body["time"] == "16:00"
+    assert body["starts_at"] == "2026-06-03T16:00:00Z"
 
 
 def test_get_teacher_follow_up_context_returns_ok(
@@ -210,10 +212,8 @@ def test_get_teacher_follow_up_context_returns_ok(
             "booking_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
             "child_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             "child_name": "Luca",
-            "child_age": 8,
-            "date_iso": "2026-03-03",
-            "date_label": "03/03/2026",
-            "time": "16:00",
+            "child_birth_month_year": "2017-04-01",
+            "starts_at": "2026-06-03T16:00:00Z",
             "duration_minutes": 60,
             "modality": "online",
             "status": "confirmada",
@@ -242,3 +242,33 @@ def test_get_teacher_follow_up_context_returns_ok(
     assert body["booking_id"] == "3472def4-1d03-4350-b2c2-20c7fa27d430"
     assert body["completed_lessons_with_child"] == 1
     assert len(body["class_objectives"]) == 1
+
+
+def test_post_booking_review_returns_created(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_create_booking_review(db, user, booking_id, payload):
+        return {
+            "id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            "booking_id": booking_id,
+            "parent_id": UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+            "teacher_id": UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+            "rating": payload.rating,
+            "comment": payload.comment,
+            "feedback": payload.feedback,
+            "is_public": payload.is_public,
+            "status": "published",
+            "submitted_at": "2026-06-03T18:00:00Z",
+            "created_at": "2026-06-03T18:00:00Z",
+            "updated_at": "2026-06-03T18:00:00Z",
+        }
+
+    monkeypatch.setattr(bookings_endpoints, "create_booking_review", _fake_create_booking_review)
+
+    response = client.post(
+        "/api/v1/bookings/3472def4-1d03-4350-b2c2-20c7fa27d430/review",
+        json={"rating": 5, "comment": "Excelente aula.", "feedback": {"punctuality": 5}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["rating"] == 5
+    assert body["status"] == "published"

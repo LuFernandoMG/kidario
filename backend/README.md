@@ -124,18 +124,21 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
   - `POST /api/v1/profiles/teacher/photo` (`multipart/form-data`, field `file`)
 - Marketplace:
   - `GET /api/v1/marketplace/teachers`
-  - `GET /api/v1/marketplace/teachers/{teacher_profile_id}`
+  - `GET /api/v1/marketplace/teachers/{teacher_id}`
+  - `GET /api/v1/marketplace/teachers/{teacher_id}/reviews`
 - Bookings:
   - `POST /api/v1/bookings`
   - `GET /api/v1/bookings/parent/agenda`
   - `GET /api/v1/bookings/teacher/agenda`
   - `GET /api/v1/bookings/{booking_id}`
+  - `GET /api/v1/bookings/{booking_id}/review`
+  - `POST /api/v1/bookings/{booking_id}/review`
   - `PATCH /api/v1/bookings/{booking_id}/reschedule`
   - `PATCH /api/v1/bookings/{booking_id}/teacher/decision`
   - `PATCH /api/v1/bookings/{booking_id}/teacher/reschedule`
   - `PATCH /api/v1/bookings/{booking_id}/cancel`
   - `PATCH /api/v1/bookings/{booking_id}/complete`
-  - `GET /api/v1/teachers/{teacher_profile_id}/availability/slots`
+  - `GET /api/v1/teachers/{teacher_id}/availability/slots`
 - Chat:
   - `GET /api/v1/chat/threads`
   - `POST /api/v1/chat/threads/from-booking/{booking_id}`
@@ -144,13 +147,22 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
   - `POST /api/v1/chat/threads/{thread_id}/messages`
 - Teacher domain:
   - `GET /api/v1/teacher/control-center/overview`
+  - `GET /api/v1/teacher/students/{child_id}/timeline`
 - Admin:
-  - `PATCH /api/v1/admin/teachers/{profile_id}/activation`
+  - `PATCH /api/v1/admin/teachers/{teacher_id}/activation`
+  - `GET /api/v1/admin/reviews`
+  - `PATCH /api/v1/admin/reviews/{review_id}`
+
+The current backend contract uses the normalized schema introduced in `sql/012_normalized_supabase_schema.sql`.
+Public payloads use internal `parent_id`, `teacher_id`, `child_id`, ISO `starts_at`, `amount_cents`, and payment rows from
+`payment_orders`/`payment_charges`; legacy `profile_id`, `date_iso`/`time`, `price_total`, and booking payment columns are
+only populated internally where older database constraints still require them.
 
 ## Database schema
 
 Apply SQL scripts in order (Supabase SQL Editor):
 
+- `sql/000_reset_public_schema.sql` (optional, destructive reset for development only)
 - `sql/001_init_profiles.sql`
 - `sql/002_rls_profiles.sql`
 - `sql/004_init_bookings.sql`
@@ -161,10 +173,26 @@ Apply SQL scripts in order (Supabase SQL Editor):
 - `sql/009_add_follow_up_objectives.sql`
 - `sql/010_add_booking_activity_plans.sql`
 - `sql/011_add_parent_cpf.sql`
+- `sql/012_normalized_supabase_schema.sql`
 - `sql/003_rls_validation.sql` (optional smoke test)
 
 `002` enables RLS with owner-based policies for `authenticated` users and keeps
 full access for `service_role/postgres` so current FastAPI direct DB access keeps working.
+
+Use `000` only when you want to wipe the current `public` schema and start from
+zero. It drops all public tables, functions, triggers, policies, views and data,
+then recreates the schema grants expected by Supabase. It does not drop
+`auth.users`.
+
+`012` introduces the normalized Supabase model for `users`, `parents`, `teachers`,
+`children`, class packages, Pagar.me-ready payment records, and mobile
+notifications. It backfills from the current tables and keeps sync triggers for
+the legacy table contract while backend services are migrated incrementally. If
+legacy parent/teacher CPF, phone, birth date, or address data is incomplete or
+CPF values are duplicated, the migration uses deterministic placeholder values
+so foreign keys and `NOT NULL`/`UNIQUE` constraints can be created; clean these
+records before enabling production payment flows that require verified
+CPF/address data.
 
 Quick verification query:
 
@@ -173,6 +201,11 @@ select schemaname, tablename, policyname, roles, cmd
 from pg_policies
 where schemaname = 'public'
   and tablename in (
+    'users',
+    'addresses',
+    'parents',
+    'children',
+    'teachers',
     'profiles',
     'parent_profiles',
     'parent_children',
@@ -180,7 +213,14 @@ where schemaname = 'public'
     'teacher_specialties',
     'teacher_formations',
     'teacher_experiences',
-    'teacher_availability'
+    'teacher_availability',
+    'package_plans',
+    'booking_packages',
+    'booking_reviews',
+    'payment_orders',
+    'payment_charges',
+    'notification_devices',
+    'notifications'
   )
 order by tablename, policyname;
 ```

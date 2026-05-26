@@ -53,15 +53,17 @@ def client() -> TestClient:
 def test_profiles_me_returns_profile(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_get_me(db, user):
         return {
-            "profile": {
+            "user": {
                 "id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
                 "email": "hello@luisfernando.io",
                 "first_name": "Luis",
                 "last_name": "Mendez",
                 "role": "parent",
+                "auth_email_confirmed": True,
             },
-            "parent_profile_exists": True,
-            "teacher_profile_exists": False,
+            "role": "parent",
+            "parent_id": UUID("11111111-1111-1111-1111-111111111111"),
+            "teacher_id": None,
         }
 
     monkeypatch.setattr(profiles_endpoints, "get_me", _fake_get_me)
@@ -70,17 +72,18 @@ def test_profiles_me_returns_profile(client: TestClient, monkeypatch: pytest.Mon
 
     assert response.status_code == 200
     body = response.json()
-    assert body["profile"]["email"] == "hello@luisfernando.io"
-    assert body["profile"]["role"] == "parent"
-    assert body["parent_profile_exists"] is True
-    assert body["teacher_profile_exists"] is False
+    assert body["user"]["email"] == "hello@luisfernando.io"
+    assert body["role"] == "parent"
+    assert body["parent_id"] == "11111111-1111-1111-1111-111111111111"
+    assert body["teacher_id"] is None
 
 
 def test_patch_parent_returns_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_patch_parent_profile(db, user, payload):
         return {
             "status": "ok",
-            "profile_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "user_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "parent_id": UUID("11111111-1111-1111-1111-111111111111"),
             "role": "parent",
         }
 
@@ -92,11 +95,20 @@ def test_patch_parent_returns_ok(client: TestClient, monkeypatch: pytest.MonkeyP
             "first_name": "Luis",
             "last_name": "Mendez",
             "cpf": "12345678901",
+            "phone": "(11) 99999-9999",
+            "birth_date": "1987-10-01",
+            "address": {
+                "street": "Rua A",
+                "number": "123",
+                "district": "Centro",
+                "city": "Sao Paulo",
+                "state": "SP",
+            },
             "children_ops": {
                 "upsert": [
                     {
                         "name": "Lucas",
-                        "birth_month_year": "2017-04",
+                        "birth_month_year": "2017-04-01",
                     }
                 ],
                 "delete_ids": [],
@@ -108,14 +120,16 @@ def test_patch_parent_returns_ok(client: TestClient, monkeypatch: pytest.MonkeyP
     body = response.json()
     assert body["status"] == "ok"
     assert body["role"] == "parent"
-    assert body["profile_id"] == "3472def4-1d03-4350-b2c2-20c7fa27d430"
+    assert body["user_id"] == "3472def4-1d03-4350-b2c2-20c7fa27d430"
+    assert body["parent_id"] == "11111111-1111-1111-1111-111111111111"
 
 
 def test_patch_teacher_returns_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_patch_teacher_profile(db, user, payload):
         return {
             "status": "ok",
-            "profile_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "user_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "teacher_id": UUID("22222222-2222-2222-2222-222222222222"),
             "role": "teacher",
         }
 
@@ -126,6 +140,14 @@ def test_patch_teacher_returns_ok(client: TestClient, monkeypatch: pytest.Monkey
         json={
             "first_name": "Ana",
             "last_name": "Silva",
+            "cpf": "12345678900",
+            "address": {
+                "street": "Rua B",
+                "number": "45",
+                "district": "Centro",
+                "city": "Sao Paulo",
+                "state": "SP",
+            },
             "availability_ops": {
                 "upsert": [
                     {
@@ -143,7 +165,8 @@ def test_patch_teacher_returns_ok(client: TestClient, monkeypatch: pytest.Monkey
     body = response.json()
     assert body["status"] == "ok"
     assert body["role"] == "teacher"
-    assert body["profile_id"] == "3472def4-1d03-4350-b2c2-20c7fa27d430"
+    assert body["user_id"] == "3472def4-1d03-4350-b2c2-20c7fa27d430"
+    assert body["teacher_id"] == "22222222-2222-2222-2222-222222222222"
 
 
 def test_patch_teacher_role_conflict_returns_409(
@@ -159,6 +182,13 @@ def test_patch_teacher_role_conflict_returns_409(
         "/api/v1/profiles/teacher",
         json={
             "first_name": "Ana",
+            "cpf": "12345678900",
+            "address": {
+                "street": "Rua B",
+                "district": "Centro",
+                "city": "Sao Paulo",
+                "state": "SP",
+            },
             "availability_ops": {
                 "upsert": [
                     {
@@ -179,26 +209,40 @@ def test_patch_teacher_role_conflict_returns_409(
 def test_get_parent_profile_returns_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_get_parent_profile(db, user):
         return {
-            "profile": {
+            "user": {
                 "id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
                 "email": "hello@luisfernando.io",
                 "first_name": "Luis",
                 "last_name": "Mendez",
                 "role": "parent",
+                "auth_email_confirmed": True,
             },
-            "phone": "(11) 99999-9999",
-            "cpf": "12345678901",
-            "birth_date": "1987-10-01",
-            "address": "Rua A, 123",
-            "bio": "Bio teste",
+            "parent": {
+                "id": UUID("11111111-1111-1111-1111-111111111111"),
+                "user_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+                "address_id": UUID("22222222-2222-2222-2222-222222222222"),
+                "phone": "(11) 99999-9999",
+                "cpf": "12345678901",
+                "birth_date": "1987-10-01",
+                "bio": "Bio teste",
+            },
+            "address": {
+                "id": UUID("22222222-2222-2222-2222-222222222222"),
+                "street": "Rua A",
+                "number": "123",
+                "district": "Centro",
+                "city": "Sao Paulo",
+                "state": "SP",
+                "country": "BR",
+            },
             "children": [
                 {
                     "id": UUID("11111111-1111-1111-1111-111111111111"),
+                    "parent_id": UUID("11111111-1111-1111-1111-111111111111"),
                     "name": "Lucas",
-                    "gender": "masculino",
-                    "age": 8,
+                    "gender": "boy",
                     "current_grade": "3 ano",
-                    "birth_month_year": "2017-04",
+                    "birth_month_year": "2017-04-01",
                     "school": "Colegio A",
                     "focus_points": "Leitura",
                 }
@@ -210,34 +254,47 @@ def test_get_parent_profile_returns_ok(client: TestClient, monkeypatch: pytest.M
 
     assert response.status_code == 200
     body = response.json()
-    assert body["profile"]["role"] == "parent"
-    assert body["cpf"] == "12345678901"
+    assert body["user"]["role"] == "parent"
+    assert body["parent"]["cpf"] == "12345678901"
     assert body["children"][0]["name"] == "Lucas"
 
 
 def test_get_teacher_profile_returns_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_get_teacher_profile(db, user):
         return {
-            "profile": {
+            "user": {
                 "id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
                 "email": "hello@luisfernando.io",
                 "first_name": "Ana",
                 "last_name": "Silva",
                 "role": "teacher",
+                "auth_email_confirmed": True,
             },
-            "phone": "(11) 98888-9999",
-            "cpf": "12345678900",
-            "professional_registration": "REG123",
-            "city": "Sao Paulo",
-            "state": "SP",
-            "modality": "online",
-            "mini_bio": "Bio teacher",
-            "hourly_rate": 120.0,
-            "lesson_duration_minutes": 60,
-            "profile_photo_file_name": "teachers/3472def4/foto.jpg",
-            "request_experience_anonymity": False,
-            "specialties": ["alfabetizacao"],
-            "formations": [],
+            "teacher": {
+                "id": UUID("22222222-2222-2222-2222-222222222222"),
+                "user_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+                "address_id": UUID("33333333-3333-3333-3333-333333333333"),
+                "phone": "(11) 98888-9999",
+                "cpf": "12345678900",
+                "professional_number": "REG123",
+                "modality": "online",
+                "biography": "Bio teacher",
+                "hourly_rate_cents": 12000,
+                "lesson_duration_minutes": 60,
+                "profile_photo_file_name": "teachers/3472def4/foto.jpg",
+                "hide_experience": False,
+                "is_active": True,
+            },
+            "address": {
+                "id": UUID("33333333-3333-3333-3333-333333333333"),
+                "street": "Rua B",
+                "district": "Centro",
+                "city": "Sao Paulo",
+                "state": "SP",
+                "country": "BR",
+            },
+            "skills": ["alfabetizacao"],
+            "academic_records": [],
             "experiences": [],
             "availability": [],
         }
@@ -247,11 +304,11 @@ def test_get_teacher_profile_returns_ok(client: TestClient, monkeypatch: pytest.
 
     assert response.status_code == 200
     body = response.json()
-    assert body["profile"]["role"] == "teacher"
-    assert body["specialties"] == ["alfabetizacao"]
+    assert body["user"]["role"] == "teacher"
+    assert body["skills"] == ["alfabetizacao"]
 
 
-def test_get_parent_profile_returns_503_when_parent_cpf_migration_is_missing(
+def test_get_parent_profile_returns_generic_database_error_for_unexpected_sql_error(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -269,18 +326,16 @@ def test_get_parent_profile_returns_503_when_parent_cpf_migration_is_missing(
 
     response = client.get("/api/v1/profiles/parent")
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == (
-        "Database schema is outdated. Missing column parent_profiles.cpf. "
-        "Run backend/sql/011_add_parent_cpf.sql in Supabase SQL Editor."
-    )
+    assert response.status_code == 500
+    assert response.json()["detail"].startswith("Database error.")
 
 
 def test_upload_teacher_photo_returns_created(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_upload_teacher_profile_photo(db, settings, user, file_name, content_type, file_bytes):
         return {
             "status": "ok",
-            "profile_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "user_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "teacher_id": UUID("22222222-2222-2222-2222-222222222222"),
             "role": "teacher",
             "profile_photo_file_name": "teachers/3472def4-1d03-4350-b2c2-20c7fa27d430/foto.jpg",
         }

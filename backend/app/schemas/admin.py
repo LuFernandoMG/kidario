@@ -1,32 +1,35 @@
-from datetime import date, datetime
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.bookings import BookingModality, BookingStatus, PaymentMethod, PaymentStatus
+from app.schemas.bookings import BookingModality, BookingStatus, PaymentMethod, PaymentOrderStatus
 
 
 class AdminTeacherRecord(BaseModel):
-    profile_id: UUID
+    teacher_id: UUID
+    user_id: UUID
     full_name: str
     email: str
     phone: str | None = None
     city: str | None = None
     state: str | None = None
     modality: str | None = None
-    hourly_rate: float | None = None
-    formations: list[str] = Field(default_factory=list)
+    hourly_rate_cents: int | None = None
+    academic_records: list[str] = Field(default_factory=list)
     experiences: list[str] = Field(default_factory=list)
-    is_active_teacher: bool
+    is_active: bool
     created_at: datetime
 
 
 class AdminParentRecord(BaseModel):
-    profile_id: UUID
+    parent_id: UUID
+    user_id: UUID
     full_name: str
     email: str
-    phone: str | None = None
-    address: str | None = None
+    phone: str
+    city: str
+    state: str
     bio: str | None = None
     children_count: int
     created_at: datetime
@@ -34,35 +37,48 @@ class AdminParentRecord(BaseModel):
 
 class AdminBookingRecord(BaseModel):
     booking_id: UUID
-    parent_profile_id: UUID
+    parent_id: UUID
     parent_name: str
-    teacher_profile_id: UUID
+    teacher_id: UUID
     teacher_name: str
     child_id: UUID
     child_name: str
-    date_iso: date
-    time: str
+    starts_at: datetime
     duration_minutes: int
     modality: BookingModality
     booking_status: BookingStatus
-    payment_method: PaymentMethod
-    payment_status: PaymentStatus
-    price_total: float
+    amount_cents: int
     currency: str
     created_at: datetime
 
 
 class AdminPaymentRecord(BaseModel):
-    booking_id: UUID
-    parent_profile_id: UUID
+    payment_order_id: UUID
+    booking_id: UUID | None = None
+    package_id: UUID | None = None
+    parent_id: UUID
     parent_name: str
-    teacher_profile_id: UUID
-    teacher_name: str
-    payment_method: PaymentMethod
-    payment_status: PaymentStatus
-    booking_status: BookingStatus
-    price_total: float
+    teacher_id: UUID | None = None
+    teacher_name: str | None = None
+    payment_method: PaymentMethod | None = None
+    payment_status: PaymentOrderStatus
+    booking_status: BookingStatus | None = None
+    amount_cents: int
     currency: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminReviewRecord(BaseModel):
+    id: UUID
+    booking_id: UUID
+    parent_id: UUID
+    teacher_id: UUID
+    rating: int
+    comment: str | None = None
+    is_public: bool
+    status: str
+    submitted_at: datetime
     created_at: datetime
     updated_at: datetime
 
@@ -72,6 +88,7 @@ class AdminDashboardResponse(BaseModel):
     parents: list[AdminParentRecord]
     bookings: list[AdminBookingRecord]
     payments: list[AdminPaymentRecord]
+    reviews: list[AdminReviewRecord] = Field(default_factory=list)
 
 
 class AdminAccessResponse(BaseModel):

@@ -47,8 +47,9 @@ class AuthSignupRequest(BaseModel):
 
 class AuthSignupResponse(BaseModel):
     status: str = "ok"
-    profile_id: UUID
-    auth_user_id: UUID
+    user_id: UUID
+    parent_id: UUID | None = None
+    teacher_id: UUID | None = None
     role: SignupRole
     email_confirmation_required: bool
     access_token: str | None = None

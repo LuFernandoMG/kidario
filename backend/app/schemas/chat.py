@@ -6,14 +6,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 BookingStatus = Literal["pendente", "confirmada", "cancelada", "concluida"]
+ChatThreadStatus = Literal["active", "archived", "blocked"]
 
 
 class ChatThreadView(BaseModel):
     id: UUID
     booking_id: UUID
-    parent_profile_id: UUID
-    teacher_profile_id: UUID
+    parent_id: UUID
+    teacher_id: UUID
     child_id: UUID
+    status: ChatThreadStatus
     booking_status: BookingStatus
     is_read_only: bool
     parent_name: str
@@ -40,7 +42,7 @@ class ChatThreadsResponse(BaseModel):
 class ChatMessageView(BaseModel):
     id: UUID
     thread_id: UUID
-    sender_profile_id: UUID
+    sender_user_id: UUID
     body: str
     created_at: datetime
 

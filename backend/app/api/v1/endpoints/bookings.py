@@ -28,6 +28,7 @@ from app.schemas.bookings import (
     TeacherAgendaResponse,
     TeacherAvailabilitySlotsResponse,
 )
+from app.schemas.reviews import BookingReviewCreateRequest, BookingReviewResponse
 from app.services.booking_service import (
     BookingConflictError,
     BookingNotFoundError,
@@ -44,6 +45,14 @@ from app.services.booking_service import (
     reschedule_booking,
     teacher_decide_booking,
     teacher_reschedule_booking,
+)
+from app.services.review_service import (
+    ReviewConflictError,
+    ReviewNotFoundError,
+    ReviewPermissionError,
+    ReviewValidationError,
+    create_booking_review,
+    get_booking_review,
 )
 
 router = APIRouter(tags=["bookings"])
@@ -65,7 +74,7 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
 
 
 def _run_write_transaction(db: Session, operation: Callable[[], dict]) -> dict:
-    if db.in_transaction():
+    if hasattr(db, "in_transaction") and db.in_transaction():
         try:
             data = operation()
             db.commit()
@@ -283,11 +292,11 @@ def get_teacher_follow_up_context_endpoint(
 
 
 @router.get(
-    "/teachers/{teacher_profile_id}/availability/slots",
+    "/teachers/{teacher_id}/availability/slots",
     response_model=TeacherAvailabilitySlotsResponse,
 )
 def get_teacher_slots_endpoint(
-    teacher_profile_id: UUID,
+    teacher_id: UUID,
     date_from: date = Query(alias="from"),
     date_to: date = Query(alias="to"),
     duration_minutes: int = Query(default=60, ge=15, le=300),
@@ -295,7 +304,7 @@ def get_teacher_slots_endpoint(
     db: Session = Depends(get_db),
 ) -> TeacherAvailabilitySlotsResponse:
     try:
-        data = get_teacher_availability_slots(db, teacher_profile_id, date_from, date_to, duration_minutes)
+        data = get_teacher_availability_slots(db, teacher_id, date_from, date_to, duration_minutes)
     except BookingValidationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except BookingNotFoundError as exc:
@@ -303,3 +312,46 @@ def get_teacher_slots_endpoint(
     except SQLAlchemyError as exc:
         _raise_http_from_sql_error(exc)
     return TeacherAvailabilitySlotsResponse(**data)
+
+
+@router.post(
+    "/bookings/{booking_id}/review",
+    response_model=BookingReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_booking_review(
+    booking_id: UUID,
+    payload: BookingReviewCreateRequest,
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> BookingReviewResponse:
+    try:
+        data = _run_write_transaction(db, lambda: create_booking_review(db, user, booking_id, payload))
+    except ReviewNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ReviewPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ReviewValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ReviewConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return BookingReviewResponse(**data)
+
+
+@router.get("/bookings/{booking_id}/review", response_model=BookingReviewResponse)
+def get_booking_review_endpoint(
+    booking_id: UUID,
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> BookingReviewResponse:
+    try:
+        data = get_booking_review(db, user, booking_id)
+    except ReviewNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ReviewPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        _raise_http_from_sql_error(exc)
+    return BookingReviewResponse(**data)
