@@ -53,8 +53,14 @@ def get_current_user(
     return user
 
 
-def get_current_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+def get_current_admin(
+    user: AuthUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AuthUser:
     settings = get_settings()
+    role = _get_user_role(db, user.user_id)
+    if role == "admin":
+        return user
     if not user.email or user.email.lower() not in settings.admin_email_set:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

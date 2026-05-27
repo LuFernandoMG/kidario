@@ -221,6 +221,57 @@ def _ensure_slot_is_available(
         raise BookingConflictError("Selected slot is no longer available.")
 
 
+def _resolve_active_package_for_booking(
+    db: Session,
+    package_id: UUID,
+    parent_id: UUID,
+    teacher_id: UUID,
+    child_id: UUID,
+) -> dict:
+    row = (
+        db.execute(
+            text(
+                """
+                select id, total_sessions, status
+                from booking_packages
+                where id = :package_id
+                  and parent_id = :parent_id
+                  and teacher_id = :teacher_id
+                  and child_id = :child_id
+                """
+            ),
+            {
+                "package_id": str(package_id),
+                "parent_id": str(parent_id),
+                "teacher_id": str(teacher_id),
+                "child_id": str(child_id),
+            },
+        )
+        .mappings()
+        .first()
+    )
+    if not row:
+        raise BookingValidationError("Package purchase does not match this parent, teacher and child.")
+    package = dict(row)
+    if package["status"] != "active":
+        raise BookingValidationError("Package purchase must be active before booking a class.")
+
+    booked_sessions = db.execute(
+        text(
+            """
+            select count(*)
+            from bookings
+            where package_id = :package_id
+              and status <> 'cancelada'
+            """
+        ),
+        {"package_id": str(package_id)},
+    ).scalar_one()
+    if int(booked_sessions) >= int(package["total_sessions"]):
+        raise BookingValidationError("Package purchase has no remaining sessions.")
+    return package
+
+
 def _payment_method_to_legacy(payment_method: str) -> str:
     if payment_method == "credit_card":
         return "cartao"
@@ -300,14 +351,18 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
     resolved_child_id = _resolve_child_id(db, parent_id, payload.child_id)
     teacher = _ensure_teacher_exists(db, payload.teacher_id)
     _ensure_teacher_supports_modality(teacher, payload.modality)
+    if payload.package_id:
+        _resolve_active_package_for_booking(db, payload.package_id, parent_id, payload.teacher_id, resolved_child_id)
     starts_at = _normalize_starts_at(payload.starts_at)
     _ensure_minimum_booking_lead_time(starts_at)
     _ensure_slot_is_available(db, payload.teacher_id, starts_at)
 
     effective_duration_minutes = int(payload.duration_minutes or teacher["lesson_duration_minutes"] or 60)
     hourly_rate_cents = int(teacher["hourly_rate_cents"] or 0)
-    amount_cents = round(hourly_rate_cents * (effective_duration_minutes / 60))
+    amount_cents = 0 if payload.package_id else round(hourly_rate_cents * (effective_duration_minutes / 60))
     booking_status = "pendente"
+    legacy_payment_status = "pago" if payload.package_id else "pendente"
+    normalized_payment_status = "paid" if payload.package_id else "pending"
     legacy_date, legacy_time = _legacy_date_time(starts_at)
     teacher_user_id = resolve_user_id_for_teacher(db, payload.teacher_id)
 
@@ -350,7 +405,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
                         :modality,
                         :status,
                         :legacy_payment_method,
-                        'pendente',
+                        :legacy_payment_status,
                         :price_total,
                         'BRL'
                       )
@@ -371,6 +426,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
                     "modality": payload.modality,
                     "status": booking_status,
                     "legacy_payment_method": _payment_method_to_legacy(payload.payment_method),
+                    "legacy_payment_status": legacy_payment_status,
                     "price_total": amount_cents / 100,
                 },
             )
@@ -399,7 +455,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
                     'legacy',
                     :amount_cents,
                     'BRL',
-                    'pending'
+                    :status
                   )
                 on conflict (id) do update
                 set
@@ -415,6 +471,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
                 "parent_id": str(parent_id),
                 "booking_id": str(booking_row["id"]),
                 "amount_cents": amount_cents,
+                "status": normalized_payment_status,
             },
         )
         .mappings()
@@ -431,7 +488,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
                 public.kidario_legacy_uuid('booking-payment-order', cast(:booking_id as uuid)),
                 'legacy',
                 :payment_method,
-                'pending',
+                :status,
                 :amount_cents
               )
             on conflict (id) do update
@@ -445,6 +502,7 @@ def create_booking(db: Session, user: AuthUser, payload: BookingCreateRequest) -
         {
             "booking_id": str(booking_row["id"]),
             "payment_method": payload.payment_method,
+            "status": normalized_payment_status,
             "amount_cents": amount_cents,
         },
     )

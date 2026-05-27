@@ -60,6 +60,12 @@ Current automated test:
 - `tests/test_health.py` (smoke test de `/api/v1/health`)
 - `tests/test_auth_api.py` (contratos HTTP de `POST /auth/signup`)
 - `tests/test_profiles_api.py` (contratos HTTP de `/profiles/me`, `PATCH /profiles/parent`, `PATCH /profiles/teacher`, y conflicto de rol)
+- `tests/test_v2_profiles_api.py` (contratos HTTP iniciales de `/api/v2/me`, padres, profesores e hijos)
+- `tests/test_v2_explore_api.py` (contratos HTTP iniciales de `/api/v2/explore`)
+- `tests/test_v2_bookings_payments_api.py` (contratos HTTP iniciales de bookings y pagos v2)
+- `tests/test_v2_packages_api.py` (contratos HTTP iniciales de planes de paquetes y compras v2)
+- `tests/test_v2_reviews_api.py` (contratos HTTP consolidados de reviews v2)
+- `tests/test_v2_notifications_api.py` (contratos HTTP iniciales de dispositivos, preferencias y notificaciones v2)
 - `tests/test_bookings_api.py` (contratos HTTP de creación/agenda/detalle/cancelación de bookings)
 - `tests/test_teacher_control_api.py` (contratos HTTP de control center Teacher y listado de chats)
 - `tests/test_marketplace_api.py` (contratos HTTP del marketplace de profesoras)
@@ -152,6 +158,76 @@ curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
   - `PATCH /api/v1/admin/teachers/{teacher_id}/activation`
   - `GET /api/v1/admin/reviews`
   - `PATCH /api/v1/admin/reviews/{review_id}`
+
+## API v2 base
+
+- Prefix: `/api/v2`
+- Identity:
+  - `GET /api/v2/me`
+  - `PATCH /api/v2/me`
+- Parents:
+  - `GET /api/v2/parents/me`
+  - `PATCH /api/v2/parents/me`
+  - `GET /api/v2/parents/me/children`
+  - `POST /api/v2/parents/me/children`
+  - `PATCH /api/v2/parents/me/children/{child_id}`
+  - `DELETE /api/v2/parents/me/children/{child_id}`
+- Teachers:
+  - `GET /api/v2/teachers/me`
+  - `PATCH /api/v2/teachers/me`
+  - `GET /api/v2/teachers/me/package-plans`
+  - `POST /api/v2/teachers/me/package-plans`
+  - `PATCH /api/v2/teachers/me/package-plans/{package_plan_id}`
+- Explore:
+  - `GET /api/v2/explore/teachers`
+  - `GET /api/v2/explore/teachers/{teacher_id}`
+- Bookings:
+  - `POST /api/v2/bookings`
+  - `GET /api/v2/bookings/{booking_id}`
+  - `GET /api/v2/parents/me/bookings`
+  - `GET /api/v2/teachers/me/bookings`
+  - `PATCH /api/v2/bookings/{booking_id}/reschedule`
+  - `PATCH /api/v2/bookings/{booking_id}/teacher/reschedule`
+  - `POST /api/v2/bookings/{booking_id}/decision`
+  - `POST /api/v2/bookings/{booking_id}/cancel`
+  - `POST /api/v2/bookings/{booking_id}/complete`
+  - `POST /api/v2/bookings/{booking_id}/review`
+  - `GET /api/v2/bookings/{booking_id}/review`
+- Packages:
+  - `POST /api/v2/packages/purchases`
+  - `GET /api/v2/parents/me/packages`
+  - `GET /api/v2/teachers/me/packages`
+- Payments:
+  - `GET /api/v2/bookings/{booking_id}/payment`
+  - `GET /api/v2/parents/me/payments`
+  - `GET /api/v2/teachers/me/payments`
+- Reviews:
+  - `GET /api/v2/reviews?teacher_id={teacher_id}`
+  - `GET /api/v2/admin/reviews`
+  - `PATCH /api/v2/admin/reviews/{review_id}`
+- Notifications:
+  - `GET /api/v2/notifications/devices`
+  - `POST /api/v2/notifications/devices`
+  - `DELETE /api/v2/notifications/devices/{device_id}`
+  - `GET /api/v2/notifications/preferences`
+  - `PUT /api/v2/notifications/preferences`
+  - `GET /api/v2/notifications`
+  - `POST /api/v2/notifications/{notification_id}/read`
+  - `POST /api/v2/admin/notifications`
+
+V2 profile responses include nested `address` for self-service parent/teacher profiles, but never return raw `cpf`;
+responses expose only `cpf_masked`. Public signup remains limited to `parent` and `teacher`; internal admin users use
+`users.role = 'admin'`.
+V2 explore responses are self-contained for initial UI rendering: availability preview, rating/review summary, latest reviews,
+and package summaries come in the teacher list/detail payloads.
+V2 packages use `package_plans` for teacher-managed offers and `booking_packages` for purchases. Creating a package
+purchase also creates a `payment_order` and first `payment_charge`, using the same cents/currency contract as bookings.
+Package purchase responses include derived session counters, and bookings with `package_id` require an active package for
+the same parent, teacher and child to avoid duplicate per-class charges. For v2 bookings, `payment_method` is required only
+when the booking is not covered by a package.
+V2 reviews are exposed through a consolidated public list by `teacher_id`, booking-level create/read routes, and admin
+moderation routes. V2 notifications cover device registration, channel/type preferences, inbox reads, and admin-created
+notification rows; delivery providers can consume the same normalized tables later.
 
 The current backend contract uses the normalized schema introduced in `sql/012_normalized_supabase_schema.sql`.
 Public payloads use internal `parent_id`, `teacher_id`, `child_id`, ISO `starts_at`, `amount_cents`, and payment rows from

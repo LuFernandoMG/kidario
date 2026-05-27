@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     env: str = "development"
     api_v1_prefix: str = "/api/v1"
+    api_v2_prefix: str = "/api/v2"
     cors_origins: str = "http://localhost:5173"
 
     supabase_url: str
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     teacher_activity_llm_timeout_seconds: float = 8.0
     teacher_activity_llm_ca_bundle: str | None = None
 
-    @field_validator("api_v1_prefix")
+    @field_validator("api_v1_prefix", "api_v2_prefix")
     @classmethod
     def ensure_prefix_starts_with_slash(cls, value: str) -> str:
         if not value.startswith("/"):

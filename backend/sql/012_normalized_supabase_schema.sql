@@ -45,11 +45,27 @@ create table if not exists public.users (
   email text not null unique,
   first_name text not null,
   last_name text not null,
-  role text not null check (role in ('parent', 'teacher')),
+  role text not null check (role in ('parent', 'teacher', 'admin')),
   auth_email_confirmed boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint
+    where conname = 'users_role_check'
+      and conrelid = 'public.users'::regclass
+  ) then
+    alter table public.users drop constraint users_role_check;
+  end if;
+
+  alter table public.users
+    add constraint users_role_check
+    check (role in ('parent', 'teacher', 'admin'));
+end
+$$;
 
 create table if not exists public.addresses (
   id uuid primary key default gen_random_uuid(),
