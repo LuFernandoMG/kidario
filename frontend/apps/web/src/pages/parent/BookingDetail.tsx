@@ -1,17 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Calendar, Clock, MapPin, Video, FileText, Sparkles, MessageCircle } from "lucide-react";
+import { Calendar, Clock, MapPin, Video, FileText, Sparkles, MessageCircle, Star } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { TeacherBookingHeaderCard } from "@/components/booking/TeacherBookingHeaderCard";
 import { BookingStatusPill } from "@/components/booking/BookingStatusPill";
-import {
-  getStoredBookingById,
-  updateStoredBooking,
-  type StoredBooking,
-} from "@/lib/bookingsStorage";
-import { buildTeacherAvailability, formatDateLong, type DayAvailability } from "@/lib/bookingUtils";
+import { type DayAvailability } from "@/lib/bookingUtils";
 import { BookingActionModal, type BookingActionMode } from "@/components/booking/BookingActionModal";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
@@ -24,6 +19,8 @@ import {
   type BookingDetailResponse,
 } from "@/data/api/bookings";
 import { getOrCreateChatThreadFromBooking } from "@/data/api/chat";
+import { createBookingReview } from "@/data/api/reviews";
+import { Textarea } from "@/components/ui/textarea";
 
 interface FollowUpSnapshot {
   updatedAt: string;
@@ -33,20 +30,36 @@ interface FollowUpSnapshot {
   attentionPoints: string[];
 }
 
-function mapBackendDetailToStoredBooking(detail: BookingDetailResponse, fallback?: StoredBooking | null): StoredBooking {
+interface StoredBooking {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  teacherAvatar?: string;
+  specialty: string;
+  dateLabel: string;
+  dateIso: string;
+  time: string;
+  modality: "online" | "presencial";
+  status: "pendente" | "confirmada" | "cancelada" | "concluida";
+  createdAtIso: string;
+  updatedAtIso?: string;
+  cancellationReason?: string;
+}
+
+function mapBackendDetailToStoredBooking(detail: BookingDetailResponse): StoredBooking {
   return {
     id: detail.id,
     teacherId: detail.teacher_id,
     teacherName: detail.teacher_name,
     teacherAvatar:
-      resolveTeacherAvatarUrl(detail.teacher_avatar_url) || fallback?.teacherAvatar,
-    specialty: detail.specialty || fallback?.specialty || "Apoio pedagógico",
+      resolveTeacherAvatarUrl(detail.teacher_avatar_url),
+    specialty: detail.specialty || "Apoio pedagógico",
     dateLabel: detail.date_label,
     dateIso: detail.date_iso,
     time: detail.time,
     modality: detail.modality,
     status: detail.status,
-    createdAtIso: fallback?.createdAtIso || new Date().toISOString(),
+    createdAtIso: detail.created_at,
     updatedAtIso: new Date().toISOString(),
     cancellationReason: detail.cancellation_reason || undefined,
   };
@@ -68,7 +81,7 @@ export default function BookingDetail() {
   const { toast } = useToast();
 
   const [booking, setBooking] = useState<StoredBooking | null>(() =>
-    bookingId ? getStoredBookingById(bookingId) ?? null : null,
+    null,
   );
   const [backendDetail, setBackendDetail] = useState<BookingDetailResponse | null>(null);
   const [isBackendSource, setIsBackendSource] = useState(false);
@@ -77,6 +90,9 @@ export default function BookingDetail() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOpeningChat, setIsOpeningChat] = useState(false);
   const [remoteAvailability, setRemoteAvailability] = useState<DayAvailability[] | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!bookingId) {
@@ -86,8 +102,7 @@ export default function BookingDetail() {
       return;
     }
 
-    const localBooking = getStoredBookingById(bookingId) ?? null;
-    setBooking(localBooking);
+    setBooking(null);
 
     const authSession = getAuthSession();
     const accessToken = getSupabaseAccessToken();
@@ -103,7 +118,7 @@ export default function BookingDetail() {
         if (!isMounted) return;
         setBackendDetail(detail);
         setIsBackendSource(true);
-        setBooking(mapBackendDetailToStoredBooking(detail, localBooking));
+        setBooking(mapBackendDetailToStoredBooking(detail));
       })
       .catch(() => {
         if (!isMounted) return;
@@ -116,12 +131,7 @@ export default function BookingDetail() {
     };
   }, [bookingId]);
 
-  const localAvailability = useMemo<DayAvailability[]>(() => {
-    if (!booking) return [];
-    return buildTeacherAvailability(booking.teacherId, { days: 14, maxSlotsPerDay: 5 });
-  }, [booking]);
-
-  const availability = remoteAvailability && remoteAvailability.length > 0 ? remoteAvailability : localAvailability;
+  const availability = remoteAvailability && remoteAvailability.length > 0 ? remoteAvailability : [];
 
   useEffect(() => {
     if (!isActionModalOpen || activeModalMode !== "reschedule") return;
@@ -194,6 +204,7 @@ export default function BookingDetail() {
   const canCancel = backendDetail
     ? backendDetail.actions.can_cancel
     : booking.status !== "cancelada" && booking.status !== "concluida";
+  const canReview = Boolean(backendDetail?.actions.can_review);
 
   const priceValue = backendDetail ? backendDetail.price_total : 0;
   const priceLabel = `R$ ${Math.round(priceValue)}`;
@@ -261,20 +272,11 @@ export default function BookingDetail() {
         }
 
         const refreshed = await getBookingDetail(accessToken, booking.id);
-        const mappedBooking = mapBackendDetailToStoredBooking(refreshed, booking);
+        const mappedBooking = mapBackendDetailToStoredBooking(refreshed);
 
         setBackendDetail(refreshed);
         setBooking(mappedBooking);
         setIsActionModalOpen(false);
-
-        updateStoredBooking(booking.id, {
-          dateIso: mappedBooking.dateIso,
-          dateLabel: mappedBooking.dateLabel,
-          time: mappedBooking.time,
-          status: mappedBooking.status,
-          cancellationReason: mappedBooking.cancellationReason,
-          updatedAtIso: new Date().toISOString(),
-        });
 
         toast({
           title: activeModalMode === "reschedule" ? "Aula reagendada" : "Aula cancelada",
@@ -295,47 +297,34 @@ export default function BookingDetail() {
       return;
     }
 
+    setIsSubmitting(false);
+  };
+
+  const handleSubmitReview = async () => {
+    const accessToken = getSupabaseAccessToken();
+    if (!bookingId || !accessToken || !canReview || isSubmittingReview) return;
+
+    setIsSubmittingReview(true);
     try {
-      let updatedBooking: StoredBooking | null = null;
-
-      if (activeModalMode === "reschedule" && payload.dateIso && payload.time) {
-        updatedBooking = updateStoredBooking(booking.id, {
-          dateIso: payload.dateIso,
-          dateLabel: formatDateLong(payload.dateIso),
-          time: payload.time,
-          status: "confirmada",
-          updatedAtIso: new Date().toISOString(),
-        });
-      }
-
-      if (activeModalMode === "cancel") {
-        updatedBooking = updateStoredBooking(booking.id, {
-          status: "cancelada",
-          cancellationReason: payload.reason ?? "",
-          updatedAtIso: new Date().toISOString(),
-        });
-      }
-
-      if (!updatedBooking) {
-        toast({
-          title: "Não foi possível atualizar a aula",
-          description: "Tente novamente em alguns instantes.",
-        });
-        return;
-      }
-
-      setBooking(updatedBooking);
-      setIsActionModalOpen(false);
-
+      await createBookingReview(accessToken, bookingId, {
+        rating: reviewRating,
+        comment: reviewComment.trim() || undefined,
+        is_public: true,
+      });
+      const refreshed = await getBookingDetail(accessToken, bookingId);
+      setBackendDetail(refreshed);
+      setBooking(mapBackendDetailToStoredBooking(refreshed));
       toast({
-        title: activeModalMode === "reschedule" ? "Aula reagendada" : "Aula cancelada",
-        description:
-          activeModalMode === "reschedule"
-            ? "A nova data foi salva na sua agenda."
-            : "A reserva foi marcada como cancelada.",
+        title: "Avaliação enviada",
+        description: "Obrigado por registrar sua experiência com esta aula.",
+      });
+    } catch (error) {
+      toast({
+        title: "Não foi possível enviar a avaliação",
+        description: error instanceof Error ? error.message : "Tente novamente em instantes.",
       });
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingReview(false);
     }
   };
 
@@ -423,6 +412,43 @@ export default function BookingDetail() {
           <section className="card-kidario p-4 border-destructive/30 bg-destructive/5">
             <h3 className="font-medium text-foreground">Motivo do cancelamento</h3>
             <p className="text-sm text-muted-foreground mt-2">{cancellationReason}</p>
+          </section>
+        )}
+
+        {canReview && (
+          <section className="card-kidario p-4 space-y-3">
+            <h2 className="font-display text-lg font-semibold text-foreground">Avaliar aula</h2>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  type="button"
+                  onClick={() => setReviewRating(rating)}
+                  className="p-1"
+                  aria-label={`Avaliar com ${rating} estrelas`}
+                >
+                  <Star
+                    className={`w-6 h-6 ${
+                      rating <= reviewRating ? "fill-warning text-warning" : "text-muted-foreground"
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+            <Textarea
+              value={reviewComment}
+              onChange={(event) => setReviewComment(event.target.value)}
+              placeholder="Como foi a experiência com esta professora?"
+              maxLength={2000}
+            />
+            <KidarioButton
+              type="button"
+              variant="hero"
+              onClick={handleSubmitReview}
+              disabled={isSubmittingReview}
+            >
+              {isSubmittingReview ? "Enviando..." : "Enviar avaliação"}
+            </KidarioButton>
           </section>
         )}
 

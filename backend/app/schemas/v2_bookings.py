@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -68,6 +68,16 @@ class PaymentOrder(BaseModel):
 
 class PaymentOrdersResponse(BaseModel):
     payments: list[PaymentOrder]
+
+
+class TeacherAvailabilitySlotDay(BaseModel):
+    date: date
+    starts_at: list[datetime] = Field(default_factory=list)
+
+
+class TeacherAvailabilitySlotsResponse(BaseModel):
+    teacher_id: UUID
+    slots: list[TeacherAvailabilitySlotDay] = Field(default_factory=list)
 
 
 class BookingChildSummary(BaseModel):
@@ -190,6 +200,22 @@ class BookingCompleteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     follow_up: BookingFollowUpPayload
+
+
+class TeacherFollowUpContextResponse(BaseModel):
+    booking_id: UUID
+    child_id: UUID
+    child_name: str
+    child_birth_month_year: date | None = None
+    starts_at: datetime
+    duration_minutes: int
+    modality: BookingModality
+    status: BookingStatus
+    completed_lessons_with_child: int
+    class_objectives: list[BookingObjectiveItem] = Field(default_factory=list)
+    parent_focus_points: list[str] = Field(default_factory=list)
+    activity_plan_source: Literal["llm", "fallback"]
+    activity_plan: list[str] = Field(default_factory=list)
 
 
 class EmptyRequest(BaseModel):

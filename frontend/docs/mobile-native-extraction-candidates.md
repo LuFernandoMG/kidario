@@ -10,7 +10,7 @@ This document defines the first selective native extraction candidates for the W
 | Password reset flow | Medium | Medium | Medium | Keep in shell for now |
 | Parent chat thread | High | High | High | Defer until native auth/session exists |
 | Teacher profile photo upload | High | Medium | Medium | Keep shell + native upload bridge |
-| Parent explore marketplace | High | Medium | High | Defer until there is evidence the shell is insufficient |
+| Parent explore discovery | High | Medium | High | Defer until there is evidence the shell is insufficient |
 | Teacher control center | High | Medium | High | Defer |
 
 ## Selection Criteria

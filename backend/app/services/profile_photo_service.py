@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.core.security import AuthUser
 from app.core.ssl_utils import build_ssl_context
-from app.schemas.profiles import TeacherProfilePatch
-from app.services.profile_service import patch_teacher_profile
+from app.schemas.v2_profiles import TeacherProfileUpdateRequest
+from app.services.profile_v2_service import update_teacher_profile_v2
 from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
 ALLOWED_CONTENT_TYPES = {
@@ -242,10 +242,10 @@ def upload_teacher_profile_photo(
     )
 
     try:
-        profile_update = patch_teacher_profile(
+        teacher_profile = update_teacher_profile_v2(
             db,
             user,
-            TeacherProfilePatch(profile_photo_file_name=object_key),
+            TeacherProfileUpdateRequest(profile_photo_file_name=object_key),
         )
     except Exception as exc:
         _delete_via_s3(settings=settings, bucket=settings.profile_photos_bucket, object_key=object_key)
@@ -260,6 +260,9 @@ def upload_teacher_profile_photo(
         ) from exc
 
     return {
-        **profile_update,
+        "status": "ok",
+        "user_id": teacher_profile["user"]["id"],
+        "teacher_id": teacher_profile["id"],
+        "role": "teacher",
         "profile_photo_file_name": resolve_teacher_profile_photo_url(settings, object_key) or object_key,
     }

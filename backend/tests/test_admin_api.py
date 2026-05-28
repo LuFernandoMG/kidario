@@ -12,11 +12,12 @@ os.environ.setdefault(
 )
 
 from app.api.deps import get_current_admin
-from app.api.v1.endpoints import admin as admin_endpoints
+from app.api.v2.endpoints import admin as admin_endpoints
+from app.api.v2.endpoints import reviews as reviews_endpoints
 from app.core.security import AuthUser
 from app.db.session import get_db
 from app.main import app
-from app.services.profile_service import ProfileNotFoundError
+from app.services.profile_v2_service import ProfileNotFoundError
 
 
 class _DummyTransaction(AbstractContextManager[None]):
@@ -122,7 +123,7 @@ def test_get_admin_dashboard_returns_all_tables(client: TestClient, monkeypatch:
 
     monkeypatch.setattr(admin_endpoints, "get_admin_dashboard", _fake_get_admin_dashboard)
 
-    response = client.get("/api/v1/admin/dashboard")
+    response = client.get("/api/v2/admin/dashboard")
 
     assert response.status_code == 200
     body = response.json()
@@ -133,7 +134,7 @@ def test_get_admin_dashboard_returns_all_tables(client: TestClient, monkeypatch:
 
 
 def test_get_admin_access_returns_ok(client: TestClient) -> None:
-    response = client.get("/api/v1/admin/access")
+    response = client.get("/api/v2/admin/access")
 
     assert response.status_code == 200
     body = response.json()
@@ -149,10 +150,10 @@ def test_patch_teacher_activation_returns_ok(client: TestClient, monkeypatch: py
             "is_active": is_active,
         }
 
-    monkeypatch.setattr(admin_endpoints, "set_teacher_activation", _fake_set_teacher_activation)
+    monkeypatch.setattr(admin_endpoints, "set_teacher_activation_v2", _fake_set_teacher_activation)
 
     response = client.patch(
-        "/api/v1/admin/teachers/3472def4-1d03-4350-b2c2-20c7fa27d430/activation",
+        "/api/v2/admin/teachers/3472def4-1d03-4350-b2c2-20c7fa27d430/activation",
         json={"is_active": False},
     )
 
@@ -167,17 +168,17 @@ def test_patch_teacher_activation_not_found_returns_404(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _fake_set_teacher_activation(db, teacher_id, is_active):
-        raise ProfileNotFoundError("Teacher profile not found.")
+        raise ProfileNotFoundError("Teacher not found.")
 
-    monkeypatch.setattr(admin_endpoints, "set_teacher_activation", _fake_set_teacher_activation)
+    monkeypatch.setattr(admin_endpoints, "set_teacher_activation_v2", _fake_set_teacher_activation)
 
     response = client.patch(
-        "/api/v1/admin/teachers/3472def4-1d03-4350-b2c2-20c7fa27d430/activation",
+        "/api/v2/admin/teachers/3472def4-1d03-4350-b2c2-20c7fa27d430/activation",
         json={"is_active": True},
     )
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Teacher profile not found."
+    assert response.json()["detail"] == "Teacher not found."
 
 
 def test_get_admin_reviews_returns_reviews(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,9 +203,9 @@ def test_get_admin_reviews_returns_reviews(client: TestClient, monkeypatch: pyte
             ]
         }
 
-    monkeypatch.setattr(admin_endpoints, "list_admin_reviews", _fake_list_admin_reviews)
+    monkeypatch.setattr(reviews_endpoints, "list_admin_reviews_v2", _fake_list_admin_reviews)
 
-    response = client.get("/api/v1/admin/reviews?status=reported")
+    response = client.get("/api/v2/admin/reviews?status=reported")
 
     assert response.status_code == 200
     assert response.json()["reviews"][0]["status"] == "reported"
@@ -227,10 +228,10 @@ def test_patch_admin_review_returns_review(client: TestClient, monkeypatch: pyte
             "updated_at": "2026-06-03T18:00:00Z",
         }
 
-    monkeypatch.setattr(admin_endpoints, "moderate_review", _fake_moderate_review)
+    monkeypatch.setattr(reviews_endpoints, "moderate_review_v2", _fake_moderate_review)
 
     response = client.patch(
-        "/api/v1/admin/reviews/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "/api/v2/admin/reviews/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
         json={"status": "hidden", "is_public": False},
     )
 

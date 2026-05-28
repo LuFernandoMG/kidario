@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Video, MapPin, Calendar, MessageCircle } from "lucide-react";
+import { Video, MapPin, Calendar, MessageCircle, PackageCheck } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
-import { type Teacher } from "@/components/marketplace/TeacherCard";
-import { RatingStars } from "@/components/marketplace/RatingStars";
-import { VerifiedBadge } from "@/components/marketplace/VerifiedBadge";
+import { type Teacher } from "@/components/explore/TeacherCard";
+import { RatingStars } from "@/components/explore/RatingStars";
+import { VerifiedBadge } from "@/components/explore/VerifiedBadge";
 import { Chip } from "@/components/ui/Chip";
-import { getTeacherById } from "@/data/mock/mockTeachers";
-import { buildTeacherAvailability, type DayAvailability } from "@/lib/bookingUtils";
-import { getMarketplaceTeacherDetail } from "@/data/api/marketplace";
+import { type DayAvailability } from "@/lib/bookingUtils";
+import {
+  getExploreTeacherDetail,
+  type ExplorePackagePlan,
+  type ExplorePublicReviewPreview,
+} from "@/data/api/explore";
 import { DEFAULT_TEACHER_AVATAR } from "@/lib/avatarUrl";
 import { useToast } from "@/hooks/use-toast";
 
@@ -44,8 +47,10 @@ export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [remoteAvailability, setRemoteAvailability] = useState<DayAvailability[] | null>(null);
+  const [packagePlans, setPackagePlans] = useState<ExplorePackagePlan[]>([]);
+  const [latestReviews, setLatestReviews] = useState<ExplorePublicReviewPreview[]>([]);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
 
   useEffect(() => {
@@ -55,17 +60,20 @@ export default function TeacherProfile() {
       return;
     }
 
-    const localTeacher = getTeacherById(id) ?? null;
-    setTeacher(localTeacher);
+    setTeacher(null);
     setRemoteAvailability(null);
+    setPackagePlans([]);
+    setLatestReviews([]);
     setIsLoadingRemote(true);
 
     let isMounted = true;
-    getMarketplaceTeacherDetail(id)
+    getExploreTeacherDetail(id)
       .then((remoteTeacher) => {
         if (!isMounted) return;
         setTeacher(remoteTeacher.teacher);
         setRemoteAvailability(remoteTeacher.nextSlots);
+        setPackagePlans(remoteTeacher.packagePlans);
+        setLatestReviews(remoteTeacher.latestReviews);
       })
       .catch(() => {
         if (!isMounted) return;
@@ -86,11 +94,7 @@ export default function TeacherProfile() {
     if (remoteAvailability !== null) {
       return remoteAvailability;
     }
-    return buildTeacherAvailability(teacher.id, {
-      days: 3,
-      baseSlots: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-      maxSlotsPerDay: 4,
-    });
+    return [];
   }, [remoteAvailability, teacher]);
 
   if (!teacher) {
@@ -294,6 +298,52 @@ export default function TeacherProfile() {
         </motion.section>
 
         {/* Availability Preview */}
+        {packagePlans.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-6"
+          >
+            <h2 className="section-title">Pacotes de aulas</h2>
+            <div className="space-y-3">
+              {packagePlans.map((plan) => (
+                <div key={plan.id} className="card-kidario p-4">
+                  <div className="flex items-start gap-3">
+                    <PackageCheck className="w-5 h-5 text-primary mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-medium text-foreground">{plan.name}</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {plan.sessions_count} aulas · {plan.discount_percent}% de desconto
+                          </p>
+                        </div>
+                        {plan.estimated_final_amount_cents != null && (
+                          <span className="font-display font-semibold text-primary">
+                            R$ {Math.round(plan.estimated_final_amount_cents / 100)}
+                          </span>
+                        )}
+                      </div>
+                      {plan.description && (
+                        <p className="text-sm text-foreground/90 mt-3 leading-relaxed">{plan.description}</p>
+                      )}
+                      <button
+                        type="button"
+                        className="text-primary text-sm font-medium hover:underline mt-3"
+                        onClick={() => navigate(`/checkout/${teacher.id}?packagePlanId=${plan.id}`)}
+                      >
+                        Comprar pacote
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.section>
+        )}
+
+        {/* Availability Preview */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -340,29 +390,37 @@ export default function TeacherProfile() {
           className="mt-6"
         >
           <h2 className="section-title">Avaliações</h2>
-          <div className="card-kidario p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-kidario-lavender-light flex items-center justify-center text-secondary-foreground font-medium">
-                M
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">Maria L.</span>
-                  <RatingStars rating={5} size="sm" showValue={false} />
+          {latestReviews.length > 0 ? (
+            <div className="space-y-3">
+              {latestReviews.map((review) => (
+                <div key={review.id} className="card-kidario p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-kidario-lavender-light flex items-center justify-center text-secondary-foreground font-medium">
+                      A
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">Avaliação verificada</span>
+                        <RatingStars rating={review.rating} size="sm" showValue={false} />
+                      </div>
+                      {review.comment && (
+                        <p className="text-muted-foreground text-sm mt-1">{review.comment}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(review.submitted_at).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-muted-foreground text-sm mt-1">
-                  "Excelente profissional! Meu filho evoluiu muito na leitura. Recomendo demais!"
-                </p>
-                <div className="flex gap-1 mt-2">
-                  <Chip variant="mint" size="sm">Pontual</Chip>
-                  <Chip variant="mint" size="sm">Carinhosa</Chip>
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
-          <button className="w-full mt-3 text-primary text-sm font-medium hover:underline">
-            Ver todas as {teacher.reviewCount} avaliações
-          </button>
+          ) : (
+            <div className="card-kidario p-4">
+              <p className="text-sm text-muted-foreground">
+                Esta professora ainda não possui avaliações publicadas.
+              </p>
+            </div>
+          )}
         </motion.section>
       </div>
 

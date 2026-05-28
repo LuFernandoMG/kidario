@@ -3,6 +3,8 @@ import { buildRequestIdHeader } from "@/lib/observability";
 
 export interface AdminTeacherRecord {
   profile_id: string;
+  teacher_id: string;
+  user_id: string;
   full_name: string;
   email: string;
   phone?: string | null;
@@ -18,6 +20,8 @@ export interface AdminTeacherRecord {
 
 export interface AdminParentRecord {
   profile_id: string;
+  parent_id: string;
+  user_id: string;
   full_name: string;
   email: string;
   phone?: string | null;
@@ -30,8 +34,10 @@ export interface AdminParentRecord {
 export interface AdminBookingRecord {
   booking_id: string;
   parent_profile_id: string;
+  parent_id: string;
   parent_name: string;
   teacher_profile_id: string;
+  teacher_id: string;
   teacher_name: string;
   child_id: string;
   child_name: string;
@@ -48,14 +54,17 @@ export interface AdminBookingRecord {
 }
 
 export interface AdminPaymentRecord {
+  payment_order_id: string;
   booking_id: string;
   parent_profile_id: string;
+  parent_id: string;
   parent_name: string;
   teacher_profile_id: string;
-  teacher_name: string;
-  payment_method: "cartao" | "pix";
-  payment_status: "pendente" | "pago" | "falhou";
-  booking_status: "pendente" | "confirmada" | "cancelada" | "concluida";
+  teacher_id?: string | null;
+  teacher_name?: string | null;
+  payment_method?: "credit_card" | "pix" | "boleto" | null;
+  payment_status: string;
+  booking_status?: "pendente" | "confirmada" | "cancelada" | "concluida" | null;
   price_total: number;
   currency: string;
   created_at: string;
@@ -72,6 +81,7 @@ export interface AdminDashboardResponse {
 export interface TeacherActivationResponse {
   status: "ok";
   profile_id: string;
+  teacher_id: string;
   is_active_teacher: boolean;
 }
 
@@ -120,10 +130,72 @@ async function adminRequest<TResponse>(params: {
 }
 
 export async function getAdminDashboard(accessToken: string): Promise<AdminDashboardResponse> {
-  return adminRequest<AdminDashboardResponse>({
+  const response = await adminRequest<{
+    teachers: Array<Omit<AdminTeacherRecord, "profile_id" | "hourly_rate" | "formations" | "is_active_teacher"> & {
+      teacher_id: string;
+      hourly_rate_cents?: number | null;
+      academic_records: string[];
+      is_active: boolean;
+    }>;
+    parents: Array<Omit<AdminParentRecord, "profile_id" | "address"> & {
+      parent_id: string;
+      city: string;
+      state: string;
+    }>;
+    bookings: Array<Omit<AdminBookingRecord, "parent_profile_id" | "teacher_profile_id" | "date_iso" | "time" | "price_total"> & {
+      parent_id: string;
+      teacher_id: string;
+      starts_at: string;
+      amount_cents: number;
+    }>;
+    payments: Array<Omit<AdminPaymentRecord, "parent_profile_id" | "teacher_profile_id" | "price_total"> & {
+      parent_id: string;
+      teacher_id?: string | null;
+      amount_cents: number;
+    }>;
+  }>({
     path: "/admin/dashboard",
     accessToken,
   });
+
+  return {
+    teachers: response.teachers.map((teacher) => ({
+      ...teacher,
+      profile_id: teacher.teacher_id,
+      teacher_id: teacher.teacher_id,
+      hourly_rate: teacher.hourly_rate_cents != null ? Math.round(teacher.hourly_rate_cents / 100) : null,
+      formations: teacher.academic_records || [],
+      is_active_teacher: teacher.is_active,
+    })),
+    parents: response.parents.map((parent) => ({
+      ...parent,
+      profile_id: parent.parent_id,
+      parent_id: parent.parent_id,
+      address: [parent.city, parent.state].filter(Boolean).join(", "),
+    })),
+    bookings: response.bookings.map((booking) => {
+      const startsAt = new Date(booking.starts_at);
+      return {
+        ...booking,
+        parent_profile_id: booking.parent_id,
+        teacher_profile_id: booking.teacher_id,
+        date_iso: Number.isNaN(startsAt.getTime()) ? booking.starts_at.slice(0, 10) : startsAt.toISOString().slice(0, 10),
+        time: Number.isNaN(startsAt.getTime())
+          ? ""
+          : startsAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        price_total: Math.round((booking.amount_cents || 0) / 100),
+        payment_method: "pix",
+        payment_status: "created",
+      };
+    }),
+    payments: response.payments.map((payment) => ({
+      ...payment,
+      booking_id: payment.booking_id || "",
+      parent_profile_id: payment.parent_id,
+      teacher_profile_id: payment.teacher_id || "",
+      price_total: Math.round((payment.amount_cents || 0) / 100),
+    })),
+  };
 }
 
 export async function getAdminAccess(accessToken: string): Promise<AdminAccessResponse> {
@@ -138,10 +210,16 @@ export async function patchTeacherActivation(
   profileId: string,
   isActiveTeacher: boolean,
 ): Promise<TeacherActivationResponse> {
-  return adminRequest<TeacherActivationResponse>({
+  const response = await adminRequest<{ status: "ok"; teacher_id: string; is_active: boolean }>({
     path: `/admin/teachers/${profileId}/activation`,
     accessToken,
     method: "PATCH",
-    body: { is_active_teacher: isActiveTeacher },
+    body: { is_active: isActiveTeacher },
   });
+  return {
+    status: response.status,
+    profile_id: response.teacher_id,
+    teacher_id: response.teacher_id,
+    is_active_teacher: response.is_active,
+  };
 }

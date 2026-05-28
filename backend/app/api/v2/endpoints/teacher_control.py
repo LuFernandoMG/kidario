@@ -8,7 +8,7 @@ from app.api.deps import get_current_teacher_user
 from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.db.session import get_db
-from app.schemas.teacher_control import TeacherControlCenterOverviewResponse, TeacherStudentTimelineResponse
+from app.schemas.v2_teacher_control import TeacherControlCenterOverviewResponse, TeacherStudentTimelineResponse
 from app.services.teacher_control_service import (
     TeacherControlPermissionError,
     TeacherStudentNotFoundError,
@@ -16,7 +16,7 @@ from app.services.teacher_control_service import (
     get_teacher_student_timeline,
 )
 
-router = APIRouter(prefix="/teacher", tags=["teacher"])
+router = APIRouter(prefix="/teacher", tags=["v2-teacher-control"])
 
 
 def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
@@ -24,7 +24,7 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     if sqlstate == "42P01":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database schema not initialized. Run SQL migrations in backend/sql.",
+            detail="Database schema not initialized. Run backend/sql migrations through 012.",
         ) from exc
 
     settings = get_settings()

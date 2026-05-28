@@ -479,20 +479,24 @@ export default function TeacherPrivateSignup() {
         last_name: formData.lastName,
         phone: formData.phone,
         cpf: formData.cpf,
-        professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
-        city: formData.city,
-        state: formData.state,
-        modality: formData.modality,
-        mini_bio: formData.miniBio,
-        hourly_rate: Number(formData.hourlyRate),
+        professional_number: PROFESSIONAL_REGISTRATION_DEFAULT,
+        address: {
+          street: "Não informado",
+          district: "Não informado",
+          city: formData.city,
+          state: formData.state,
+        },
+        modality: formData.modality === "hibrido" ? "ambos" : formData.modality,
+        biography: formData.miniBio,
+        hourly_rate_cents: Math.round(Number(formData.hourlyRate) * 100),
         lesson_duration_minutes: Number(formData.lessonDuration),
         profile_photo_file_name: profilePhotoFileName,
-        request_experience_anonymity: formData.requestExperienceAnonymity,
-        specialties_ops: {
+        hide_experience: formData.requestExperienceAnonymity,
+        skills_ops: {
           add: formData.specialties,
           remove: [],
         },
-        formations_ops: {
+        academic_records_ops: {
           upsert: formData.formations.map((formation) => ({
             degree_type: formation.degreeType,
             course_name: formation.courseName,
@@ -505,7 +509,7 @@ export default function TeacherPrivateSignup() {
           upsert: formData.experiences.map((experience) => ({
             institution: experience.institution,
             role: experience.role,
-            responsibilities: experience.responsibilities,
+            description: experience.responsibilities,
             period_from: experience.periodFrom,
             period_to: experience.currentPosition ? null : experience.periodTo || null,
             current_position: experience.currentPosition,
@@ -528,7 +532,7 @@ export default function TeacherPrivateSignup() {
         password: formData.password,
         full_name: fullName,
         role: "teacher",
-        teacher_profile: buildTeacherProfilePayload(null),
+        teacher: buildTeacherProfilePayload(null),
         captcha_token: captchaToken || undefined,
         honeypot,
         metadata: {

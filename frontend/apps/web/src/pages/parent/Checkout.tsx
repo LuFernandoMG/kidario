@@ -1,27 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { CreditCard, Landmark, TicketPercent } from "lucide-react";
+import { Landmark, TicketPercent } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
-import { getTeacherById } from "@/data/mock/mockTeachers";
 import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
-import { appendStoredBooking } from "@/lib/bookingsStorage";
 import { BookingSummaryCard } from "@/components/booking/BookingSummaryCard";
 import { TeacherBookingHeaderCard } from "@/components/booking/TeacherBookingHeaderCard";
 import { PaymentMethodOption } from "@/components/booking/PaymentMethodOption";
 import { BookingModality, formatDateLong } from "@/lib/bookingUtils";
-import { createBooking } from "@/data/api/bookings";
+import { createBooking, type PaymentMethod } from "@/data/api/bookings";
 import { useToast } from "@/hooks/use-toast";
-import { getMarketplaceTeacherDetail } from "@/data/api/marketplace";
-import { type Teacher } from "@/components/marketplace/TeacherCard";
+import { getExploreTeacherDetail, type ExplorePackagePlan } from "@/data/api/explore";
+import { type Teacher } from "@/components/explore/TeacherCard";
+import { createPackagePurchase } from "@/data/api/packages";
 import {
   getParentProfile,
   type BackendParentChildView,
 } from "@/data/api/parentProfiles";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-type PaymentMethod = "cartao" | "pix";
 
 const couponDiscounts: Record<string, number> = {
   KIDARIO10: 0.1,
@@ -34,13 +31,14 @@ export default function Checkout() {
   const { toast } = useToast();
   const queryChildId = searchParams.get("childId") || "";
 
-  const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [isLoadingTeacher, setIsLoadingTeacher] = useState(false);
   const [lessonDurationMinutes, setLessonDurationMinutes] = useState(60);
   const authSession = getAuthSession();
 
   const dateIso = searchParams.get("date") ?? "";
   const time = searchParams.get("time") ?? "";
+  const packagePlanId = searchParams.get("packagePlanId") ?? "";
   const modalityQuery = searchParams.get("modality");
 
   const modality: BookingModality = modalityQuery === "presencial" ? "presencial" : "online";
@@ -53,24 +51,26 @@ export default function Checkout() {
   const [children, setChildren] = useState<BackendParentChildView[]>([]);
   const [selectedChildId, setSelectedChildId] = useState(queryChildId);
   const [isLoadingChildren, setIsLoadingChildren] = useState(false);
+  const [packagePlans, setPackagePlans] = useState<ExplorePackagePlan[]>([]);
 
   useEffect(() => {
     if (!id) {
       setTeacher(null);
       setLessonDurationMinutes(60);
+      setPackagePlans([]);
       return;
     }
 
-    const localTeacher = getTeacherById(id) ?? null;
-    setTeacher(localTeacher);
+    setTeacher(null);
     setIsLoadingTeacher(true);
 
     let isMounted = true;
-    getMarketplaceTeacherDetail(id)
+    getExploreTeacherDetail(id)
       .then((detail) => {
         if (!isMounted) return;
         setTeacher(detail.teacher);
         setLessonDurationMinutes(detail.lessonDurationMinutes > 0 ? detail.lessonDurationMinutes : 60);
+        setPackagePlans(detail.packagePlans);
       })
       .catch(() => {})
       .finally(() => {
@@ -124,21 +124,36 @@ export default function Checkout() {
     };
   }, [authSession.isAuthenticated, queryChildId]);
 
+  const selectedPackagePlan = useMemo(
+    () => packagePlans.find((plan) => plan.id === packagePlanId) || null,
+    [packagePlanId, packagePlans],
+  );
+
   const basePrice = useMemo(() => {
+    if (selectedPackagePlan) {
+      return Math.round(
+        (selectedPackagePlan.estimated_final_amount_cents
+          ?? selectedPackagePlan.estimated_original_amount_cents
+          ?? 0) / 100,
+      );
+    }
     if (!teacher) return 0;
     return Math.round(teacher.pricePerClass * (lessonDurationMinutes / 60));
-  }, [lessonDurationMinutes, teacher]);
+  }, [lessonDurationMinutes, selectedPackagePlan, teacher]);
 
   const discountRate = appliedCoupon ? couponDiscounts[appliedCoupon] ?? 0 : 0;
   const discountValue = Math.round(basePrice * discountRate);
   const totalPrice = Math.max(basePrice - discountValue, 0);
   const dateLabel = formatDateLong(dateIso);
-  const requiresChildSelection = authSession.isAuthenticated && children.length > 0;
+  const requiresChildSelection = authSession.isAuthenticated;
   const selectedChildName =
     children.find((child) => child.id === selectedChildId)?.name
     || (authSession.isAuthenticated ? "Não selecionado" : "Definido após login");
 
-  const isPayloadValid = Boolean(teacher && dateIso && time && lessonDurationMinutes > 0);
+  const isPackageCheckout = Boolean(selectedPackagePlan);
+  const isPayloadValid = Boolean(
+    teacher && (isPackageCheckout || (dateIso && time && lessonDurationMinutes > 0)),
+  );
 
   const handleApplyCoupon = () => {
     const normalized = couponInput.trim().toUpperCase();
@@ -175,71 +190,51 @@ export default function Checkout() {
     }
 
     const accessToken = getSupabaseAccessToken();
-    const canUseBackendBooking = Boolean(accessToken && isUuidLike(teacher.id));
-
-    if (canUseBackendBooking && accessToken) {
-      try {
-        const response = await createBooking(accessToken, {
-          teacher_profile_id: teacher.id,
-          child_id: selectedChildId || undefined,
-          date_iso: dateIso,
-          time,
-          duration_minutes: lessonDurationMinutes,
-          modality,
-          payment_method: paymentMethod,
-          coupon_code: appliedCoupon || undefined,
-        });
-
-        appendStoredBooking({
-          id: response.booking_id,
-          teacherId: teacher.id,
-          teacherName: teacher.name,
-          teacherAvatar: teacher.avatar,
-          specialty: teacher.specialties[0] ?? "Apoio pedagógico",
-          dateLabel,
-          dateIso,
-          time,
-          modality,
-          status: response.booking_status,
-          createdAtIso: new Date().toISOString(),
-          updatedAtIso: new Date().toISOString(),
-        });
-
-        navigate(`/confirmacao-reserva/${response.booking_id}`);
-        return;
-      } catch (error) {
-        setIsSubmitting(false);
-        toast({
-          title: "Não foi possível concluir no backend",
-          description:
-            error instanceof Error
-              ? error.message
-              : "Tente novamente em alguns instantes.",
-        });
-        return;
-      }
+    if (!accessToken) {
+      setIsSubmitting(false);
+      toast({
+        title: "Sessão inválida",
+        description: "Faça login novamente para concluir o agendamento.",
+      });
+      return;
     }
 
-    const bookingId = getBookingId();
-    const bookingStatus = "pendente";
+    try {
+      if (selectedPackagePlan) {
+        await createPackagePurchase(accessToken, {
+          package_plan_id: selectedPackagePlan.id,
+          child_id: selectedChildId,
+          payment_method: paymentMethod,
+        });
+        toast({
+          title: "Pacote comprado",
+          description: "O pacote ficará disponível para agendar aulas com esta professora.",
+        });
+        navigate("/agenda");
+        return;
+      }
 
-    setTimeout(() => {
-      appendStoredBooking({
-        id: bookingId,
-        teacherId: teacher.id,
-        teacherName: teacher.name,
-        teacherAvatar: teacher.avatar,
-        specialty: teacher.specialties[0] ?? "Apoio pedagógico",
-        dateLabel,
-        dateIso,
-        time,
+      const response = await createBooking(accessToken, {
+        teacher_id: teacher.id,
+        child_id: selectedChildId,
+        starts_at: composeStartsAt(dateIso, time),
+        duration_minutes: lessonDurationMinutes,
         modality,
-        status: bookingStatus,
-        createdAtIso: new Date().toISOString(),
+        payment_method: paymentMethod,
       });
 
-      navigate(`/confirmacao-reserva/${bookingId}`);
-    }, 700);
+      navigate(`/confirmacao-reserva/${response.booking_id}`);
+      return;
+    } catch (error) {
+      setIsSubmitting(false);
+      toast({
+        title: "Não foi possível concluir no backend",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Tente novamente em alguns instantes.",
+      });
+    }
   };
 
   if (!isPayloadValid || !teacher) {
@@ -273,13 +268,22 @@ export default function Checkout() {
         />
 
         <BookingSummaryCard
-          title="Resumo da reserva"
-          rows={[
-            { label: "Filho(a):", value: selectedChildName },
-            { label: "Data:", value: dateLabel },
-            { label: "Horário:", value: `${time} (${lessonDurationMinutes} min)` },
-            { label: "Modalidade:", value: modality === "online" ? "Online" : "Presencial" },
-          ]}
+          title={selectedPackagePlan ? "Resumo do pacote" : "Resumo da reserva"}
+          rows={
+            selectedPackagePlan
+              ? [
+                  { label: "Filho(a):", value: selectedChildName },
+                  { label: "Pacote:", value: selectedPackagePlan.name },
+                  { label: "Aulas:", value: `${selectedPackagePlan.sessions_count}` },
+                  { label: "Desconto:", value: `${selectedPackagePlan.discount_percent}%` },
+                ]
+              : [
+                  { label: "Filho(a):", value: selectedChildName },
+                  { label: "Data:", value: dateLabel },
+                  { label: "Horário:", value: `${time} (${lessonDurationMinutes} min)` },
+                  { label: "Modalidade:", value: modality === "online" ? "Online" : "Presencial" },
+                ]
+          }
         />
 
         {authSession.isAuthenticated && (
@@ -389,7 +393,9 @@ export default function Checkout() {
           {isSubmitting
             ? "Processando..."
             : authSession.isAuthenticated
-              ? "Pagar e agendar"
+              ? selectedPackagePlan
+                ? "Comprar pacote"
+                : "Pagar e agendar"
               : "Entrar para continuar"}
         </KidarioButton>
       </div>
@@ -397,15 +403,9 @@ export default function Checkout() {
   );
 }
 
-function getBookingId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.round(Math.random() * 1_000_000)}`;
-}
-
-function isUuidLike(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+function composeStartsAt(dateIso: string, time: string) {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1, hours || 0, minutes || 0, 0, 0);
+  return date.toISOString();
 }

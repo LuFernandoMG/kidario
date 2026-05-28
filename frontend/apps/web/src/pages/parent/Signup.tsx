@@ -324,20 +324,21 @@ export default function Signup() {
         phone: formData.phone,
         cpf: formData.cpf,
         birth_date: formData.birthDate,
-        address: formData.address,
-        bio: formData.bio,
-        children_ops: {
-          upsert: formData.children.map((child) => ({
-            name: child.name,
-            gender: normalizeChildGender(child.gender),
-            age: Number(child.age),
-            current_grade: child.currentGrade,
-            birth_month_year: child.birthMonthYear,
-            school: child.school,
-            focus_points: child.focusPoints,
-          })),
-          delete_ids: [],
+        address: {
+          street: formData.address,
+          district: "Não informado",
+          city: "Não informado",
+          state: "NA",
         },
+        bio: formData.bio,
+        children: formData.children.map((child) => ({
+          name: child.name,
+          gender: normalizeChildGender(child.gender),
+          current_grade: child.currentGrade,
+          birth_month_year: child.birthMonthYear,
+          school: child.school,
+          focus_points: child.focusPoints,
+        })),
       };
 
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
@@ -346,7 +347,7 @@ export default function Signup() {
         password: formData.password,
         full_name: fullName,
         role: "parent",
-        parent_profile: parentProfilePayload,
+        parent: parentProfilePayload,
         captcha_token: captchaToken || undefined,
         honeypot,
         metadata: {

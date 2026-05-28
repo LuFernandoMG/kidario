@@ -62,7 +62,7 @@ export function NativeEntryHub() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Parent</Text>
         <EntryAction href="/signup" title="Create account" description="Go directly to parent signup." />
-        <EntryAction href="/explore" title="Explore teachers" description="Enter the marketplace flow." />
+        <EntryAction href="/explore" title="Explore teachers" description="Enter the explore flow." />
         <EntryAction href="/agenda" title="Open agenda" description="Jump into the current parent agenda shell." />
       </View>
 

@@ -1,4 +1,5 @@
 import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
+import { formatDateLong, toDateIso } from "@/lib/bookingUtils";
 import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
@@ -16,7 +17,9 @@ export interface TeacherAgendaControlLesson {
   id: string;
   child_id: string;
   child_name: string;
+  parent_id: string;
   parent_profile_id: string;
+  starts_at: string;
   date_iso: string;
   date_label: string;
   time: string;
@@ -45,6 +48,7 @@ export interface TeacherChatPreview {
   booking_status: BookingStatus;
   child_name: string;
   parent_name: string;
+  lesson_starts_at: string;
   lesson_date_iso: string;
   lesson_time: string;
   last_message_at?: string | null;
@@ -57,6 +61,7 @@ export interface TeacherStudentOverview {
   child_age?: number | null;
   total_lessons: number;
   completed_lessons: number;
+  latest_lesson_at?: string | null;
   latest_lesson_date?: string | null;
   latest_follow_up_summary?: string | null;
   progress_status: TeacherProgressStatus;
@@ -66,6 +71,7 @@ export interface TeacherStudentTimelineEntry {
   booking_id: string;
   child_id: string;
   child_name: string;
+  starts_at: string;
   date_iso: string;
   date_label: string;
   time: string;
@@ -99,6 +105,9 @@ export interface TeacherControlCenterOverviewResponse {
   students: TeacherStudentOverview[];
   finance: {
     currency: string;
+    gross_revenue_total_cents: number;
+    paid_total_cents: number;
+    pending_payment_total_cents: number;
     gross_revenue_total: number;
     paid_total: number;
     pending_payment_total: number;
@@ -146,8 +155,8 @@ export interface ChatThreadsResponse {
   threads: {
     id: string;
     booking_id: string;
-    parent_profile_id: string;
-    teacher_profile_id: string;
+    parent_id: string;
+    teacher_id: string;
     child_id: string;
     booking_status: BookingStatus;
     parent_name: string;
@@ -162,7 +171,7 @@ export interface ChatThreadsResponse {
 async function teacherRequest<TResponse>(params: {
   path: string;
   accessToken: string;
-  method?: "GET" | "PATCH";
+  method?: "GET" | "PATCH" | "POST";
   body?: Record<string, unknown>;
   fallback: string;
 }): Promise<TResponse> {
@@ -203,6 +212,62 @@ function normalizeLimit(value: number | undefined, fallback: number) {
   return Math.min(30, Math.max(1, raw));
 }
 
+function deriveDateParts(startsAt: string) {
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) {
+    const dateIso = startsAt.slice(0, 10);
+    return { dateIso, dateLabel: formatDateLong(dateIso), time: "" };
+  }
+  const dateIso = toDateIso(date);
+  return {
+    dateIso,
+    dateLabel: formatDateLong(dateIso),
+    time: date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function composeStartsAt(dateIso: string, time: string) {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1, hours || 0, minutes || 0, 0, 0);
+  return date.toISOString();
+}
+
+function mapOverviewResponse(response: TeacherControlCenterOverviewResponse): TeacherControlCenterOverviewResponse {
+  return {
+    ...response,
+    agenda: (response.agenda || []).map((lesson) => {
+      const parts = deriveDateParts(lesson.starts_at);
+      return {
+        ...lesson,
+        parent_profile_id: lesson.parent_profile_id || lesson.parent_id,
+        date_iso: lesson.date_iso || parts.dateIso,
+        date_label: lesson.date_label || parts.dateLabel,
+        time: lesson.time || parts.time,
+      };
+    }),
+    chat_threads: (response.chat_threads || []).map((thread) => {
+      const parts = deriveDateParts(thread.lesson_starts_at);
+      return {
+        ...thread,
+        lesson_date_iso: thread.lesson_date_iso || parts.dateIso,
+        lesson_time: thread.lesson_time || parts.time,
+      };
+    }),
+    students: (response.students || []).map((student) => ({
+      ...student,
+      latest_lesson_date: student.latest_lesson_date || student.latest_lesson_at || null,
+    })),
+    finance: {
+      ...response.finance,
+      gross_revenue_total: response.finance.gross_revenue_total ?? (response.finance.gross_revenue_total_cents || 0) / 100,
+      paid_total: response.finance.paid_total ?? (response.finance.paid_total_cents || 0) / 100,
+      pending_payment_total:
+        response.finance.pending_payment_total ?? (response.finance.pending_payment_total_cents || 0) / 100,
+    },
+  };
+}
+
 export async function getTeacherControlCenterOverview(
   accessToken: string,
   params: {
@@ -224,11 +289,12 @@ export async function getTeacherControlCenterOverview(
     query.set("include_history", "true");
   }
 
-  return teacherRequest<TeacherControlCenterOverviewResponse>({
+  const response = await teacherRequest<TeacherControlCenterOverviewResponse>({
     path: `/teacher/control-center/overview?${query.toString()}`,
     accessToken,
     fallback: "Não foi possível carregar o centro de controle da professora.",
   });
+  return mapOverviewResponse(response);
 }
 
 export async function decideTeacherBooking(
@@ -236,13 +302,23 @@ export async function decideTeacherBooking(
   bookingId: string,
   payload: TeacherBookingDecisionPayload,
 ): Promise<TeacherBookingDecisionResponse> {
-  return teacherRequest<TeacherBookingDecisionResponse>({
-    path: `/bookings/${bookingId}/teacher/decision`,
+  const response = await teacherRequest<{ id: string; status: BookingStatus; updated_at: string; cancellation_reason?: string | null }>({
+    path: `/bookings/${bookingId}/decision`,
     accessToken,
-    method: "PATCH",
-    body: payload as Record<string, unknown>,
+    method: "POST",
+    body: {
+      decision: payload.action === "accept" ? "accept" : "reject",
+      reason: payload.reason,
+    },
     fallback: "Não foi possível atualizar o status da aula.",
   });
+  return {
+    status: "ok",
+    booking_id: response.id,
+    booking_status: response.status,
+    updated_at_iso: response.updated_at,
+    cancellation_reason: response.cancellation_reason,
+  };
 }
 
 export async function rescheduleTeacherBooking(
@@ -250,13 +326,25 @@ export async function rescheduleTeacherBooking(
   bookingId: string,
   payload: TeacherBookingReschedulePayload,
 ): Promise<TeacherBookingRescheduleResponse> {
-  return teacherRequest<TeacherBookingRescheduleResponse>({
+  const response = await teacherRequest<{ id: string; starts_at: string; status: BookingStatus; updated_at: string }>({
     path: `/bookings/${bookingId}/teacher/reschedule`,
     accessToken,
     method: "PATCH",
-    body: payload as Record<string, unknown>,
+    body: {
+      starts_at: composeStartsAt(payload.new_date_iso, payload.new_time),
+      reason: payload.reason,
+    },
     fallback: "Não foi possível reagendar a aula.",
   });
+  const parts = deriveDateParts(response.starts_at);
+  return {
+    status: "ok",
+    booking_id: response.id,
+    date_iso: parts.dateIso,
+    time: parts.time,
+    booking_status: response.status,
+    updated_at_iso: response.updated_at,
+  };
 }
 
 export async function getTeacherChatThreads(
@@ -286,9 +374,21 @@ export async function getTeacherStudentTimeline(
   const rawLimit = Number.isFinite(params.limit) ? Number(params.limit) : 50;
   query.set("limit", String(Math.min(200, Math.max(1, rawLimit))));
 
-  return teacherRequest<TeacherStudentTimelineResponse>({
+  const response = await teacherRequest<TeacherStudentTimelineResponse>({
     path: `/teacher/students/${childId}/timeline?${query.toString()}`,
     accessToken,
     fallback: "Não foi possível carregar a linha do tempo do aluno.",
   });
+  return {
+    ...response,
+    timeline: (response.timeline || []).map((entry) => {
+      const parts = deriveDateParts(entry.starts_at);
+      return {
+        ...entry,
+        date_iso: entry.date_iso || parts.dateIso,
+        date_label: entry.date_label || parts.dateLabel,
+        time: entry.time || parts.time,
+      };
+    }),
+  };
 }

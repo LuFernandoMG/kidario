@@ -9,7 +9,7 @@ from fastapi import Request
 
 from app.core.config import Settings
 from app.core.ssl_utils import build_ssl_context
-from app.schemas.auth import AuthSignupRequest
+from app.schemas.v2_auth import AuthSignupRequest
 
 logger = logging.getLogger(__name__)
 

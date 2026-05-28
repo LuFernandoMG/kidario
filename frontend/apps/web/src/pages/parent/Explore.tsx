@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
 import { SearchField } from "@/components/forms/SearchField";
-import { TeacherCard } from "@/components/marketplace/TeacherCard";
-import { type Teacher } from "@/components/marketplace/TeacherCard";
+import { TeacherCard } from "@/components/explore/TeacherCard";
+import { type Teacher } from "@/components/explore/TeacherCard";
 import { Chip } from "@/components/ui/Chip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getMarketplaceTeachers } from "@/data/api/marketplace";
+import { getExploreTeachers } from "@/data/api/explore";
 
 const filterOptions = [
   { label: "Todas", value: "all" },
@@ -25,7 +25,10 @@ export default function Explore() {
     let isMounted = true;
     setIsLoadingRemote(true);
 
-    getMarketplaceTeachers()
+    getExploreTeachers({
+      query: searchQuery.trim() || undefined,
+      modality: activeFilter === "all" ? "all" : (activeFilter as "online" | "presencial"),
+    })
       .then((teachers) => {
         if (!isMounted) return;
         setRemoteTeachers(teachers);
@@ -44,7 +47,7 @@ export default function Explore() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activeFilter, searchQuery]);
 
   const filteredTeachers = useMemo(() => {
     return remoteTeachers.filter((teacher) => {

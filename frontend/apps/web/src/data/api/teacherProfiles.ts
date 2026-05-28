@@ -11,6 +11,7 @@ import {
 } from "@/data/api/profiles";
 
 export interface BackendTeacherProfileResponse {
+  id: string;
   profile: BackendProfileView;
   phone?: string | null;
   cpf?: string | null;
@@ -22,6 +23,7 @@ export interface BackendTeacherProfileResponse {
   hourly_rate?: number | null;
   lesson_duration_minutes?: number | null;
   profile_photo_file_name?: string | null;
+  profile_photo_url?: string | null;
   request_experience_anonymity: boolean;
   specialties: string[];
   formations: {
@@ -105,36 +107,168 @@ export interface TeacherProfilePatchPayload {
   };
 }
 
+interface V2TeacherProfile {
+  id: string;
+  user: {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: "parent" | "teacher" | "admin";
+  };
+  phone?: string | null;
+  cpf_masked?: string | null;
+  professional_number?: string | null;
+  modality?: "online" | "presencial" | "ambos" | null;
+  biography?: string | null;
+  hourly_rate_cents?: number | null;
+  lesson_duration_minutes?: number | null;
+  profile_photo_file_name?: string | null;
+  profile_photo_url?: string | null;
+  hide_experience: boolean;
+  address: {
+    city: string;
+    state: string;
+  };
+  skills: { id: string; skill: string }[];
+  academic_records: BackendTeacherProfileResponse["formations"];
+  experiences: {
+    id: string;
+    institution: string;
+    role: string;
+    description: string;
+    period_from: string;
+    period_to?: string | null;
+    current_position: boolean;
+  }[];
+  availability: BackendTeacherProfileResponse["availability"];
+}
+
 interface TeacherPhotoUploadResponse extends BackendProfileStatusResponse {
   profile_photo_file_name: string;
 }
 
+function toBackendModality(value?: string) {
+  if (value === "hibrido") return "ambos";
+  if (value === "online" || value === "presencial" || value === "ambos") return value;
+  return undefined;
+}
+
+function fromBackendModality(value?: string | null) {
+  if (value === "ambos") return "hibrido";
+  return value || "";
+}
+
+function mapTeacherProfile(payload: V2TeacherProfile): BackendTeacherProfileResponse {
+  return {
+    id: payload.id,
+    profile: {
+      id: payload.user.id,
+      email: payload.user.email,
+      first_name: payload.user.first_name,
+      last_name: payload.user.last_name,
+      role: payload.user.role,
+    },
+    phone: payload.phone,
+    cpf: payload.cpf_masked,
+    professional_registration: payload.professional_number,
+    city: payload.address?.city,
+    state: payload.address?.state,
+    modality: fromBackendModality(payload.modality),
+    mini_bio: payload.biography,
+    hourly_rate: payload.hourly_rate_cents != null ? Math.round(payload.hourly_rate_cents / 100) : null,
+    lesson_duration_minutes: payload.lesson_duration_minutes,
+    profile_photo_file_name: payload.profile_photo_file_name,
+    profile_photo_url: payload.profile_photo_url,
+    request_experience_anonymity: payload.hide_experience,
+    specialties: (payload.skills || []).map((skill) => skill.skill),
+    formations: payload.academic_records || [],
+    experiences: (payload.experiences || []).map((experience) => ({
+      id: experience.id,
+      institution: experience.institution,
+      role: experience.role,
+      responsibilities: experience.description,
+      period_from: experience.period_from,
+      period_to: experience.period_to,
+      current_position: experience.current_position,
+    })),
+    availability: payload.availability || [],
+  };
+}
+
+function mapTeacherPatchPayload(payload: TeacherProfilePatchPayload): Record<string, unknown> {
+  const next: Record<string, unknown> = {};
+  if (payload.first_name !== undefined) next.first_name = payload.first_name;
+  if (payload.last_name !== undefined) next.last_name = payload.last_name;
+  if (payload.phone !== undefined) next.phone = payload.phone;
+  if (payload.cpf !== undefined) next.cpf = payload.cpf;
+  if (payload.professional_registration !== undefined) next.professional_number = payload.professional_registration;
+  if (payload.modality !== undefined) next.modality = toBackendModality(payload.modality);
+  if (payload.mini_bio !== undefined) next.biography = payload.mini_bio;
+  if (payload.hourly_rate !== undefined) next.hourly_rate_cents = Math.round(payload.hourly_rate * 100);
+  if (payload.lesson_duration_minutes !== undefined) next.lesson_duration_minutes = payload.lesson_duration_minutes;
+  if (payload.profile_photo_file_name !== undefined) next.profile_photo_file_name = payload.profile_photo_file_name;
+  if (payload.request_experience_anonymity !== undefined) next.hide_experience = payload.request_experience_anonymity;
+  if (payload.city !== undefined || payload.state !== undefined) {
+    next.address = {
+      city: payload.city,
+      state: payload.state,
+    };
+  }
+  if (payload.specialties_ops) next.skills_ops = payload.specialties_ops;
+  if (payload.formations_ops) next.academic_records_ops = payload.formations_ops;
+  if (payload.experiences_ops) {
+    next.experiences_ops = {
+      delete_ids: payload.experiences_ops.delete_ids,
+      upsert: payload.experiences_ops.upsert.map((experience) => ({
+        id: experience.id,
+        institution: experience.institution,
+        role: experience.role,
+        description: experience.responsibilities,
+        period_from: experience.period_from,
+        period_to: experience.period_to,
+        current_position: experience.current_position,
+      })),
+    };
+  }
+  if (payload.availability_ops) next.availability_ops = payload.availability_ops;
+  return next;
+}
+
 export async function getTeacherProfile(accessToken: string): Promise<BackendTeacherProfileResponse> {
-  return profileBackendRequest<BackendTeacherProfileResponse>({
-    path: "/profiles/teacher",
+  const payload = await profileBackendRequest<V2TeacherProfile>({
+    path: "/teachers/me",
     accessToken,
     method: "GET",
     fallback: "Não foi possível carregar o perfil da professora.",
   });
+  return mapTeacherProfile(payload);
 }
 
 export async function patchTeacherProfile(
   accessToken: string,
   payload: TeacherProfilePatchPayload,
 ): Promise<BackendProfileStatusResponse> {
-  return profileBackendRequest<BackendProfileStatusResponse>({
-    path: "/profiles/teacher",
+  const updated = await profileBackendRequest<V2TeacherProfile>({
+    path: "/teachers/me",
     accessToken,
     method: "PATCH",
-    body: payload as Record<string, unknown>,
+    body: mapTeacherPatchPayload(payload),
   });
+  return {
+    status: "ok",
+    user_id: updated.user.id,
+    profile_id: updated.user.id,
+    teacher_id: updated.id,
+    role: "teacher",
+  };
 }
 
 export async function uploadTeacherProfilePhoto(
   accessToken: string,
   file: File,
 ): Promise<TeacherPhotoUploadResponse> {
-  const url = `${getBackendApiBaseUrl()}/profiles/teacher/photo`;
+  const url = `${getBackendApiBaseUrl()}/teachers/me/photo`;
   const bearerToken = await resolveProtectedAccessToken(accessToken);
   const body = new FormData();
   body.append("file", file);

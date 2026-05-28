@@ -126,6 +126,14 @@ class DeleteChildResponse(BaseModel):
     child_id: UUID
 
 
+class TeacherProfilePhotoUploadResponse(BaseModel):
+    status: str = "ok"
+    user_id: UUID
+    role: UserRole
+    teacher_id: UUID
+    profile_photo_file_name: str
+
+
 class ParentProfile(BaseModel):
     id: UUID
     user: UserProfile
@@ -199,6 +207,65 @@ class TeacherAvailabilityRule(BaseModel):
     updated_at: datetime
 
 
+class TeacherSkillsOps(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    add: list[str] = Field(default_factory=list)
+    remove: list[str] = Field(default_factory=list)
+
+
+class TeacherAcademicRecordUpsert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID | None = None
+    degree_type: str
+    course_name: str
+    institution: str
+    completion_year: str | None = None
+
+
+class TeacherAcademicRecordsOps(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    upsert: list[TeacherAcademicRecordUpsert] = Field(default_factory=list)
+    delete_ids: list[UUID] = Field(default_factory=list)
+
+
+class TeacherExperienceUpsert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID | None = None
+    institution: str
+    role: str
+    description: str
+    period_from: str
+    period_to: str | None = None
+    current_position: bool = False
+
+
+class TeacherExperiencesOps(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    upsert: list[TeacherExperienceUpsert] = Field(default_factory=list)
+    delete_ids: list[UUID] = Field(default_factory=list)
+
+
+class TeacherAvailabilityUpsert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID | None = None
+    day_of_week: int = Field(ge=0, le=6)
+    start_time: time
+    end_time: time
+
+
+class TeacherAvailabilityOps(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    upsert: list[TeacherAvailabilityUpsert] = Field(default_factory=list)
+    delete_ids: list[UUID] = Field(default_factory=list)
+
+
 class TeacherProfile(BaseModel):
     id: UUID
     user: UserProfile
@@ -237,6 +304,10 @@ class TeacherProfileUpdateRequest(BaseModel):
     profile_photo_file_name: str | None = None
     hide_experience: bool | None = None
     address: AddressInput | None = None
+    skills_ops: TeacherSkillsOps | None = None
+    academic_records_ops: TeacherAcademicRecordsOps | None = None
+    experiences_ops: TeacherExperiencesOps | None = None
+    availability_ops: TeacherAvailabilityOps | None = None
 
     @model_validator(mode="after")
     def ensure_not_empty(self) -> "TeacherProfileUpdateRequest":

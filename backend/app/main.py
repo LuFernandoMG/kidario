@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.router import api_router as api_v1_router
 from app.api.v2.router import api_router as api_v2_router
 from app.core.config import get_settings
 from app.core.observability import configure_logging, request_observability_middleware
@@ -20,5 +19,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
 app.include_router(api_v2_router, prefix=settings.api_v2_prefix)

@@ -13,6 +13,7 @@ export const CHAT_PATH = "/chat/:threadId";
 export const AGENDA_PATH = "/agenda";
 export const PROGRESS_PATH = "/progresso";
 export const PROFILE_PATH = "/perfil";
+export const NOTIFICATIONS_PATH = "/notificacoes";
 export const PARENT_PROFILE_SETTINGS_PATH = "/perfil/responsavel";
 export const TEACHER_PROFILE_SETTINGS_PATH = "/perfil/professora";
 export const TEACHER_CONTROL_CENTER_PATH = "/inicio";
@@ -52,6 +53,7 @@ export const frontendRoutes = {
     agenda: AGENDA_PATH,
     progress: PROGRESS_PATH,
     profile: PROFILE_PATH,
+    notifications: NOTIFICATIONS_PATH,
     parentProfileSettings: PARENT_PROFILE_SETTINGS_PATH,
     teacherProfileSettings: TEACHER_PROFILE_SETTINGS_PATH,
     teacherControlCenter: TEACHER_CONTROL_CENTER_PATH,
@@ -81,6 +83,7 @@ const handledStaticPaths = new Set([
   AGENDA_PATH,
   PROGRESS_PATH,
   PROFILE_PATH,
+  NOTIFICATIONS_PATH,
   PARENT_PROFILE_SETTINGS_PATH,
   TEACHER_PROFILE_SETTINGS_PATH,
   TEACHER_CONTROL_CENTER_PATH,

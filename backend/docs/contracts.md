@@ -13,7 +13,8 @@ The backend uses the normalized schema from `backend/sql/012_normalized_supabase
 - Notifications: `notification_devices`, `notification_preferences`, `notifications`, `notification_deliveries`
 
 Legacy columns and tables may still exist because earlier migrations created them, but backend reads and authorization use
-normalized IDs and timestamps. Compatibility writes are limited to columns that are still required by old constraints.
+normalized IDs and timestamps. The v1 router is no longer mounted; `013_api_v2_cutover.sql` relaxes the remaining old
+constraints needed to stop v2 services from writing compatibility columns.
 
 ## Public API Shape
 
@@ -89,59 +90,6 @@ V2 profile rules:
 - Payment v2 responses read from `payment_orders` and include nested `payment_charges`.
 - Notification v2 responses read/write `notification_devices`, `notification_preferences`, and `notifications`; delivery attempts stay in `notification_deliveries` for worker/provider integrations.
 
-Existing V1 endpoints:
-
-Profiles:
-
-- `GET /api/v1/profiles/me`
-- `GET /api/v1/profiles/parent`
-- `GET /api/v1/profiles/teacher`
-- `PATCH /api/v1/profiles/parent`
-- `PATCH /api/v1/profiles/teacher`
-- `POST /api/v1/profiles/teacher/photo`
-
-Marketplace:
-
-- `GET /api/v1/marketplace/teachers`
-- `GET /api/v1/marketplace/teachers/{teacher_id}`
-- `GET /api/v1/marketplace/teachers/{teacher_id}/reviews`
-
-Bookings:
-
-- `POST /api/v1/bookings`
-- `GET /api/v1/bookings/parent/agenda`
-- `GET /api/v1/bookings/teacher/agenda`
-- `GET /api/v1/bookings/{booking_id}`
-- `PATCH /api/v1/bookings/{booking_id}/reschedule`
-- `PATCH /api/v1/bookings/{booking_id}/teacher/decision`
-- `PATCH /api/v1/bookings/{booking_id}/teacher/reschedule`
-- `PATCH /api/v1/bookings/{booking_id}/cancel`
-- `PATCH /api/v1/bookings/{booking_id}/complete`
-- `GET /api/v1/teachers/{teacher_id}/availability/slots`
-
-Reviews:
-
-- `POST /api/v1/bookings/{booking_id}/review`
-- `GET /api/v1/bookings/{booking_id}/review`
-- `GET /api/v1/admin/reviews`
-- `PATCH /api/v1/admin/reviews/{review_id}`
-
-Chat and teacher control:
-
-- `GET /api/v1/chat/threads`
-- `POST /api/v1/chat/threads/from-booking/{booking_id}`
-- `GET /api/v1/chat/threads/{thread_id}`
-- `GET /api/v1/chat/threads/{thread_id}/messages`
-- `POST /api/v1/chat/threads/{thread_id}/messages`
-- `GET /api/v1/teacher/control-center/overview`
-- `GET /api/v1/teacher/students/{child_id}/timeline`
-
-Admin:
-
-- `GET /api/v1/admin/dashboard`
-- `GET /api/v1/admin/access`
-- `PATCH /api/v1/admin/teachers/{teacher_id}/activation`
-
 ## Review Rules
 
 - A booking has zero or one review.
@@ -160,7 +108,7 @@ Admin:
 - Package purchase responses expose derived `booked_sessions`, `completed_sessions`, and `remaining_sessions` counters.
 - Bookings created with `package_id` require an active package matching parent, teacher and child, and consume remaining sessions before creating extra paid bookings.
 - `payment_method` is required for one-off bookings and optional when `package_id` is provided.
-- Package payment provider remains `legacy` until Pagar.me order/charge creation is implemented.
+- Package payment provider remains `internal` until Pagar.me order/charge creation is implemented.
 
 ## Notification Rules
 
@@ -177,4 +125,4 @@ Admin:
 - `teacher_id` must exist and support the requested modality.
 - New and rescheduled lessons must respect the minimum lead time.
 - Scheduling conflicts are checked by `teacher_id + starts_at` for active bookings.
-- Booking creation also creates/updates a `payment_order` and `payment_charge` with provider `legacy` until Pagar.me is integrated.
+- Booking creation also creates/updates a `payment_order` and `payment_charge` with provider `internal` until Pagar.me is integrated.

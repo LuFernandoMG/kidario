@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from datetime import date
 from typing import Literal
 from uuid import UUID
 
@@ -18,6 +19,8 @@ from app.schemas.v2_bookings import (
     BookingDecisionRequest,
     BookingRescheduleRequest,
     BookingsResponse,
+    TeacherAvailabilitySlotsResponse,
+    TeacherFollowUpContextResponse,
 )
 from app.services.booking_v2_service import (
     BookingConflictError,
@@ -29,6 +32,8 @@ from app.services.booking_v2_service import (
     create_booking_v2,
     decide_booking_v2,
     get_booking_v2,
+    get_teacher_availability_slots_v2,
+    get_teacher_follow_up_context_v2,
     list_parent_bookings_v2,
     list_teacher_bookings_v2,
     reschedule_booking_v2,
@@ -223,3 +228,37 @@ def post_booking_complete_endpoint(
         _handle_booking_error(exc)
     return Booking(**data)
 
+
+@router.get(
+    "/bookings/{booking_id}/teacher/follow-up-context",
+    response_model=TeacherFollowUpContextResponse,
+)
+def get_teacher_follow_up_context_endpoint(
+    booking_id: UUID,
+    user: AuthUser = Security(get_current_teacher_user),
+    db: Session = Depends(get_db),
+) -> TeacherFollowUpContextResponse:
+    try:
+        data = get_teacher_follow_up_context_v2(db, user, booking_id)
+    except Exception as exc:
+        _handle_booking_error(exc)
+    return TeacherFollowUpContextResponse(**data)
+
+
+@router.get(
+    "/teachers/{teacher_id}/availability/slots",
+    response_model=TeacherAvailabilitySlotsResponse,
+)
+def get_teacher_slots_endpoint(
+    teacher_id: UUID,
+    date_from: date = Query(alias="from"),
+    date_to: date = Query(alias="to"),
+    duration_minutes: int = Query(default=60, ge=15, le=300),
+    _: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> TeacherAvailabilitySlotsResponse:
+    try:
+        data = get_teacher_availability_slots_v2(db, teacher_id, date_from, date_to, duration_minutes)
+    except Exception as exc:
+        _handle_booking_error(exc)
+    return TeacherAvailabilitySlotsResponse(**data)

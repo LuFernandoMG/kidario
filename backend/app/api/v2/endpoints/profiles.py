@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Security, status
+from fastapi import APIRouter, Depends, File, HTTPException, Security, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -20,10 +20,14 @@ from app.schemas.v2_profiles import (
     ParentProfile,
     ParentProfileUpdateRequest,
     TeacherProfile,
+    TeacherProfilePhotoUploadResponse,
     TeacherProfileUpdateRequest,
 )
-from app.services.profile_service import ProfileConflictError, ProfileNotFoundError, ProfileValidationError
+from app.services.profile_photo_service import ProfilePhotoUploadError, upload_teacher_profile_photo
 from app.services.profile_v2_service import (
+    ProfileConflictError,
+    ProfileNotFoundError,
+    ProfileValidationError,
     create_child_v2,
     delete_child_v2,
     get_me_v2,
@@ -209,3 +213,29 @@ def patch_my_teacher_profile_endpoint(
     except Exception as exc:
         _handle_profile_error(exc)
     return TeacherProfile(**data)
+
+
+@router.post("/teachers/me/photo", response_model=TeacherProfilePhotoUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_my_teacher_photo_endpoint(
+    file: UploadFile = File(...),
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> TeacherProfilePhotoUploadResponse:
+    file_bytes = await file.read()
+    try:
+        data = _run_write_transaction(
+            db,
+            lambda: upload_teacher_profile_photo(
+                db,
+                get_settings(),
+                user,
+                file_name=file.filename,
+                content_type=file.content_type,
+                file_bytes=file_bytes,
+            ),
+        )
+    except ProfilePhotoUploadError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except Exception as exc:
+        _handle_profile_error(exc)
+    return TeacherProfilePhotoUploadResponse(**data)

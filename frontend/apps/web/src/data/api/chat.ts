@@ -4,8 +4,8 @@ import { buildRequestIdHeader } from "@/lib/observability";
 export interface ChatThreadView {
   id: string;
   booking_id: string;
-  parent_profile_id: string;
-  teacher_profile_id: string;
+  parent_id: string;
+  teacher_id: string;
   child_id: string;
   booking_status: "pendente" | "confirmada" | "cancelada" | "concluida";
   is_read_only: boolean;
@@ -20,7 +20,7 @@ export interface ChatThreadView {
 export interface ChatMessageView {
   id: string;
   thread_id: string;
-  sender_profile_id: string;
+  sender_user_id: string;
   body: string;
   created_at: string;
 }

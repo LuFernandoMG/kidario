@@ -1,9 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.bookings import BookingModality, BookingStatus, PaymentMethod, PaymentOrderStatus
+from app.schemas.v2_bookings import BookingModality, BookingStatus, PaymentMethod, PaymentOrderStatus
 
 
 class AdminTeacherRecord(BaseModel):
@@ -94,3 +94,15 @@ class AdminDashboardResponse(BaseModel):
 class AdminAccessResponse(BaseModel):
     status: str = "ok"
     is_admin: bool = True
+
+
+class TeacherActivationPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_active: bool
+
+
+class TeacherActivationResponse(BaseModel):
+    status: str = "ok"
+    teacher_id: UUID
+    is_active: bool

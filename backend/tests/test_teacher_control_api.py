@@ -12,8 +12,8 @@ os.environ.setdefault(
 )
 
 from app.api.deps import get_current_teacher_user, get_current_user
-from app.api.v1.endpoints import chat as chat_endpoints
-from app.api.v1.endpoints import teacher_control as teacher_control_endpoints
+from app.api.v2.endpoints import chat as chat_endpoints
+from app.api.v2.endpoints import teacher_control as teacher_control_endpoints
 from app.core.security import AuthUser
 from app.db.session import get_db
 from app.main import app
@@ -136,7 +136,7 @@ def test_get_teacher_control_center_overview_returns_ok(
         _fake_get_teacher_control_center_overview,
     )
 
-    response = client.get("/api/v1/teacher/control-center/overview")
+    response = client.get("/api/v2/teacher/control-center/overview")
 
     assert response.status_code == 200
     body = response.json()
@@ -183,7 +183,7 @@ def test_get_teacher_student_timeline_returns_ok(
         _fake_get_teacher_student_timeline,
     )
 
-    response = client.get(f"/api/v1/teacher/students/{expected_child_id}/timeline")
+    response = client.get(f"/api/v2/teacher/students/{expected_child_id}/timeline")
 
     assert response.status_code == 200
     body = response.json()
@@ -221,7 +221,7 @@ def test_get_chat_threads_returns_ok(
 
     monkeypatch.setattr(chat_endpoints, "list_threads", _fake_list_threads)
 
-    response = client.get("/api/v1/chat/threads?limit=20")
+    response = client.get("/api/v2/chat/threads?limit=20")
 
     assert response.status_code == 200
     body = response.json()

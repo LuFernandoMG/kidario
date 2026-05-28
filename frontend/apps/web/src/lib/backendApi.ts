@@ -2,7 +2,7 @@ import { getValidSupabaseAccessToken, handleExpiredSessionRedirect } from "@/lib
 
 export function getBackendApiBaseUrl(): string {
   const configured = import.meta.env.VITE_BACKEND_API_URL?.trim();
-  const baseUrl = configured || "http://localhost:8000/api/v1";
+  const baseUrl = configured || "http://localhost:8000/api/v2";
   return baseUrl.replace(/\/+$/, "");
 }
 

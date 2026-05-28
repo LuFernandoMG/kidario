@@ -47,7 +47,7 @@ def get_or_create_teacher_activity_plan_for_booking(
     *,
     db: Session,
     booking_id: str,
-    teacher_profile_id: str,
+    teacher_id: str,
     child_id: str,
     planner_input: TeacherActivityPlanInput,
     settings: Settings | None = None,
@@ -73,7 +73,7 @@ def get_or_create_teacher_activity_plan_for_booking(
         _persist_booking_activity_plan(
             db=db,
             booking_id=booking_id,
-            teacher_profile_id=teacher_profile_id,
+            teacher_id=teacher_id,
             child_id=child_id,
             source=str(generated_plan["source"]),
             activities=generated_plan["activities"],
@@ -274,41 +274,39 @@ def _persist_booking_activity_plan(
     *,
     db: Session,
     booking_id: str,
-    teacher_profile_id: str,
+    teacher_id: str,
     child_id: str,
     source: str,
     activities: list[str],
     context_hash: str,
 ) -> None:
-    bind = db.get_bind()
-    with bind.begin() as connection:
-        connection.execute(
-            text(
-                """
-                insert into booking_activity_plans
-                  (booking_id, teacher_profile_id, child_id, source, activities, context_hash, generated_at)
-                values
-                  (:booking_id, :teacher_profile_id, :child_id, :source, cast(:activities as jsonb), :context_hash, now())
-                on conflict (booking_id)
-                do update set
-                  teacher_profile_id = excluded.teacher_profile_id,
-                  child_id = excluded.child_id,
-                  source = excluded.source,
-                  activities = excluded.activities,
-                  context_hash = excluded.context_hash,
-                  generated_at = now(),
-                  updated_at = now()
-                """
-            ),
-            {
-                "booking_id": booking_id,
-                "teacher_profile_id": teacher_profile_id,
-                "child_id": child_id,
-                "source": source,
-                "activities": json.dumps(activities, ensure_ascii=False),
-                "context_hash": context_hash,
-            },
-        )
+    db.execute(
+        text(
+            """
+            insert into booking_activity_plans
+              (booking_id, teacher_id, child_id, source, activities, context_hash, generated_at)
+            values
+              (:booking_id, :teacher_id, :child_id, :source, cast(:activities as jsonb), :context_hash, now())
+            on conflict (booking_id)
+            do update set
+              teacher_id = excluded.teacher_id,
+              child_id = excluded.child_id,
+              source = excluded.source,
+              activities = excluded.activities,
+              context_hash = excluded.context_hash,
+              generated_at = now(),
+              updated_at = now()
+            """
+        ),
+        {
+            "booking_id": booking_id,
+            "teacher_id": teacher_id,
+            "child_id": child_id,
+            "source": source,
+            "activities": json.dumps(activities, ensure_ascii=False),
+            "context_hash": context_hash,
+        },
+    )
 
 
 def _build_fallback_activities(planner_input: TeacherActivityPlanInput) -> list[str]:

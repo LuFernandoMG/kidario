@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
       proxy: {
-        "/api/v1": {
+        "/api/v2": {
           target: backendProxyTarget,
           changeOrigin: true,
         },

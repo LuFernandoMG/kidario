@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.schemas.auth import AuthSignupRequest, AuthSignupResponse
+from app.schemas.v2_auth import AuthSignupRequest, AuthSignupResponse
 from app.services.auth_service import AuthSignupError, signup_with_profile
 from app.services.signup_protection_service import (
     SignupProtectionError,
@@ -12,7 +12,7 @@ from app.services.signup_protection_service import (
     get_client_ip,
 )
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["v2-auth"])
 
 
 def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
@@ -20,7 +20,7 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     if sqlstate == "42P01":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database schema not initialized. Run backend/sql scripts.",
+            detail="Database schema not initialized. Run backend/sql migrations through 012.",
         ) from exc
 
     settings = get_settings()

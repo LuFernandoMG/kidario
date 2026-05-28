@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Search, Calendar, TrendingUp, User, LayoutDashboard, Wallet } from "lucide-react";
+import { Search, Calendar, TrendingUp, User, LayoutDashboard, Wallet, Bell } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { getAuthSession } from "@/lib/authSession";
@@ -11,6 +11,7 @@ import {
   TEACHER_STUDENTS_PATH,
 } from "@/routes/teacher";
 import { LOGIN_PATH, ROOT_PATH, SIGNUP_PATH } from "@/routes/paths";
+import { NOTIFICATIONS_PATH } from "@/routes/paths";
 
 interface NavItem {
   path: string;
@@ -22,6 +23,7 @@ const parentNavItems: NavItem[] = [
   { path: "/explorar", label: "Explorar", icon: <Search className="w-5 h-5" /> },
   { path: "/agenda", label: "Agenda", icon: <Calendar className="w-5 h-5" /> },
   { path: "/progresso", label: "Progresso", icon: <TrendingUp className="w-5 h-5" /> },
+  { path: NOTIFICATIONS_PATH, label: "Avisos", icon: <Bell className="w-5 h-5" /> },
   { path: "/perfil", label: "Perfil", icon: <User className="w-5 h-5" /> },
 ];
 
@@ -30,6 +32,7 @@ const teacherNavItems: NavItem[] = [
   { path: TEACHER_AGENDA_PATH, label: "Agenda", icon: <Calendar className="w-5 h-5" /> },
   { path: TEACHER_STUDENTS_PATH, label: "Alunos", icon: <TrendingUp className="w-5 h-5" /> },
   { path: TEACHER_FINANCE_PATH, label: "Financeiro", icon: <Wallet className="w-5 h-5" /> },
+  { path: NOTIFICATIONS_PATH, label: "Avisos", icon: <Bell className="w-5 h-5" /> },
   { path: "/perfil", label: "Perfil", icon: <User className="w-5 h-5" /> },
 ];
 

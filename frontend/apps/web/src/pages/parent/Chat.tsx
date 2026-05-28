@@ -177,7 +177,7 @@ export default function Chat() {
                 </p>
               ) : (
                 messages.map((message) => {
-                  const isMine = Boolean(currentProfileId) && message.sender_profile_id === currentProfileId;
+                  const isMine = Boolean(currentProfileId) && message.sender_user_id === currentProfileId;
                   return (
                     <div key={message.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                       <div

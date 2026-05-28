@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import RecoverPassword from "./pages/RecoverPassword";
 import ResetPassword from "./pages/ResetPassword";
 import AdminHiddenDashboard from "./pages/AdminHiddenDashboard";
+import NotificationsPage from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 import Signup from "./pages/parent/Signup";
 import Explore from "./pages/parent/Explore";
@@ -52,6 +53,7 @@ import {
   CHECKOUT_PATH,
   EXPLORE_PATH,
   LOGIN_PATH,
+  NOTIFICATIONS_PATH,
   PARENT_PROFILE_SETTINGS_PATH,
   PROFILE_PATH,
   PROGRESS_PATH,
@@ -152,6 +154,14 @@ const App = () => (
             )}
           />
           <Route path={PROFILE_PATH} element={<Profile />} />
+          <Route
+            path={NOTIFICATIONS_PATH}
+            element={(
+              <RequireRoleRoute allowedRoles={["parent", "teacher"]}>
+                <NotificationsPage />
+              </RequireRoleRoute>
+            )}
+          />
           <Route
             path={PARENT_PROFILE_SETTINGS_PATH}
             element={(

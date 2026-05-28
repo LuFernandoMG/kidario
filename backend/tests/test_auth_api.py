@@ -14,7 +14,7 @@ os.environ.setdefault(
 # Keep signup protection deterministic in tests regardless of local .env values.
 os.environ["KIDARIO_SIGNUP_CAPTCHA_REQUIRED"] = "false"
 
-from app.api.v1.endpoints import auth as auth_endpoints
+from app.api.v2.endpoints import auth as auth_endpoints
 from app.db.session import get_db
 from app.main import app
 from app.services.auth_service import AuthSignupError
@@ -60,12 +60,12 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
     monkeypatch.setattr(auth_endpoints, "enforce_signup_protection", lambda settings, payload, client_ip: None)
 
     response = client.post(
-        "/api/v1/auth/signup",
+        "/api/v2/auth/signup",
         json={
             "email": "parent@example.com",
             "password": "very-secure-password",
             "role": "parent",
-            "parent_profile": {
+            "parent": {
                 "first_name": "Maria",
                 "last_name": "Silva",
                 "cpf": "12345678901",
@@ -77,10 +77,7 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
                     "city": "Sao Paulo",
                     "state": "SP",
                 },
-                "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
-                    "delete_ids": [],
-                },
+                "children": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
             },
         },
     )
@@ -100,12 +97,12 @@ def test_post_auth_signup_returns_conflict(client: TestClient, monkeypatch: pyte
     monkeypatch.setattr(auth_endpoints, "enforce_signup_protection", lambda settings, payload, client_ip: None)
 
     response = client.post(
-        "/api/v1/auth/signup",
+        "/api/v2/auth/signup",
         json={
             "email": "parent@example.com",
             "password": "very-secure-password",
             "role": "parent",
-            "parent_profile": {
+            "parent": {
                 "first_name": "Maria",
                 "phone": "(11) 99999-9999",
                 "cpf": "12345678901",
@@ -116,10 +113,7 @@ def test_post_auth_signup_returns_conflict(client: TestClient, monkeypatch: pyte
                     "city": "Sao Paulo",
                     "state": "SP",
                 },
-                "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
-                    "delete_ids": [],
-                },
+                "children": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
             },
         },
     )
@@ -130,17 +124,14 @@ def test_post_auth_signup_returns_conflict(client: TestClient, monkeypatch: pyte
 
 def test_post_auth_signup_requires_role_specific_payload(client: TestClient) -> None:
     response = client.post(
-        "/api/v1/auth/signup",
+        "/api/v2/auth/signup",
         json={
             "email": "teacher@example.com",
             "password": "very-secure-password",
             "role": "teacher",
-            "parent_profile": {
+            "parent": {
                 "first_name": "Ana",
-                "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
-                    "delete_ids": [],
-                },
+                "children": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
             },
         },
     )
@@ -170,13 +161,13 @@ def test_post_auth_signup_rejects_honeypot(client: TestClient, monkeypatch: pyte
     monkeypatch.setattr(auth_endpoints, "signup_with_profile", _fake_signup_with_profile)
 
     response = client.post(
-        "/api/v1/auth/signup",
+        "/api/v2/auth/signup",
         json={
             "email": "parent@example.com",
             "password": "very-secure-password",
             "role": "parent",
             "honeypot": "spam-bot-filled-field",
-            "parent_profile": {
+            "parent": {
                 "first_name": "Maria",
                 "last_name": "Silva",
                 "cpf": "12345678901",
@@ -188,10 +179,7 @@ def test_post_auth_signup_rejects_honeypot(client: TestClient, monkeypatch: pyte
                     "city": "Sao Paulo",
                     "state": "SP",
                 },
-                "children_ops": {
-                    "upsert": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
-                    "delete_ids": [],
-                },
+                "children": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
             },
         },
     )

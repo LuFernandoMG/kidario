@@ -13,8 +13,19 @@ from app.schemas.v2_profiles import (
     ParentProfileUpdateRequest,
     TeacherProfileUpdateRequest,
 )
-from app.services.profile_service import ProfileConflictError, ProfileNotFoundError, ProfileValidationError
 from app.services.storage_url_service import resolve_teacher_profile_photo_url
+
+
+class ProfileConflictError(Exception):
+    pass
+
+
+class ProfileValidationError(Exception):
+    pass
+
+
+class ProfileNotFoundError(Exception):
+    pass
 
 
 ADDRESS_FIELDS = (
@@ -59,6 +70,84 @@ def _get_user(db: Session, user_id: str) -> dict:
     if not row:
         raise ProfileNotFoundError("User profile does not exist yet.")
     return dict(row)
+
+
+def _split_email_name(email: str | None) -> tuple[str, str]:
+    local = (email or "usuario").split("@", maxsplit=1)[0].strip() or "usuario"
+    return local, ""
+
+
+def ensure_user_v2(
+    db: Session,
+    user: AuthUser,
+    *,
+    target_role: str,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    auth_email_confirmed: bool = True,
+) -> UUID:
+    row = (
+        db.execute(
+            text(
+                """
+                select id, role
+                from users
+                where id = :user_id
+                """
+            ),
+            {"user_id": user.user_id},
+        )
+        .mappings()
+        .first()
+    )
+    fallback_first_name, fallback_last_name = _split_email_name(user.email)
+    resolved_first_name = first_name if first_name is not None else fallback_first_name
+    resolved_last_name = last_name if last_name is not None else fallback_last_name
+
+    if row is None:
+        if not user.email:
+            raise ProfileValidationError("Token does not include email.")
+        db.execute(
+            text(
+                """
+                insert into users (id, email, first_name, last_name, role, auth_email_confirmed)
+                values (:id, :email, :first_name, :last_name, :role, :auth_email_confirmed)
+                """
+            ),
+            {
+                "id": user.user_id,
+                "email": user.email,
+                "first_name": resolved_first_name,
+                "last_name": resolved_last_name,
+                "role": target_role,
+                "auth_email_confirmed": auth_email_confirmed,
+            },
+        )
+        return UUID(str(user.user_id))
+
+    if row["role"] != target_role:
+        raise ProfileConflictError(f"User already registered as role '{row['role']}'.")
+
+    db.execute(
+        text(
+            """
+            update users
+            set
+              first_name = coalesce(:first_name, first_name),
+              last_name = coalesce(:last_name, last_name),
+              auth_email_confirmed = auth_email_confirmed or :auth_email_confirmed,
+              updated_at = now()
+            where id = :id
+            """
+        ),
+        {
+            "id": user.user_id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "auth_email_confirmed": auth_email_confirmed,
+        },
+    )
+    return UUID(str(user.user_id))
 
 
 def _update_user_names(db: Session, user_id: str, first_name: str | None, last_name: str | None) -> None:
@@ -625,6 +714,8 @@ def update_teacher_profile_v2(db: Session, user: AuthUser, payload: TeacherProfi
     if values["cpf"] is None and existing_teacher is None:
         raise ProfileValidationError("Teacher profile is missing required field: cpf.")
 
+    teacher_id = UUID(str(existing_teacher["id"])) if existing_teacher else uuid4()
+
     if existing_teacher:
         db.execute(
             text(
@@ -644,7 +735,7 @@ def update_teacher_profile_v2(db: Session, user: AuthUser, payload: TeacherProfi
                 where id = :teacher_id
                 """
             ),
-            {"teacher_id": str(existing_teacher["id"]), "address_id": str(address_id), **values},
+            {"teacher_id": str(teacher_id), "address_id": str(address_id), **values},
         )
     else:
         db.execute(
@@ -660,7 +751,222 @@ def update_teacher_profile_v2(db: Session, user: AuthUser, payload: TeacherProfi
                 )
                 """
             ),
-            {"id": str(uuid4()), "user_id": user.user_id, "address_id": str(address_id), **values},
+            {"id": str(teacher_id), "user_id": user.user_id, "address_id": str(address_id), **values},
         )
 
+    if payload.skills_ops:
+        for skill in payload.skills_ops.remove:
+            db.execute(
+                text(
+                    """
+                    delete from teacher_skills
+                    where teacher_id = :teacher_id and lower(skill) = lower(:skill)
+                    """
+                ),
+                {"teacher_id": str(teacher_id), "skill": skill},
+            )
+        for skill in payload.skills_ops.add:
+            normalized_skill = skill.strip()
+            if not normalized_skill:
+                continue
+            exists = db.execute(
+                text(
+                    """
+                    select exists(
+                      select 1 from teacher_skills
+                      where teacher_id = :teacher_id and lower(skill) = lower(:skill)
+                    )
+                    """
+                ),
+                {"teacher_id": str(teacher_id), "skill": normalized_skill},
+            ).scalar_one()
+            if not exists:
+                db.execute(
+                    text(
+                        """
+                        insert into teacher_skills (id, teacher_id, skill)
+                        values (:id, :teacher_id, :skill)
+                        """
+                    ),
+                    {"id": str(uuid4()), "teacher_id": str(teacher_id), "skill": normalized_skill},
+                )
+
+    if payload.academic_records_ops:
+        for record_id in payload.academic_records_ops.delete_ids:
+            db.execute(
+                text("delete from teacher_academic_records where id = :id and teacher_id = :teacher_id"),
+                {"id": str(record_id), "teacher_id": str(teacher_id)},
+            )
+        for record in payload.academic_records_ops.upsert:
+            record_id = record.id or uuid4()
+            exists = db.execute(
+                text("select exists(select 1 from teacher_academic_records where id = :id and teacher_id = :teacher_id)"),
+                {"id": str(record_id), "teacher_id": str(teacher_id)},
+            ).scalar_one()
+            params = {
+                "id": str(record_id),
+                "teacher_id": str(teacher_id),
+                "degree_type": record.degree_type,
+                "course_name": record.course_name,
+                "institution": record.institution,
+                "completion_year": record.completion_year,
+            }
+            if exists:
+                db.execute(
+                    text(
+                        """
+                        update teacher_academic_records
+                        set degree_type = :degree_type,
+                            course_name = :course_name,
+                            institution = :institution,
+                            completion_year = :completion_year,
+                            updated_at = now()
+                        where id = :id and teacher_id = :teacher_id
+                        """
+                    ),
+                    params,
+                )
+            else:
+                db.execute(
+                    text(
+                        """
+                        insert into teacher_academic_records
+                          (id, teacher_id, degree_type, course_name, institution, completion_year)
+                        values
+                          (:id, :teacher_id, :degree_type, :course_name, :institution, :completion_year)
+                        """
+                    ),
+                    params,
+                )
+
+    if payload.experiences_ops:
+        for experience_id in payload.experiences_ops.delete_ids:
+            db.execute(
+                text("delete from teacher_experiences where id = :id and teacher_id = :teacher_id"),
+                {"id": str(experience_id), "teacher_id": str(teacher_id)},
+            )
+        for experience in payload.experiences_ops.upsert:
+            experience_id = experience.id or uuid4()
+            exists = db.execute(
+                text("select exists(select 1 from teacher_experiences where id = :id and teacher_id = :teacher_id)"),
+                {"id": str(experience_id), "teacher_id": str(teacher_id)},
+            ).scalar_one()
+            params = {
+                "id": str(experience_id),
+                "teacher_id": str(teacher_id),
+                "institution": experience.institution,
+                "role": experience.role,
+                "description": experience.description,
+                "period_from": experience.period_from,
+                "period_to": experience.period_to,
+                "current_position": experience.current_position,
+            }
+            if exists:
+                db.execute(
+                    text(
+                        """
+                        update teacher_experiences
+                        set institution = :institution,
+                            role = :role,
+                            responsibilities = :description,
+                            description = :description,
+                            period_from = :period_from,
+                            period_to = :period_to,
+                            current_position = :current_position,
+                            updated_at = now()
+                        where id = :id and teacher_id = :teacher_id
+                        """
+                    ),
+                    params,
+                )
+            else:
+                db.execute(
+                    text(
+                        """
+                        insert into teacher_experiences
+                          (
+                            id, teacher_id, institution, role, description,
+                            period_from, period_to, current_position
+                          )
+                        values
+                          (
+                            :id, :teacher_id, :institution, :role, :description,
+                            :period_from, :period_to, :current_position
+                          )
+                        """
+                    ),
+                    params,
+                )
+
+    if payload.availability_ops:
+        for availability_id in payload.availability_ops.delete_ids:
+            db.execute(
+                text("delete from teacher_availability where id = :id and teacher_id = :teacher_id"),
+                {"id": str(availability_id), "teacher_id": str(teacher_id)},
+            )
+        for slot in payload.availability_ops.upsert:
+            slot_id = slot.id or uuid4()
+            exists = db.execute(
+                text("select exists(select 1 from teacher_availability where id = :id and teacher_id = :teacher_id)"),
+                {"id": str(slot_id), "teacher_id": str(teacher_id)},
+            ).scalar_one()
+            params = {
+                "id": str(slot_id),
+                "teacher_id": str(teacher_id),
+                "day_of_week": slot.day_of_week,
+                "start_time": slot.start_time,
+                "end_time": slot.end_time,
+            }
+            if exists:
+                db.execute(
+                    text(
+                        """
+                        update teacher_availability
+                        set day_of_week = :day_of_week,
+                            start_time = :start_time,
+                            end_time = :end_time,
+                            updated_at = now()
+                        where id = :id and teacher_id = :teacher_id
+                        """
+                    ),
+                    params,
+                )
+            else:
+                db.execute(
+                    text(
+                        """
+                        insert into teacher_availability
+                          (id, teacher_id, day_of_week, start_time, end_time)
+                        values
+                          (:id, :teacher_id, :day_of_week, :start_time, :end_time)
+                        """
+                    ),
+                    params,
+                )
+
     return get_teacher_profile_v2(db, user)
+
+
+def set_teacher_activation_v2(db: Session, teacher_id: UUID, is_active: bool) -> dict:
+    row = (
+        db.execute(
+            text(
+                """
+                update teachers
+                set is_active = :is_active, updated_at = now()
+                where id = :teacher_id
+                returning id, is_active
+                """
+            ),
+            {"teacher_id": str(teacher_id), "is_active": is_active},
+        )
+        .mappings()
+        .first()
+    )
+    if not row:
+        raise ProfileNotFoundError("Teacher profile not found.")
+    return {
+        "status": "ok",
+        "teacher_id": UUID(str(row["id"])),
+        "is_active": bool(row["is_active"]),
+    }

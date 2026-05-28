@@ -1,8 +1,10 @@
 import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
+import { formatDateLong, toDateIso } from "@/lib/bookingUtils";
 import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
+export type PaymentMethod = "credit_card" | "pix" | "boleto";
 export type ObjectiveFulfilmentLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface LessonObjectiveItem {
@@ -11,23 +13,98 @@ export interface LessonObjectiveItem {
   fullfilment_level: ObjectiveFulfilmentLevel;
 }
 
-export interface CreateBookingPayload {
-  parent_profile_id?: string;
-  child_id?: string;
-  teacher_profile_id: string;
-  date_iso: string;
-  time: string;
+export interface PaymentCharge {
+  id: string;
+  payment_order_id: string;
+  provider: string;
+  provider_charge_id?: string | null;
+  provider_transaction_id?: string | null;
+  payment_method: PaymentMethod;
+  status: string;
+  amount_cents: number;
+  paid_amount_cents?: number | null;
+  installments: number;
+  pix_qr_code_url?: string | null;
+  boleto_url?: string | null;
+  paid_at?: string | null;
+  failed_at?: string | null;
+  canceled_at?: string | null;
+  refunded_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentOrder {
+  id: string;
+  parent_id: string;
+  booking_id?: string | null;
+  package_id?: string | null;
+  provider: string;
+  provider_order_id?: string | null;
+  provider_order_code?: string | null;
+  amount_cents: number;
+  currency: string;
+  status: string;
+  charges: PaymentCharge[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BookingResponse {
+  id: string;
+  parent_id: string;
+  child_id: string;
+  teacher_id: string;
+  package_id?: string | null;
+  starts_at: string;
   duration_minutes: number;
   modality: BookingModality;
-  payment_method: "cartao" | "pix";
-  coupon_code?: string;
+  status: BookingStatus;
+  cancellation_reason?: string | null;
+  confirmed_at?: string | null;
+  completed_at?: string | null;
+  canceled_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  child: {
+    id: string;
+    name: string;
+  };
+  teacher: {
+    id: string;
+    display_name: string;
+    profile_photo_url?: string | null;
+  };
+  parent?: {
+    id: string;
+    display_name: string;
+  } | null;
+  payment_order?: PaymentOrder | null;
+  latest_follow_up?: BookingDetailFollowUp | null;
+  actions: {
+    can_reschedule: boolean;
+    can_cancel: boolean;
+    can_complete: boolean;
+    can_review: boolean;
+  };
+}
+
+export interface CreateBookingPayload {
+  child_id: string;
+  teacher_id: string;
+  starts_at: string;
+  duration_minutes: number;
+  modality: BookingModality;
+  payment_method?: PaymentMethod;
+  package_id?: string;
 }
 
 export interface CreateBookingResponse {
   status: "ok";
   booking_id: string;
   booking_status: BookingStatus;
-  payment_status: "pendente" | "pago" | "falhou";
+  payment_status: string;
+  booking: BookingDetailResponse;
 }
 
 export interface ParentAgendaLesson {
@@ -38,6 +115,7 @@ export interface ParentAgendaLesson {
   specialty?: string | null;
   child_id: string;
   child_name: string;
+  starts_at: string;
   date_iso: string;
   date_label: string;
   time: string;
@@ -79,41 +157,30 @@ export interface TeacherFollowUpContextResponse {
   activity_plan: string[];
 }
 
-export interface BookingDetailResponse {
-  id: string;
+export interface BookingDetailResponse extends BookingResponse {
   parent_profile_id: string;
-  child_id: string;
   child_name: string;
-  teacher_id: string;
   teacher_name: string;
   teacher_avatar_url?: string | null;
   specialty?: string | null;
   date_iso: string;
   date_label: string;
   time: string;
-  duration_minutes: number;
-  modality: BookingModality;
-  status: BookingStatus;
   price_total: number;
   currency: string;
-  cancellation_reason?: string | null;
-  latest_follow_up?: BookingDetailFollowUp | null;
-  actions: {
-    can_reschedule: boolean;
-    can_cancel: boolean;
-    can_complete: boolean;
-  };
 }
 
 export interface RescheduleBookingPayload {
-  new_date_iso: string;
-  new_time: string;
+  starts_at?: string;
+  new_date_iso?: string;
+  new_time?: string;
   reason?: string;
 }
 
 export interface RescheduleBookingResponse {
   status: "ok";
   booking_id: string;
+  starts_at: string;
   date_iso: string;
   time: string;
   booking_status: BookingStatus;
@@ -121,14 +188,14 @@ export interface RescheduleBookingResponse {
 }
 
 export interface CancelBookingPayload {
-  reason: string;
+  reason?: string;
 }
 
 export interface CancelBookingResponse {
   status: "ok";
   booking_id: string;
   booking_status: BookingStatus;
-  cancellation_reason: string;
+  cancellation_reason?: string | null;
   updated_at_iso: string;
 }
 
@@ -139,6 +206,7 @@ export interface TeacherAvailabilityDay {
 }
 
 export interface TeacherAvailabilitySlotsResponse {
+  teacher_id: string;
   teacher_profile_id: string;
   slots: TeacherAvailabilityDay[];
 }
@@ -182,16 +250,80 @@ async function backendRequest<TResponse>(params: {
   return payload as TResponse;
 }
 
+function formatTimeFromIso(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function composeStartsAt(dateIso: string, time: string) {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1, hours || 0, minutes || 0, 0, 0);
+  return date.toISOString();
+}
+
+function mapBooking(raw: BookingResponse): BookingDetailResponse {
+  const startsAtDate = new Date(raw.starts_at);
+  const dateIso = Number.isNaN(startsAtDate.getTime()) ? raw.starts_at.slice(0, 10) : toDateIso(startsAtDate);
+  const time = formatTimeFromIso(raw.starts_at);
+  const amountCents = raw.payment_order?.amount_cents ?? 0;
+
+  return {
+    ...raw,
+    parent_profile_id: raw.parent_id,
+    child_name: raw.child?.name || "Aluno",
+    teacher_name: raw.teacher?.display_name || "Professora",
+    teacher_avatar_url: raw.teacher?.profile_photo_url,
+    specialty: null,
+    date_iso: dateIso,
+    date_label: formatDateLong(dateIso),
+    time,
+    price_total: amountCents / 100,
+    currency: raw.payment_order?.currency || "BRL",
+  };
+}
+
+function mapAgendaLesson(raw: BookingResponse): ParentAgendaLesson {
+  const detail = mapBooking(raw);
+  return {
+    id: detail.id,
+    teacher_id: detail.teacher_id,
+    teacher_name: detail.teacher_name,
+    teacher_avatar_url: detail.teacher_avatar_url,
+    specialty: detail.specialty,
+    child_id: detail.child_id,
+    child_name: detail.child_name,
+    starts_at: detail.starts_at,
+    date_iso: detail.date_iso,
+    date_label: detail.date_label,
+    time: detail.time,
+    modality: detail.modality,
+    status: detail.status,
+    created_at_iso: detail.created_at,
+    updated_at_iso: detail.updated_at,
+  };
+}
+
 export async function createBooking(
   accessToken: string,
   payload: CreateBookingPayload,
 ): Promise<CreateBookingResponse> {
-  return backendRequest<CreateBookingResponse>({
-    path: "/bookings",
-    accessToken,
-    method: "POST",
-    body: payload as Record<string, unknown>,
-  });
+  const booking = mapBooking(
+    await backendRequest<BookingResponse>({
+      path: "/bookings",
+      accessToken,
+      method: "POST",
+      body: payload as unknown as Record<string, unknown>,
+    }),
+  );
+  return {
+    status: "ok",
+    booking_id: booking.id,
+    booking_status: booking.status,
+    payment_status: booking.payment_order?.status || "created",
+    booking,
+  };
 }
 
 export async function getParentAgenda(
@@ -202,20 +334,23 @@ export async function getParentAgenda(
   query.set("tab", params.tab);
   if (params.childId) query.set("child_id", params.childId);
 
-  return backendRequest<ParentAgendaResponse>({
-    path: `/bookings/parent/agenda?${query.toString()}`,
+  const response = await backendRequest<{ bookings: BookingResponse[] }>({
+    path: `/parents/me/bookings?${query.toString()}`,
     accessToken,
   });
+  return { lessons: response.bookings.map(mapAgendaLesson) };
 }
 
 export async function getBookingDetail(
   accessToken: string,
   bookingId: string,
 ): Promise<BookingDetailResponse> {
-  return backendRequest<BookingDetailResponse>({
-    path: `/bookings/${bookingId}`,
-    accessToken,
-  });
+  return mapBooking(
+    await backendRequest<BookingResponse>({
+      path: `/bookings/${bookingId}`,
+      accessToken,
+    }),
+  );
 }
 
 export async function getTeacherFollowUpContext(
@@ -242,17 +377,20 @@ export async function completeBooking(
     };
   },
 ) {
-  return backendRequest<{
-    status: "ok";
-    booking_id: string;
-    booking_status: BookingStatus;
-    latest_follow_up: BookingDetailFollowUp;
-  }>({
-    path: `/bookings/${bookingId}/complete`,
-    accessToken,
-    method: "PATCH",
-    body: payload as Record<string, unknown>,
-  });
+  const booking = mapBooking(
+    await backendRequest<BookingResponse>({
+      path: `/bookings/${bookingId}/complete`,
+      accessToken,
+      method: "POST",
+      body: payload as unknown as Record<string, unknown>,
+    }),
+  );
+  return {
+    status: "ok" as const,
+    booking_id: booking.id,
+    booking_status: booking.status,
+    latest_follow_up: booking.latest_follow_up,
+  };
 }
 
 export async function rescheduleBooking(
@@ -260,12 +398,29 @@ export async function rescheduleBooking(
   bookingId: string,
   payload: RescheduleBookingPayload,
 ): Promise<RescheduleBookingResponse> {
-  return backendRequest<RescheduleBookingResponse>({
-    path: `/bookings/${bookingId}/reschedule`,
-    accessToken,
-    method: "PATCH",
-    body: payload as Record<string, unknown>,
-  });
+  const startsAt = payload.starts_at || (
+    payload.new_date_iso && payload.new_time ? composeStartsAt(payload.new_date_iso, payload.new_time) : ""
+  );
+  const booking = mapBooking(
+    await backendRequest<BookingResponse>({
+      path: `/bookings/${bookingId}/reschedule`,
+      accessToken,
+      method: "PATCH",
+      body: {
+        starts_at: startsAt,
+        reason: payload.reason,
+      },
+    }),
+  );
+  return {
+    status: "ok",
+    booking_id: booking.id,
+    starts_at: booking.starts_at,
+    date_iso: booking.date_iso,
+    time: booking.time,
+    booking_status: booking.status,
+    updated_at_iso: booking.updated_at,
+  };
 }
 
 export async function cancelBooking(
@@ -273,12 +428,21 @@ export async function cancelBooking(
   bookingId: string,
   payload: CancelBookingPayload,
 ): Promise<CancelBookingResponse> {
-  return backendRequest<CancelBookingResponse>({
-    path: `/bookings/${bookingId}/cancel`,
-    accessToken,
-    method: "PATCH",
-    body: payload as Record<string, unknown>,
-  });
+  const booking = mapBooking(
+    await backendRequest<BookingResponse>({
+      path: `/bookings/${bookingId}/cancel`,
+      accessToken,
+      method: "POST",
+      body: payload as unknown as Record<string, unknown>,
+    }),
+  );
+  return {
+    status: "ok",
+    booking_id: booking.id,
+    booking_status: booking.status,
+    cancellation_reason: booking.cancellation_reason,
+    updated_at_iso: booking.updated_at,
+  };
 }
 
 export async function getTeacherAvailabilitySlots(

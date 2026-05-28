@@ -8,12 +8,14 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.core.security import AuthUser
 from app.core.ssl_utils import build_ssl_context
-from app.schemas.auth import AuthSignupRequest
-from app.services.profile_service import (
+from app.schemas.v2_auth import AuthSignupRequest
+from app.services.profile_v2_service import (
     ProfileConflictError,
     ProfileValidationError,
-    patch_parent_profile,
-    patch_teacher_profile,
+    create_child_v2,
+    ensure_user_v2,
+    update_parent_profile_v2,
+    update_teacher_profile_v2,
 )
 
 
@@ -64,12 +66,12 @@ def _build_signup_metadata(payload: AuthSignupRequest) -> dict[str, Any]:
     if payload.full_name:
         metadata.setdefault("full_name", payload.full_name)
 
-    if payload.role == "parent" and payload.parent_profile:
-        metadata.setdefault("first_name", payload.parent_profile.first_name)
-        metadata.setdefault("last_name", payload.parent_profile.last_name)
-    if payload.role == "teacher" and payload.teacher_profile:
-        metadata.setdefault("first_name", payload.teacher_profile.first_name)
-        metadata.setdefault("last_name", payload.teacher_profile.last_name)
+    if payload.role == "parent" and payload.parent:
+        metadata.setdefault("first_name", payload.parent.first_name)
+        metadata.setdefault("last_name", payload.parent.last_name)
+    if payload.role == "teacher" and payload.teacher:
+        metadata.setdefault("first_name", payload.teacher.first_name)
+        metadata.setdefault("last_name", payload.teacher.last_name)
 
     return metadata
 
@@ -177,13 +179,39 @@ def signup_with_profile(db: Session, settings: Settings, payload: AuthSignupRequ
     try:
         with db.begin():
             if payload.role == "parent":
-                if payload.parent_profile is None:
-                    raise AuthSignupError("parent_profile is required when role is 'parent'.", status_code=422)
-                profile_data = patch_parent_profile(db, auth_user, payload.parent_profile)
+                if payload.parent is None:
+                    raise AuthSignupError("parent is required when role is 'parent'.", status_code=422)
+                ensure_user_v2(
+                    db,
+                    auth_user,
+                    target_role="parent",
+                    first_name=payload.parent.first_name,
+                    last_name=payload.parent.last_name,
+                    auth_email_confirmed=has_session,
+                )
+                parent_profile = update_parent_profile_v2(db, auth_user, payload.parent)
+                for child_payload in payload.parent.children:
+                    create_child_v2(db, auth_user, child_payload)
+                profile_data = {
+                    "parent_id": parent_profile["id"],
+                    "role": "parent",
+                }
             else:
-                if payload.teacher_profile is None:
-                    raise AuthSignupError("teacher_profile is required when role is 'teacher'.", status_code=422)
-                profile_data = patch_teacher_profile(db, auth_user, payload.teacher_profile)
+                if payload.teacher is None:
+                    raise AuthSignupError("teacher is required when role is 'teacher'.", status_code=422)
+                ensure_user_v2(
+                    db,
+                    auth_user,
+                    target_role="teacher",
+                    first_name=payload.teacher.first_name,
+                    last_name=payload.teacher.last_name,
+                    auth_email_confirmed=has_session,
+                )
+                teacher_profile = update_teacher_profile_v2(db, auth_user, payload.teacher)
+                profile_data = {
+                    "teacher_id": teacher_profile["id"],
+                    "role": "teacher",
+                }
     except ProfileConflictError as exc:
         deleted, reason = _try_delete_auth_user(settings, auth_user_id)
         suffix = "" if deleted else f" Compensation pending ({reason})."

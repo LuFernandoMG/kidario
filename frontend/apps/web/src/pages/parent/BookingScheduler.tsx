@@ -5,14 +5,13 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { Chip } from "@/components/ui/Chip";
-import { getTeacherById } from "@/data/mock/mockTeachers";
 import { BookingSummaryCard } from "@/components/booking/BookingSummaryCard";
 import { TeacherBookingHeaderCard } from "@/components/booking/TeacherBookingHeaderCard";
-import { BookingModality, DayAvailability, buildTeacherAvailability } from "@/lib/bookingUtils";
-import { type Teacher } from "@/components/marketplace/TeacherCard";
+import { BookingModality, DayAvailability } from "@/lib/bookingUtils";
+import { type Teacher } from "@/components/explore/TeacherCard";
 import { getSupabaseAccessToken } from "@/lib/authSession";
 import { getTeacherAvailabilitySlots } from "@/data/api/bookings";
-import { getMarketplaceTeacherDetail } from "@/data/api/marketplace";
+import { getExploreTeacherDetail } from "@/data/api/explore";
 import {
   getParentProfile,
   type BackendParentChildView,
@@ -25,7 +24,7 @@ export default function BookingScheduler() {
   const navigate = useNavigate();
   const queryChildId = searchParams.get("childId") || "";
 
-  const [teacher, setTeacher] = useState<Teacher | null>(() => (id ? getTeacherById(id) ?? null : null));
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [remoteAvailability, setRemoteAvailability] = useState<DayAvailability[] | null>(null);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
   const [children, setChildren] = useState<BackendParentChildView[]>([]);
@@ -46,7 +45,7 @@ export default function BookingScheduler() {
     if (remoteAvailability !== null) {
       return remoteAvailability;
     }
-    return buildTeacherAvailability(teacher.id);
+    return [];
   }, [remoteAvailability, teacher]);
 
   const initialDate = useMemo(() => {
@@ -79,16 +78,16 @@ export default function BookingScheduler() {
       return;
     }
 
-    const localTeacher = getTeacherById(id) ?? null;
-    setTeacher(localTeacher);
+    setTeacher(null);
     setRemoteAvailability(null);
     setIsLoadingRemote(true);
 
     let isMounted = true;
-    getMarketplaceTeacherDetail(id)
+    getExploreTeacherDetail(id)
       .then((detail) => {
         if (!isMounted) return;
         setTeacher(detail.teacher);
+        setRemoteAvailability(detail.nextSlots);
         setLessonDurationMinutes(detail.lessonDurationMinutes > 0 ? detail.lessonDurationMinutes : 60);
       })
       .catch(() => {})
@@ -214,7 +213,7 @@ export default function BookingScheduler() {
   const estimatedPrice = Math.round((teacher?.pricePerClass ?? 0) * (lessonDurationMinutes / 60));
   const selectedChildName =
     children.find((child) => child.id === selectedChildId)?.name || "Não selecionado";
-  const requiresChildSelection = children.length > 0;
+  const requiresChildSelection = true;
 
   const handleDateSelection = (dateIso: string) => {
     setSelectedDate(dateIso);

@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.security import AuthUser
-from app.schemas.chat import ChatMessageCreateRequest
+from app.schemas.v2_chat import ChatMessageCreateRequest
 from app.services.identity_service import IdentityNotFoundError, get_actor_participant_ids
 
 
@@ -213,8 +213,6 @@ def get_or_create_thread_from_booking(db: Session, user: AuthUser, booking_id: U
                             booking_id,
                             parent_id,
                             teacher_id,
-                            parent_profile_id,
-                            teacher_profile_id,
                             child_id,
                             status
                           )
@@ -223,8 +221,6 @@ def get_or_create_thread_from_booking(db: Session, user: AuthUser, booking_id: U
                             :booking_id,
                             :parent_id,
                             :teacher_id,
-                            :parent_profile_id,
-                            :teacher_profile_id,
                             :child_id,
                             'active'
                           )
@@ -235,8 +231,6 @@ def get_or_create_thread_from_booking(db: Session, user: AuthUser, booking_id: U
                         "booking_id": str(booking_id),
                         "parent_id": str(booking["parent_id"]),
                         "teacher_id": str(booking["teacher_id"]),
-                        "parent_profile_id": str(booking["parent_user_id"]),
-                        "teacher_profile_id": str(booking["teacher_user_id"]),
                         "child_id": str(booking["child_id"]),
                     },
                 )
@@ -311,7 +305,7 @@ def get_thread_messages(db: Session, user: AuthUser, thread_id: UUID, limit: int
         db.execute(
             text(
                 """
-                select id, thread_id, coalesce(sender_user_id, sender_profile_id) as sender_user_id, body, created_at
+                select id, thread_id, sender_user_id, body, created_at
                 from chat_messages
                 where thread_id = :thread_id
                 order by created_at desc
@@ -341,16 +335,15 @@ def post_thread_message(db: Session, user: AuthUser, thread_id: UUID, payload: C
             text(
                 """
                 insert into chat_messages
-                  (thread_id, sender_user_id, sender_profile_id, body)
+                  (thread_id, sender_user_id, body)
                 values
-                  (:thread_id, :sender_user_id, :sender_profile_id, :body)
+                  (:thread_id, :sender_user_id, :body)
                 returning id, thread_id, sender_user_id, body, created_at
                 """
             ),
             {
                 "thread_id": str(thread_id),
                 "sender_user_id": user.user_id,
-                "sender_profile_id": user.user_id,
                 "body": normalized_body,
             },
         )

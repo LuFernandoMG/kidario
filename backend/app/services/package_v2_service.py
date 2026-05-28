@@ -419,7 +419,7 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
               id, parent_id, package_id, provider, amount_cents, currency, status
             )
             values (
-              :id, :parent_id, :package_id, 'legacy', :amount_cents, 'BRL', 'pending'
+              :id, :parent_id, :package_id, 'internal', :amount_cents, 'BRL', 'pending'
             )
             """
         ),
@@ -437,7 +437,7 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
               id, payment_order_id, provider, payment_method, status, amount_cents
             )
             values (
-              :id, :payment_order_id, 'legacy', :payment_method, 'pending', :amount_cents
+              :id, :payment_order_id, 'internal', :payment_method, 'pending', :amount_cents
             )
             """
         ),

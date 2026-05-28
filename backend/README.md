@@ -55,20 +55,18 @@ source .venv/bin/activate
 pytest -q
 ```
 
-Current automated test:
+Current automated tests:
 
-- `tests/test_health.py` (smoke test de `/api/v1/health`)
-- `tests/test_auth_api.py` (contratos HTTP de `POST /auth/signup`)
-- `tests/test_profiles_api.py` (contratos HTTP de `/profiles/me`, `PATCH /profiles/parent`, `PATCH /profiles/teacher`, y conflicto de rol)
-- `tests/test_v2_profiles_api.py` (contratos HTTP iniciales de `/api/v2/me`, padres, profesores e hijos)
-- `tests/test_v2_explore_api.py` (contratos HTTP iniciales de `/api/v2/explore`)
-- `tests/test_v2_bookings_payments_api.py` (contratos HTTP iniciales de bookings y pagos v2)
-- `tests/test_v2_packages_api.py` (contratos HTTP iniciales de planes de paquetes y compras v2)
-- `tests/test_v2_reviews_api.py` (contratos HTTP consolidados de reviews v2)
-- `tests/test_v2_notifications_api.py` (contratos HTTP iniciales de dispositivos, preferencias y notificaciones v2)
-- `tests/test_bookings_api.py` (contratos HTTP de creación/agenda/detalle/cancelación de bookings)
-- `tests/test_teacher_control_api.py` (contratos HTTP de control center Teacher y listado de chats)
-- `tests/test_marketplace_api.py` (contratos HTTP del marketplace de profesoras)
+- `tests/test_health.py` (smoke test de `/api/v2/health`)
+- `tests/test_auth_api.py` (contratos HTTP de `POST /api/v2/auth/signup`)
+- `tests/test_profiles_api.py` y `tests/test_v2_profiles_api.py` (identidad, padres, profesores, direcciones e hijos)
+- `tests/test_v2_explore_api.py` (contratos HTTP de `/api/v2/explore`)
+- `tests/test_bookings_api.py` y `tests/test_v2_bookings_payments_api.py` (bookings, pagos y agenda v2)
+- `tests/test_v2_packages_api.py` (planes de paquetes y compras v2)
+- `tests/test_v2_reviews_api.py` (reviews públicos, booking-level y moderación v2)
+- `tests/test_v2_notifications_api.py` (dispositivos, preferencias y notificaciones v2)
+- `tests/test_teacher_control_api.py` (control center Teacher y chats v2)
+- `tests/test_admin_api.py` (dashboard, acceso, activación y reviews admin v2)
 
 ## Run tests (manual API checks)
 
@@ -83,7 +81,7 @@ make dev
 2. Verifica health:
 
 ```bash
-curl -i http://localhost:8000/api/v1/health
+curl -i http://localhost:8000/api/v2/health
 ```
 
 3. Obtén un access token válido de Supabase (por ejemplo, desde el frontend ya logueado en `localStorage` key `kidario_supabase_tokens_v1`).
@@ -91,77 +89,39 @@ curl -i http://localhost:8000/api/v1/health
 4. Prueba endpoint protegido:
 
 ```bash
-curl -i http://localhost:8000/api/v1/profiles/me \
+curl -i http://localhost:8000/api/v2/me \
   -H "Authorization: Bearer <SUPABASE_ACCESS_TOKEN>"
 ```
 
 5. Prueba patch parent:
 
 ```bash
-curl -i -X PATCH http://localhost:8000/api/v1/profiles/parent \
+curl -i -X PATCH http://localhost:8000/api/v2/parents/me \
   -H "Authorization: Bearer <SUPABASE_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "first_name": "Maria",
     "last_name": "Silva",
-    "children_ops": {
-      "upsert": [
-        {
-          "name": "Lucas",
-          "birth_month_year": "2017-04"
-        }
-      ]
+    "phone": "(11) 99999-9999",
+    "birth_date": "1987-10-01",
+    "address": {
+      "street": "Rua A",
+      "district": "Centro",
+      "city": "Sao Paulo",
+      "state": "SP"
     }
   }'
 ```
 
 ## API base
 
-- Prefix: `/api/v1`
-- Health: `/api/v1/health`
-- Auth:
-  - `POST /api/v1/auth/signup`
-- Profiles:
-  - `GET /api/v1/profiles/me`
-  - `GET /api/v1/profiles/parent`
-  - `GET /api/v1/profiles/teacher`
-  - `PATCH /api/v1/profiles/parent`
-  - `PATCH /api/v1/profiles/teacher`
-  - `POST /api/v1/profiles/teacher/photo` (`multipart/form-data`, field `file`)
-- Marketplace:
-  - `GET /api/v1/marketplace/teachers`
-  - `GET /api/v1/marketplace/teachers/{teacher_id}`
-  - `GET /api/v1/marketplace/teachers/{teacher_id}/reviews`
-- Bookings:
-  - `POST /api/v1/bookings`
-  - `GET /api/v1/bookings/parent/agenda`
-  - `GET /api/v1/bookings/teacher/agenda`
-  - `GET /api/v1/bookings/{booking_id}`
-  - `GET /api/v1/bookings/{booking_id}/review`
-  - `POST /api/v1/bookings/{booking_id}/review`
-  - `PATCH /api/v1/bookings/{booking_id}/reschedule`
-  - `PATCH /api/v1/bookings/{booking_id}/teacher/decision`
-  - `PATCH /api/v1/bookings/{booking_id}/teacher/reschedule`
-  - `PATCH /api/v1/bookings/{booking_id}/cancel`
-  - `PATCH /api/v1/bookings/{booking_id}/complete`
-  - `GET /api/v1/teachers/{teacher_id}/availability/slots`
-- Chat:
-  - `GET /api/v1/chat/threads`
-  - `POST /api/v1/chat/threads/from-booking/{booking_id}`
-  - `GET /api/v1/chat/threads/{thread_id}`
-  - `GET /api/v1/chat/threads/{thread_id}/messages`
-  - `POST /api/v1/chat/threads/{thread_id}/messages`
-- Teacher domain:
-  - `GET /api/v1/teacher/control-center/overview`
-  - `GET /api/v1/teacher/students/{child_id}/timeline`
-- Admin:
-  - `PATCH /api/v1/admin/teachers/{teacher_id}/activation`
-  - `GET /api/v1/admin/reviews`
-  - `PATCH /api/v1/admin/reviews/{review_id}`
-
-## API v2 base
+The active API is `/api/v2`. The previous-version router is no longer mounted in `app.main`.
 
 - Prefix: `/api/v2`
+- Health:
+  - `GET /api/v2/health`
+- Auth:
+  - `POST /api/v2/auth/signup`
 - Identity:
   - `GET /api/v2/me`
   - `PATCH /api/v2/me`
@@ -231,8 +191,8 @@ notification rows; delivery providers can consume the same normalized tables lat
 
 The current backend contract uses the normalized schema introduced in `sql/012_normalized_supabase_schema.sql`.
 Public payloads use internal `parent_id`, `teacher_id`, `child_id`, ISO `starts_at`, `amount_cents`, and payment rows from
-`payment_orders`/`payment_charges`; legacy `profile_id`, `date_iso`/`time`, `price_total`, and booking payment columns are
-only populated internally where older database constraints still require them.
+`payment_orders`/`payment_charges`. Legacy `profile_id`, `date_iso`/`time`, `price_total`, and booking payment columns may
+remain in old tables for migration history, but the mounted API does not use them as source of truth.
 
 ## Database schema
 
@@ -250,6 +210,7 @@ Apply SQL scripts in order (Supabase SQL Editor):
 - `sql/010_add_booking_activity_plans.sql`
 - `sql/011_add_parent_cpf.sql`
 - `sql/012_normalized_supabase_schema.sql`
+- `sql/013_api_v2_cutover.sql`
 - `sql/003_rls_validation.sql` (optional smoke test)
 
 `002` enables RLS with owner-based policies for `authenticated` users and keeps
@@ -269,6 +230,11 @@ CPF values are duplicated, the migration uses deterministic placeholder values
 so foreign keys and `NOT NULL`/`UNIQUE` constraints can be created; clean these
 records before enabling production payment flows that require verified
 CPF/address data.
+
+`013` is the API v2 cutover migration. It relaxes old `NOT NULL` constraints that
+belonged to the v1 contract, disables booking-to-payment compatibility sync that
+would duplicate normalized payment rows, and adds normalized indexes/FKs for
+teacher availability, follow-ups and activity plans.
 
 Quick verification query:
 
@@ -318,7 +284,7 @@ If you get SSL errors calling Supabase (JWKS or Auth endpoints like `/auth/v1/si
 
 ## Signup Anti-Spam
 
-`POST /api/v1/auth/signup` now supports:
+`POST /api/v2/auth/signup` supports:
 
 - Honeypot rejection (`honeypot` field must stay empty)
 - In-memory rate limiting (by IP and by email)
@@ -361,7 +327,7 @@ Behavior:
 
 The recommended flow is server-side upload through:
 
-- `POST /api/v1/profiles/teacher/photo`
+- `POST /api/v2/teachers/me/photo`
 
 Rules implemented:
 

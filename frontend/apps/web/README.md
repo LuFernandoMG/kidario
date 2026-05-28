@@ -125,7 +125,7 @@ Create `.env.local` from `.env.example` and set:
 - `VITE_SIGNUP_CAPTCHA_ENABLED`
 - `VITE_TURNSTILE_SITE_KEY`
 
-The frontend expects the backend API through `/api/v1` in local Vite dev. Vite proxies that path to `VITE_BACKEND_PROXY_TARGET`, which defaults to `http://127.0.0.1:8000`.
+The frontend expects the backend API through `/api/v2` in local Vite dev. Vite proxies that path to `VITE_BACKEND_PROXY_TARGET`, which defaults to `http://127.0.0.1:8000`.
 
 ## Scripts
 
@@ -142,7 +142,7 @@ npm run test:e2e
 
 ## Notes
 
-- The app keeps the existing backend and auth flow.
+- The app uses the normalized backend `/api/v2` contract.
 - Parent and teacher web flows are both active.
-- The marketplace still falls back to mock data in some scenarios.
+- Explore, bookings, payments, packages, reviews and notifications call backend v2 services.
 - The local dependency tree is currently hoisted at `frontend/node_modules` by the workspace root.

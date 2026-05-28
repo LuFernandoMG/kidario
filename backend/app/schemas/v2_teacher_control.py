@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.schemas.bookings import BookingModality, BookingStatus
+from app.schemas.v2_bookings import BookingModality, BookingStatus
 
 
 class TeacherAgendaActionFlags(BaseModel):

@@ -7,8 +7,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.security import AuthUser
-from app.schemas.teacher_control import TeacherControlCenterOverviewResponse, TeacherStudentTimelineResponse
-from app.services.booking_service import BookingNotFoundError, BookingValidationError, get_teacher_availability_slots
+from app.schemas.v2_teacher_control import TeacherControlCenterOverviewResponse, TeacherStudentTimelineResponse
+from app.services.booking_v2_service import BookingNotFoundError, BookingValidationError, get_teacher_availability_slots_v2
 from app.services.identity_service import IdentityNotFoundError, IdentityPermissionError, require_user_role, resolve_teacher_id
 from app.services.teacher_activity_planner_service import get_cached_teacher_activity_plan_for_booking
 
@@ -196,7 +196,7 @@ def get_teacher_control_center_overview(
                   limit 1
                 ) latest_follow_up on true
                 left join lateral (
-                  select coalesce(cm.sender_user_id, cm.sender_profile_id) as sender_user_id
+                  select cm.sender_user_id
                   from chat_messages cm
                   where cm.thread_id = ct.id
                   order by cm.created_at desc
@@ -411,7 +411,7 @@ def get_teacher_control_center_overview(
         {"teacher_id": str(teacher_id)},
     ).scalar()
     try:
-        availability = get_teacher_availability_slots(
+        availability = get_teacher_availability_slots_v2(
             db,
             teacher_id,
             date_from=today,

@@ -8,26 +8,26 @@ from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.db.session import get_db
-from app.schemas.chat import (
+from app.schemas.v2_chat import (
     ChatMessageCreateRequest,
     ChatMessageCreateResponse,
     ChatMessagesResponse,
     ChatThreadGetOrCreateResponse,
-    ChatThreadsResponse,
     ChatThreadResponse,
+    ChatThreadsResponse,
 )
 from app.services.chat_service import (
     ChatNotFoundError,
     ChatPermissionError,
     ChatValidationError,
     get_or_create_thread_from_booking,
-    list_threads,
     get_thread,
     get_thread_messages,
+    list_threads,
     post_thread_message,
 )
 
-router = APIRouter(tags=["chat"])
+router = APIRouter(tags=["v2-chat"])
 
 
 def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
@@ -35,7 +35,7 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     if sqlstate == "42P01":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database schema not initialized. Run SQL migrations in backend/sql.",
+            detail="Database schema not initialized. Run backend/sql migrations through 012.",
         ) from exc
 
     settings = get_settings()
@@ -43,6 +43,18 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     if settings.env != "production":
         detail = f"{detail} Reason: {exc}"
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail) from exc
+
+
+def _handle_chat_error(exc: Exception) -> None:
+    if isinstance(exc, ChatNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, ChatPermissionError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if isinstance(exc, ChatValidationError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if isinstance(exc, SQLAlchemyError):
+        _raise_http_from_sql_error(exc)
+    raise exc
 
 
 @router.post(
@@ -58,34 +70,9 @@ def post_chat_thread_from_booking(
     try:
         with db.begin():
             data = get_or_create_thread_from_booking(db, user, booking_id)
-    except ChatNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ChatPermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ChatValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except SQLAlchemyError as exc:
-        _raise_http_from_sql_error(exc)
+    except Exception as exc:
+        _handle_chat_error(exc)
     return ChatThreadGetOrCreateResponse(**data)
-
-
-@router.get("/chat/threads/{thread_id}", response_model=ChatThreadResponse)
-def get_chat_thread(
-    thread_id: UUID,
-    user: AuthUser = Security(get_current_user),
-    db: Session = Depends(get_db),
-) -> ChatThreadResponse:
-    try:
-        data = get_thread(db, user, thread_id)
-    except ChatNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ChatPermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ChatValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except SQLAlchemyError as exc:
-        _raise_http_from_sql_error(exc)
-    return ChatThreadResponse(**data)
 
 
 @router.get("/chat/threads", response_model=ChatThreadsResponse)
@@ -97,13 +84,22 @@ def get_chat_threads(
 ) -> ChatThreadsResponse:
     try:
         data = list_threads(db, user, limit=limit, booking_status=booking_status)
-    except ChatPermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ChatValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except SQLAlchemyError as exc:
-        _raise_http_from_sql_error(exc)
+    except Exception as exc:
+        _handle_chat_error(exc)
     return ChatThreadsResponse(**data)
+
+
+@router.get("/chat/threads/{thread_id}", response_model=ChatThreadResponse)
+def get_chat_thread(
+    thread_id: UUID,
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChatThreadResponse:
+    try:
+        data = get_thread(db, user, thread_id)
+    except Exception as exc:
+        _handle_chat_error(exc)
+    return ChatThreadResponse(**data)
 
 
 @router.get("/chat/threads/{thread_id}/messages", response_model=ChatMessagesResponse)
@@ -115,14 +111,8 @@ def get_chat_messages(
 ) -> ChatMessagesResponse:
     try:
         data = get_thread_messages(db, user, thread_id, limit)
-    except ChatNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ChatPermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ChatValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except SQLAlchemyError as exc:
-        _raise_http_from_sql_error(exc)
+    except Exception as exc:
+        _handle_chat_error(exc)
     return ChatMessagesResponse(**data)
 
 
@@ -140,12 +130,6 @@ def post_chat_message(
     try:
         with db.begin():
             data = post_thread_message(db, user, thread_id, payload)
-    except ChatNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ChatPermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ChatValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except SQLAlchemyError as exc:
-        _raise_http_from_sql_error(exc)
+    except Exception as exc:
+        _handle_chat_error(exc)
     return ChatMessageCreateResponse(**data)
