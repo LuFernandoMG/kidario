@@ -2168,8 +2168,8 @@ def get_teacher_availability_slots_v2(
         available_starts: list[datetime] = []
         blocked_times = booked_by_date.get(current_date, set())
         for schedule in rows_by_day.get(current_date.weekday(), []):
-            start_minutes = _time_to_minutes(str(schedule["start_time"]))
-            end_minutes = _time_to_minutes(str(schedule["end_time"]))
+            start_minutes = _time_to_minutes(schedule["start_time"])
+            end_minutes = _time_to_minutes(schedule["end_time"])
             minute = start_minutes
             while minute + duration_minutes <= end_minutes:
                 time_value = _minutes_to_time(minute)
@@ -2184,9 +2184,14 @@ def get_teacher_availability_slots_v2(
     return {"teacher_id": teacher_id, "slots": slots}
 
 
-def _time_to_minutes(value: str) -> int:
-    hours_part, minutes_part = value.split(":", maxsplit=1)
-    return int(hours_part) * 60 + int(minutes_part)
+def _time_to_minutes(value: object) -> int:
+    if isinstance(value, time):
+        return value.hour * 60 + value.minute
+
+    parts = str(value).strip().split(":")
+    if len(parts) < 2:
+        raise ValueError(f"Invalid time value: {value!r}")
+    return int(parts[0]) * 60 + int(parts[1])
 
 
 def _minutes_to_time(total_minutes: int) -> str:

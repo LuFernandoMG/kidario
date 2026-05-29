@@ -1,8 +1,9 @@
 import importlib
-import mimetypes
+from io import BytesIO
 from urllib import error, parse, request
 from uuid import uuid4
 
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -19,7 +20,8 @@ ALLOWED_CONTENT_TYPES = {
     "image/webp",
 }
 
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+PROCESSED_CONTENT_TYPE = "image/jpeg"
+PROCESSED_EXTENSION = ".jpg"
 
 
 class ProfilePhotoUploadError(Exception):
@@ -33,25 +35,6 @@ def _encode_storage_path(path: str) -> str:
     return "/".join(parse.quote(part, safe="") for part in path.split("/") if part)
 
 
-def _resolve_extension(file_name: str | None, content_type: str | None) -> str:
-    from_filename = ""
-    if file_name:
-        dot_index = file_name.rfind(".")
-        if dot_index >= 0:
-            from_filename = file_name[dot_index:].lower()
-
-    if from_filename in ALLOWED_EXTENSIONS:
-        return from_filename
-
-    guessed = mimetypes.guess_extension(content_type or "") if content_type else None
-    if guessed in ALLOWED_EXTENSIONS:
-        if guessed == ".jpe":
-            return ".jpg"
-        return guessed
-
-    return ".jpg"
-
-
 def _validate_upload_input(settings: Settings, file_bytes: bytes, content_type: str | None) -> None:
     if not file_bytes:
         raise ProfilePhotoUploadError("A foto de perfil está vazia.", status_code=422)
@@ -62,6 +45,51 @@ def _validate_upload_input(settings: Settings, file_bytes: bytes, content_type: 
         )
     if content_type and content_type.lower() not in ALLOWED_CONTENT_TYPES:
         raise ProfilePhotoUploadError("Tipo de arquivo não suportado. Use JPG, PNG ou WEBP.", status_code=415)
+
+
+def _normalized_processing_settings(settings: Settings) -> tuple[int, int]:
+    target_size = int(settings.profile_photo_target_size_pixels or 512)
+    jpeg_quality = int(settings.profile_photo_jpeg_quality or 82)
+    return max(64, min(target_size, 2048)), max(50, min(jpeg_quality, 95))
+
+
+def _to_rgb_image(image: Image.Image) -> Image.Image:
+    has_alpha = image.mode in {"RGBA", "LA"} or (image.mode == "P" and "transparency" in image.info)
+    if not has_alpha:
+        return image.convert("RGB")
+
+    rgba_image = image.convert("RGBA")
+    background = Image.new("RGB", rgba_image.size, (255, 255, 255))
+    background.paste(rgba_image, mask=rgba_image.getchannel("A"))
+    return background
+
+
+def _process_profile_photo_image(settings: Settings, file_bytes: bytes) -> bytes:
+    target_size, jpeg_quality = _normalized_processing_settings(settings)
+
+    try:
+        with Image.open(BytesIO(file_bytes)) as image:
+            image = ImageOps.exif_transpose(image)
+            if image.width <= 0 or image.height <= 0:
+                raise ProfilePhotoUploadError("A imagem de perfil é inválida.", status_code=422)
+
+            side = min(image.width, image.height)
+            left = (image.width - side) // 2
+            top = (image.height - side) // 2
+            image = image.crop((left, top, left + side, top + side))
+
+            output_size = min(side, target_size)
+            if side > output_size:
+                image = image.resize((output_size, output_size), Image.Resampling.LANCZOS)
+
+            image = _to_rgb_image(image)
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=jpeg_quality, optimize=True, progressive=True)
+            return output.getvalue()
+    except ProfilePhotoUploadError:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise ProfilePhotoUploadError("Não foi possível processar a imagem. Use JPG, PNG ou WEBP.", status_code=422) from exc
 
 
 def _upload_via_supabase_storage_rest(
@@ -198,8 +226,8 @@ def _upload_photo_blob(
     file_bytes: bytes,
 ) -> str:
     _validate_upload_input(settings, file_bytes, content_type)
-    extension = _resolve_extension(file_name, content_type)
-    object_key = f"teachers/{user_id}/{uuid4().hex}{extension}"
+    processed_file_bytes = _process_profile_photo_image(settings, file_bytes)
+    object_key = f"teachers/{user_id}/{uuid4().hex}{PROCESSED_EXTENSION}"
     bucket = settings.profile_photos_bucket
 
     if settings.storage_s3_access_key_id and settings.storage_s3_secret_access_key:
@@ -208,8 +236,8 @@ def _upload_photo_blob(
                 settings=settings,
                 bucket=bucket,
                 object_key=object_key,
-                file_bytes=file_bytes,
-                content_type=content_type,
+                file_bytes=processed_file_bytes,
+                content_type=PROCESSED_CONTENT_TYPE,
             )
             return object_key
         except Exception as exc:
@@ -219,8 +247,8 @@ def _upload_photo_blob(
         settings=settings,
         bucket=bucket,
         object_key=object_key,
-        file_bytes=file_bytes,
-        content_type=content_type,
+        file_bytes=processed_file_bytes,
+        content_type=PROCESSED_CONTENT_TYPE,
     )
     return object_key
 
@@ -264,5 +292,6 @@ def upload_teacher_profile_photo(
         "user_id": teacher_profile["user"]["id"],
         "teacher_id": teacher_profile["id"],
         "role": "teacher",
-        "profile_photo_file_name": resolve_teacher_profile_photo_url(settings, object_key) or object_key,
+        "profile_photo_file_name": object_key,
+        "profile_photo_url": resolve_teacher_profile_photo_url(settings, object_key),
     }

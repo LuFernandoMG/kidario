@@ -168,6 +168,7 @@ interface V2TeacherProfile {
 
 interface TeacherPhotoUploadResponse extends BackendProfileStatusResponse {
   profile_photo_file_name: string;
+  profile_photo_url?: string | null;
 }
 
 function toBackendModality(value?: string) {

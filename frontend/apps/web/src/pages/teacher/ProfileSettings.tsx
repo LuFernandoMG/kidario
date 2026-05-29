@@ -1,12 +1,20 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Camera, LogOut, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CalendarDays, Camera, Check, LogOut, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -68,6 +76,7 @@ interface TeacherFormState {
   lessonDurationMinutes: string;
   requestExperienceAnonymity: boolean;
   profilePhotoFileName: string;
+  profilePhotoUrl: string;
   formations: FormationForm[];
   experiences: ExperienceForm[];
   weeklyAvailability: (WeeklyAvailabilitySlot & { id?: string })[];
@@ -93,6 +102,7 @@ const emptyForm: TeacherFormState = {
   lessonDurationMinutes: "",
   requestExperienceAnonymity: false,
   profilePhotoFileName: "",
+  profilePhotoUrl: "",
   formations: [],
   experiences: [],
   weeklyAvailability: [],
@@ -133,16 +143,6 @@ const degreeTypes = [
   { value: "doutorado", label: "Doutorado" },
   { value: "curso-livre", label: "Curso livre / certificação" },
 ];
-
-const dayLabelByValue = {
-  segunda: "Segunda",
-  terca: "Terça",
-  quarta: "Quarta",
-  quinta: "Quinta",
-  sexta: "Sexta",
-  sabado: "Sábado",
-  domingo: "Domingo",
-} as const;
 
 const dayValueByNumber = {
   0: "segunda",
@@ -185,7 +185,7 @@ function emptyExperience(): ExperienceForm {
 }
 
 function getAvailabilityKey(dayOfWeek: string, startTime: string) {
-  return `${dayOfWeek}|${startTime}`;
+  return `${dayOfWeek}|${normalizeClockTime(startTime)}`;
 }
 
 function mapDayNumberToValue(dayOfWeek: number): WeeklyAvailabilitySlot["dayOfWeek"] {
@@ -206,6 +206,11 @@ function formatCepMask(value: string): string {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
+function normalizeClockTime(value: string): string {
+  const [hours = "0", minutes = "0"] = value.split(":");
+  return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
+}
+
 export default function TeacherProfileSettings() {
   const navigate = useNavigate();
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -220,13 +225,26 @@ export default function TeacherProfileSettings() {
   const [payoutForm, setPayoutForm] = useState<PayoutFormState>(emptyPayoutForm);
   const [payoutStatus, setPayoutStatus] = useState<string>("pending");
   const [isSavingPayout, setIsSavingPayout] = useState(false);
+  const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false);
+  const [isAvailabilityModalEditing, setIsAvailabilityModalEditing] = useState(false);
+  const [availabilityModalSnapshot, setAvailabilityModalSnapshot] = useState<TeacherFormState["weeklyAvailability"]>([]);
   const [initialSnapshot, setInitialSnapshot] = useState<TeacherFormState>(emptyForm);
   const [deletedFormationIds, setDeletedFormationIds] = useState<string[]>([]);
   const [deletedExperienceIds, setDeletedExperienceIds] = useState<string[]>([]);
 
   const avatarUrl = useMemo(
-    () => resolveTeacherAvatarUrl(form.profilePhotoFileName || undefined),
-    [form.profilePhotoFileName],
+    () => resolveTeacherAvatarUrl(form.profilePhotoUrl || form.profilePhotoFileName || undefined),
+    [form.profilePhotoFileName, form.profilePhotoUrl],
+  );
+
+  const calendarAvailability = useMemo(
+    () =>
+      form.weeklyAvailability.map((slot) => ({
+        dayOfWeek: slot.dayOfWeek,
+        startTime: normalizeClockTime(slot.startTime),
+        endTime: normalizeClockTime(slot.endTime),
+      })),
+    [form.weeklyAvailability],
   );
 
   const loadProfile = useCallback(async () => {
@@ -260,6 +278,7 @@ export default function TeacherProfileSettings() {
           payload.lesson_duration_minutes != null ? String(payload.lesson_duration_minutes) : "",
         requestExperienceAnonymity: payload.request_experience_anonymity,
         profilePhotoFileName: payload.profile_photo_file_name || "",
+        profilePhotoUrl: payload.profile_photo_url || "",
         formations: (payload.formations || []).map((formation) => ({
           id: formation.id,
           degreeType: formation.degree_type,
@@ -279,8 +298,8 @@ export default function TeacherProfileSettings() {
         weeklyAvailability: (payload.availability || []).map((slot) => ({
           id: slot.id,
           dayOfWeek: mapDayNumberToValue(slot.day_of_week),
-          startTime: slot.start_time,
-          endTime: slot.end_time,
+          startTime: normalizeClockTime(slot.start_time),
+          endTime: normalizeClockTime(slot.end_time),
         })),
       };
       setEmail(payload.profile.email);
@@ -289,6 +308,8 @@ export default function TeacherProfileSettings() {
       setDeletedFormationIds([]);
       setDeletedExperienceIds([]);
       setIsEditing(false);
+      setIsAvailabilityModalEditing(false);
+      setAvailabilityModalSnapshot([]);
       try {
         const payout = await getTeacherPayoutProfile(accessToken);
         setPayoutForm((current) => ({
@@ -423,22 +444,60 @@ export default function TeacherProfileSettings() {
     setIsEditing(false);
   };
 
-  const handleSave = async () => {
+  const handleAvailabilityChange = (nextSlots: WeeklyAvailabilitySlot[]) => {
+    setForm((previous) => {
+      const previousByKey = new Map(
+        previous.weeklyAvailability.map((slot) => [getAvailabilityKey(slot.dayOfWeek, slot.startTime), slot]),
+      );
+      return {
+        ...previous,
+        weeklyAvailability: nextSlots.map((slot) => ({
+          id: previousByKey.get(getAvailabilityKey(slot.dayOfWeek, slot.startTime))?.id,
+          dayOfWeek: slot.dayOfWeek,
+          startTime: normalizeClockTime(slot.startTime),
+          endTime: normalizeClockTime(slot.endTime),
+        })),
+      };
+    });
+  };
+
+  const handleStartAvailabilityModalEdit = () => {
+    setError("");
+    setNotice("");
+    setAvailabilityModalSnapshot(form.weeklyAvailability);
+    setIsAvailabilityModalEditing(true);
+  };
+
+  const handleCancelAvailabilityModalEdit = () => {
+    setForm((previous) => ({ ...previous, weeklyAvailability: availabilityModalSnapshot }));
+    setError("");
+    setIsAvailabilityModalEditing(false);
+    setAvailabilityModalSnapshot([]);
+  };
+
+  const handleAvailabilityModalOpenChange = (open: boolean) => {
+    if (!open && isAvailabilityModalEditing) {
+      handleCancelAvailabilityModalEdit();
+    }
+    setIsAvailabilityModalOpen(open);
+  };
+
+  const handleSave = async (): Promise<boolean> => {
     const accessToken = getSupabaseAccessToken();
     if (!accessToken) {
       navigate("/login?returnTo=%2Fperfil%2Fprofessora");
-      return;
+      return false;
     }
 
-    if (!isEditing) return;
+    if (!isEditing) return false;
 
     if (!form.firstName.trim() || !form.lastName.trim()) {
       setError("Preencha nome e sobrenome.");
-      return;
+      return false;
     }
     if (form.weeklyAvailability.length < 1) {
       setError("Defina pelo menos um horário de disponibilidade semanal.");
-      return;
+      return false;
     }
     if (
       !form.address.trim()
@@ -449,7 +508,7 @@ export default function TeacherProfileSettings() {
       || extractDigits(form.postalCode, 8).length !== 8
     ) {
       setError("Preencha endereço profissional completo com rua, número, bairro, cidade, UF e CEP.");
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -522,9 +581,63 @@ export default function TeacherProfileSettings() {
       });
       setNotice("Perfil da professora atualizado com sucesso.");
       await loadProfile();
+      return true;
     } catch (saveError) {
       setError(
         saveError instanceof Error ? saveError.message : "Não foi possível salvar o perfil da professora.",
+      );
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAvailabilityModal = async () => {
+    const accessToken = getSupabaseAccessToken();
+    if (!accessToken) {
+      navigate("/login?returnTo=%2Fperfil%2Fprofessora");
+      return;
+    }
+
+    if (form.weeklyAvailability.length < 1) {
+      setError("Defina pelo menos um horário de disponibilidade semanal.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const currentAvailabilityIds = new Set(
+        form.weeklyAvailability
+          .map((slot) => slot.id)
+          .filter((id): id is string => Boolean(id)),
+      );
+      const availabilityDeleteIds = availabilityModalSnapshot
+        .map((slot) => slot.id)
+        .filter((id): id is string => Boolean(id) && !currentAvailabilityIds.has(id));
+
+      await patchTeacherProfile(accessToken, {
+        availability_ops: {
+          upsert: form.weeklyAvailability.map((slot) => ({
+            id: slot.id,
+            day_of_week: mapDayValueToNumber(slot.dayOfWeek),
+            start_time: normalizeClockTime(slot.startTime),
+            end_time: normalizeClockTime(slot.endTime),
+          })),
+          delete_ids: availabilityDeleteIds,
+        },
+      });
+
+      setNotice("Disponibilidade atualizada com sucesso.");
+      setIsAvailabilityModalEditing(false);
+      setAvailabilityModalSnapshot([]);
+      setIsAvailabilityModalOpen(false);
+      await loadProfile();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "Não foi possível salvar a disponibilidade.",
       );
     } finally {
       setIsSaving(false);
@@ -543,7 +656,11 @@ export default function TeacherProfileSettings() {
 
     try {
       const result = await uploadTeacherProfilePhoto(accessToken, file);
-      setForm((prev) => ({ ...prev, profilePhotoFileName: result.profile_photo_file_name }));
+      setForm((prev) => ({
+        ...prev,
+        profilePhotoFileName: result.profile_photo_file_name,
+        profilePhotoUrl: result.profile_photo_url || result.profile_photo_file_name,
+      }));
       setNotice("Foto de perfil atualizada com sucesso.");
     } catch (uploadError) {
       setError(
@@ -617,46 +734,85 @@ export default function TeacherProfileSettings() {
                 </p>
               )}
               {!isEditing && form.weeklyAvailability.length > 0 && (
-                <div className="rounded-xl border border-border p-3">
-                  <ul className="space-y-1">
-                    {form.weeklyAvailability
-                      .slice()
-                      .sort((a, b) => getAvailabilityKey(a.dayOfWeek, a.startTime).localeCompare(getAvailabilityKey(b.dayOfWeek, b.startTime)))
-                      .map((slot, index) => (
-                        <li key={`${slot.dayOfWeek}-${slot.startTime}-${index}`} className="text-sm text-foreground">
-                          {dayLabelByValue[slot.dayOfWeek as keyof typeof dayLabelByValue]}-feira · {slot.startTime} - {slot.endTime}
-                        </li>
-                      ))}
-                  </ul>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {form.weeklyAvailability.length}{" "}
+                    {form.weeklyAvailability.length === 1 ? "horário cadastrado" : "horários cadastrados"}.
+                  </p>
+                  <KidarioButton
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsAvailabilityModalOpen(true)}
+                  >
+                    <CalendarDays className="w-4 h-4" />
+                    Ver minha disponibilidade
+                  </KidarioButton>
                 </div>
               )}
               {isEditing && (
                 <WeeklyAvailabilityCalendar
-                  value={form.weeklyAvailability.map((slot) => ({
-                    dayOfWeek: slot.dayOfWeek,
-                    startTime: slot.startTime,
-                    endTime: slot.endTime,
-                  }))}
-                  onChange={(nextSlots) =>
-                    setForm((previous) => {
-                      const previousByKey = new Map(
-                        previous.weeklyAvailability.map((slot) => [getAvailabilityKey(slot.dayOfWeek, slot.startTime), slot]),
-                      );
-                      return {
-                        ...previous,
-                        weeklyAvailability: nextSlots.map((slot) => ({
-                          id: previousByKey.get(getAvailabilityKey(slot.dayOfWeek, slot.startTime))?.id,
-                          dayOfWeek: slot.dayOfWeek,
-                          startTime: slot.startTime,
-                          endTime: slot.endTime,
-                        })),
-                      };
-                    })
-                  }
+                  value={calendarAvailability}
+                  onChange={handleAvailabilityChange}
                   slotDurationMinutes={Number(form.lessonDurationMinutes) || 60}
                 />
               )}
             </section>
+
+            <Dialog open={isAvailabilityModalOpen} onOpenChange={handleAvailabilityModalOpenChange}>
+              <DialogContent className="max-h-[90vh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-5xl">
+                <DialogHeader className="flex-row items-start justify-between gap-4 space-y-0 pr-10 text-left">
+                  <div className="space-y-1.5">
+                    <DialogTitle>Minha disponibilidade</DialogTitle>
+                    <DialogDescription>
+                      Horários semanais cadastrados no perfil.
+                    </DialogDescription>
+                  </div>
+                  {!isAvailabilityModalEditing && (
+                    <KidarioButton
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleStartAvailabilityModalEdit}
+                      className="shrink-0"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Editar disponibilidade
+                    </KidarioButton>
+                  )}
+                </DialogHeader>
+                <WeeklyAvailabilityCalendar
+                  value={calendarAvailability}
+                  onChange={isAvailabilityModalEditing ? handleAvailabilityChange : undefined}
+                  slotDurationMinutes={Number(form.lessonDurationMinutes) || 60}
+                  readOnly={!isAvailabilityModalEditing}
+                />
+                {isAvailabilityModalEditing && (
+                  <DialogFooter className="gap-2">
+                    <KidarioButton
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancelAvailabilityModalEdit}
+                      disabled={isSaving}
+                    >
+                      <X className="w-4 h-4" />
+                      Cancelar
+                    </KidarioButton>
+                    <KidarioButton
+                      type="button"
+                      size="sm"
+                      variant="hero"
+                      onClick={handleSaveAvailabilityModal}
+                      disabled={isSaving}
+                    >
+                      <Check className="w-4 h-4" />
+                      {isSaving ? "Salvando..." : "Salvar disponibilidade"}
+                    </KidarioButton>
+                  </DialogFooter>
+                )}
+              </DialogContent>
+            </Dialog>
 
             <section className="card-kidario p-4 space-y-3">
               <div className="flex items-center justify-between">

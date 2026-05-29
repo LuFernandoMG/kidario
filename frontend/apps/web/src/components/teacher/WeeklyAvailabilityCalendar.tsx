@@ -9,10 +9,11 @@ export interface WeeklyAvailabilitySlot {
 
 interface WeeklyAvailabilityCalendarProps {
   value: WeeklyAvailabilitySlot[];
-  onChange: (slots: WeeklyAvailabilitySlot[]) => void;
+  onChange?: (slots: WeeklyAvailabilitySlot[]) => void;
   slotDurationMinutes?: number;
   startHour?: number;
   endHour?: number;
+  readOnly?: boolean;
 }
 
 const weekDays = [
@@ -31,6 +32,7 @@ export function WeeklyAvailabilityCalendar({
   slotDurationMinutes = 60,
   startHour = 7,
   endHour = 21,
+  readOnly = false,
 }: WeeklyAvailabilityCalendarProps) {
   const duration = Number.isFinite(slotDurationMinutes) && slotDurationMinutes > 0
     ? slotDurationMinutes
@@ -49,16 +51,18 @@ export function WeeklyAvailabilityCalendar({
   }, [duration, endHour, startHour]);
 
   const selectedKeys = useMemo(() => {
-    return new Set(value.map((slot) => `${slot.dayOfWeek}|${slot.startTime}`));
+    return new Set(value.map((slot) => `${slot.dayOfWeek}|${normalizeTime(slot.startTime)}`));
   }, [value]);
 
   const handleToggleSlot = (dayOfWeek: string, startTime: string) => {
+    if (readOnly || !onChange) return;
+
     const key = `${dayOfWeek}|${startTime}`;
     const endTime = addMinutes(startTime, duration);
     const exists = selectedKeys.has(key);
 
     const nextSlots = exists
-      ? value.filter((slot) => !(slot.dayOfWeek === dayOfWeek && slot.startTime === startTime))
+      ? value.filter((slot) => !(slot.dayOfWeek === dayOfWeek && normalizeTime(slot.startTime) === startTime))
       : [...value, { dayOfWeek, startTime, endTime }];
 
     onChange(sortSlots(nextSlots));
@@ -66,9 +70,11 @@ export function WeeklyAvailabilityCalendar({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Toque em cada bloco para marcar disponibilidade. Cada bloco representa {duration} minutos.
-      </p>
+      {!readOnly && (
+        <p className="text-sm text-muted-foreground">
+          Toque em cada bloco para marcar disponibilidade. Cada bloco representa {duration} minutos.
+        </p>
+      )}
 
       <div className="max-h-[640px] overflow-auto rounded-lg border border-border bg-background">
         <div className="min-w-[760px] p-[5px]">
@@ -89,6 +95,7 @@ export function WeeklyAvailabilityCalendar({
                 time={time}
                 selectedKeys={selectedKeys}
                 onToggle={handleToggleSlot}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -96,7 +103,7 @@ export function WeeklyAvailabilityCalendar({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Blocos selecionados: {value.length}
+        {readOnly ? "Horários cadastrados" : "Blocos selecionados"}: {value.length}
       </p>
     </div>
   );
@@ -106,10 +113,12 @@ function CalendarRow({
   time,
   selectedKeys,
   onToggle,
+  readOnly,
 }: {
   time: string;
   selectedKeys: Set<string>;
   onToggle: (dayOfWeek: string, startTime: string) => void;
+  readOnly: boolean;
 }) {
   return (
     <>
@@ -128,9 +137,12 @@ function CalendarRow({
               isActive
                 ? "bg-primary border-primary text-primary-foreground"
                 : "bg-background border-border hover:bg-muted",
+              readOnly && "cursor-default focus-visible:ring-0 focus-visible:ring-offset-0",
+              readOnly && !isActive && "hover:bg-background",
             )}
             aria-pressed={isActive}
             aria-label={`${day.label} ${time}`}
+            aria-disabled={readOnly}
           />
         );
       })}
@@ -145,12 +157,17 @@ function minutesToTime(totalMinutes: number) {
 }
 
 function timeToMinutes(time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
+  const [hours, minutes] = normalizeTime(time).split(":").map(Number);
   return hours * 60 + minutes;
 }
 
 function addMinutes(time: string, minutesToAdd: number) {
   return minutesToTime(timeToMinutes(time) + minutesToAdd);
+}
+
+function normalizeTime(time: string) {
+  const [hours = "0", minutes = "0"] = time.split(":");
+  return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
 }
 
 function sortSlots(slots: WeeklyAvailabilitySlot[]) {
@@ -159,6 +176,6 @@ function sortSlots(slots: WeeklyAvailabilitySlot[]) {
   return [...slots].sort((a, b) => {
     const dayDiff = (dayOrder.get(a.dayOfWeek) ?? 99) - (dayOrder.get(b.dayOfWeek) ?? 99);
     if (dayDiff !== 0) return dayDiff;
-    return a.startTime.localeCompare(b.startTime);
+    return normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime));
   });
 }

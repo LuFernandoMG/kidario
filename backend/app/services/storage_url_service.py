@@ -29,6 +29,29 @@ def _normalize_object_key(raw_path: str, bucket: str) -> str:
     return normalized
 
 
+def _extract_supabase_storage_object_key(raw_url: str, bucket: str) -> str | None:
+    parsed = parse.urlparse(raw_url.strip())
+    if not parsed.scheme and not parsed.netloc:
+        return None
+
+    segments = [parse.unquote(part) for part in parsed.path.split("/") if part]
+    supported_prefixes = (
+        ("storage", "v1", "object", "sign"),
+        ("storage", "v1", "object", "public"),
+        ("storage", "v1", "object", "authenticated"),
+        ("storage", "v1", "s3"),
+    )
+    for prefix in supported_prefixes:
+        prefix_length = len(prefix)
+        if tuple(segments[:prefix_length]) != prefix:
+            continue
+        if len(segments) <= prefix_length or segments[prefix_length] != bucket:
+            continue
+        object_segments = segments[prefix_length + 1 :]
+        return "/".join(object_segments) if object_segments else None
+    return None
+
+
 def _build_public_storage_url(settings: Settings, object_key: str) -> str:
     return (
         f"{settings.supabase_url.rstrip('/')}/storage/v1/object/public/"
@@ -147,10 +170,14 @@ def resolve_teacher_profile_photo_url(settings: Settings, raw_path: str | None) 
     value = raw_path.strip()
     if not value:
         return None
-    if value.startswith("http://") or value.startswith("https://") or value.startswith("data:image/"):
+    if value.startswith("data:image/"):
         return value
 
-    object_key = _normalize_object_key(value, settings.profile_photos_bucket)
+    object_key = _extract_supabase_storage_object_key(value, settings.profile_photos_bucket)
+    if object_key is None and (value.startswith("http://") or value.startswith("https://")):
+        return value
+    if object_key is None:
+        object_key = _normalize_object_key(value, settings.profile_photos_bucket)
     if not object_key:
         return None
 

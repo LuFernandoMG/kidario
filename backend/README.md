@@ -361,6 +361,8 @@ Rules implemented:
 
 - Random object key (UUID-based), no user-provided path.
 - Validation for image MIME types (`jpg/png/webp`) and max size.
+- Server-side normalization: center-crop to square, resize to max `KIDARIO_PROFILE_PHOTO_TARGET_SIZE_PIXELS`
+  (default `512`), and store as optimized JPEG with `KIDARIO_PROFILE_PHOTO_JPEG_QUALITY` (default `82`).
 - Upload to S3-compatible storage when S3 credentials are configured.
 - Fallback to Supabase Storage REST using `KIDARIO_SUPABASE_SERVICE_ROLE_KEY`.
 - Profile update in DB after upload; rollback attempt if DB update fails.

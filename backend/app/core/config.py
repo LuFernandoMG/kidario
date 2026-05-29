@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     profile_photos_bucket: str = "teacher-profile-photos"
     profile_photo_max_upload_bytes: int = 5_242_880
     profile_photo_signed_url_ttl_seconds: int = 3600
+    profile_photo_target_size_pixels: int = 512
+    profile_photo_jpeg_quality: int = 82
     storage_s3_endpoint_url: str | None = None
     storage_s3_region: str = "us-east-1"
     storage_s3_access_key_id: str | None = None

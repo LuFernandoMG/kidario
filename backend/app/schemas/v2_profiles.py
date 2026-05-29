@@ -146,6 +146,7 @@ class TeacherProfilePhotoUploadResponse(BaseModel):
     role: UserRole
     teacher_id: UUID
     profile_photo_file_name: str
+    profile_photo_url: str | None = None
 
 
 class ParentProfile(BaseModel):
