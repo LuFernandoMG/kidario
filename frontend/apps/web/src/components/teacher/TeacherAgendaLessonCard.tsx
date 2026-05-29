@@ -19,6 +19,23 @@ const statusClassNameByBooking = {
   concluida: "bg-primary/10 text-primary",
 } as const;
 
+const teacherDecisionLabel = {
+  pending: "Aguardando professora",
+  accepted: "Horário aceito",
+  rejected: "Horário recusado",
+} as const;
+
+const paymentFlowLabel: Record<string, string> = {
+  not_started: "Pagamento não iniciado",
+  authorization_required: "Autorização pendente",
+  authorized: "Cartão autorizado",
+  awaiting_payment: "Aguardando pagamento",
+  paid: "Pago",
+  failed: "Pagamento falhou",
+  expired: "Pagamento expirado",
+  refunded: "Reembolsado",
+};
+
 const modalityLabelByLesson = {
   online: "Online",
   presencial: "Presencial",
@@ -73,9 +90,17 @@ export function TeacherAgendaLessonCard({
             {modalityLabelByLesson[lesson.modality]} • {lesson.duration_minutes} minutos
           </p>
         </div>
-        <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusClassNameByBooking[lesson.status]}`}>
-          {statusLabelByBooking[lesson.status]}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusClassNameByBooking[lesson.status]}`}>
+            {statusLabelByBooking[lesson.status]}
+          </span>
+          <span className="rounded-full px-2 py-1 text-[11px] font-medium bg-muted text-muted-foreground">
+            {teacherDecisionLabel[lesson.teacher_decision_status || "pending"]}
+          </span>
+          <span className="rounded-full px-2 py-1 text-[11px] font-medium bg-muted text-muted-foreground">
+            {paymentFlowLabel[lesson.payment_flow_status || "not_started"]}
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">

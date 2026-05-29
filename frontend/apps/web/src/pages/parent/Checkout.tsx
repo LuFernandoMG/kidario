@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Landmark, TicketPercent } from "lucide-react";
+import { Barcode, CreditCard, Landmark, TicketPercent } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getExploreTeacherDetail, type ExplorePackagePlan } from "@/data/api/explore";
 import { type Teacher } from "@/components/explore/TeacherCard";
 import { createPackagePurchase } from "@/data/api/packages";
+import { tokenizePagarmeCard } from "@/data/api/pagarmeTokenization";
 import {
   getParentProfile,
   type BackendParentChildView,
@@ -44,6 +45,13 @@ export default function Checkout() {
   const modality: BookingModality = modalityQuery === "presencial" ? "presencial" : "online";
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
+  const [savedCardId, setSavedCardId] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardHolderName, setCardHolderName] = useState("");
+  const [cardExpMonth, setCardExpMonth] = useState("");
+  const [cardExpYear, setCardExpYear] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [installments, setInstallments] = useState(1);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -189,6 +197,19 @@ export default function Checkout() {
       return;
     }
 
+    const shouldTokenizeCard = paymentMethod === "credit_card" && !savedCardId.trim();
+    if (
+      shouldTokenizeCard
+      && (!cardNumber.trim() || !cardHolderName.trim() || !cardExpMonth.trim() || !cardExpYear.trim() || !cardCvv.trim())
+    ) {
+      setIsSubmitting(false);
+      toast({
+        title: "Dados do cartão incompletos",
+        description: "Preencha os dados do cartão ou informe um card_id salvo.",
+      });
+      return;
+    }
+
     const accessToken = getSupabaseAccessToken();
     if (!accessToken) {
       setIsSubmitting(false);
@@ -200,11 +221,29 @@ export default function Checkout() {
     }
 
     try {
+      const cardPaymentReference =
+        paymentMethod === "credit_card"
+          ? savedCardId.trim()
+            ? { card_id: savedCardId.trim() }
+            : {
+                card_token: await tokenizePagarmeCard({
+                  number: cardNumber,
+                  holderName: cardHolderName,
+                  expMonth: cardExpMonth,
+                  expYear: cardExpYear,
+                  cvv: cardCvv,
+                }),
+              }
+          : {};
+
       if (selectedPackagePlan) {
         await createPackagePurchase(accessToken, {
           package_plan_id: selectedPackagePlan.id,
           child_id: selectedChildId,
           payment_method: paymentMethod,
+          ...(paymentMethod === "credit_card"
+            ? { ...cardPaymentReference, installments }
+            : {}),
         });
         toast({
           title: "Pacote comprado",
@@ -221,6 +260,9 @@ export default function Checkout() {
         duration_minutes: lessonDurationMinutes,
         modality,
         payment_method: paymentMethod,
+        ...(paymentMethod === "credit_card"
+          ? { ...cardPaymentReference, installments }
+          : {}),
       });
 
       navigate(`/confirmacao-reserva/${response.booking_id}`);
@@ -335,22 +377,142 @@ export default function Checkout() {
         <section className="card-kidario p-4 space-y-3">
           <h2 className="font-display text-lg font-semibold text-foreground">Forma de pagamento</h2>
 
-          {/* <PaymentMethodOption
-            disabled={true}
-            title="Cartao"
-            description="Confirma em poucos segundos."
+          <PaymentMethodOption
+            title="Cartão de crédito"
+            description={
+              selectedPackagePlan
+                ? "O pacote é pago no checkout."
+                : "Autoriza agora e captura apenas se a professora aceitar."
+            }
             icon={<CreditCard className="w-4 h-4" />}
-            selected={paymentMethod === "cartao"}
-            onSelect={() => setPaymentMethod("cartao")}
-          /> */}
+            selected={paymentMethod === "credit_card"}
+            onSelect={() => setPaymentMethod("credit_card")}
+          />
 
           <PaymentMethodOption
             title="Pix"
-            description="A reserva fica pendente até a confirmação do pagamento."
+            description={
+              selectedPackagePlan
+                ? "O pacote fica ativo após a confirmação do Pix."
+                : "O Pix será gerado após a professora aceitar o horário."
+            }
             icon={<Landmark className="w-4 h-4" />}
             selected={paymentMethod === "pix"}
             onSelect={() => setPaymentMethod("pix")}
           />
+
+          <PaymentMethodOption
+            title="Boleto"
+            description={
+              selectedPackagePlan
+                ? "O pacote fica ativo após a compensação."
+                : "O boleto será gerado após a professora aceitar o horário."
+            }
+            icon={<Barcode className="w-4 h-4" />}
+            selected={paymentMethod === "boleto"}
+            onSelect={() => setPaymentMethod("boleto")}
+          />
+
+          {paymentMethod === "credit_card" && (
+            <div className="rounded-xl border border-border/70 p-3 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-sm font-medium text-foreground" htmlFor="card-number">
+                    Número do cartão
+                  </label>
+                  <input
+                    id="card-number"
+                    inputMode="numeric"
+                    autoComplete="cc-number"
+                    value={cardNumber}
+                    onChange={(event) => setCardNumber(event.target.value)}
+                    placeholder="0000 0000 0000 0000"
+                    className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-sm font-medium text-foreground" htmlFor="card-holder-name">
+                    Nome impresso
+                  </label>
+                  <input
+                    id="card-holder-name"
+                    autoComplete="cc-name"
+                    value={cardHolderName}
+                    onChange={(event) => setCardHolderName(event.target.value)}
+                    placeholder="Nome do titular"
+                    className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground" htmlFor="card-exp-month">
+                    Mês
+                  </label>
+                  <input
+                    id="card-exp-month"
+                    inputMode="numeric"
+                    autoComplete="cc-exp-month"
+                    value={cardExpMonth}
+                    onChange={(event) => setCardExpMonth(event.target.value)}
+                    placeholder="MM"
+                    className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground" htmlFor="card-exp-year">
+                    Ano
+                  </label>
+                  <input
+                    id="card-exp-year"
+                    inputMode="numeric"
+                    autoComplete="cc-exp-year"
+                    value={cardExpYear}
+                    onChange={(event) => setCardExpYear(event.target.value)}
+                    placeholder="AAAA"
+                    className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground" htmlFor="card-cvv">
+                    CVV
+                  </label>
+                  <input
+                    id="card-cvv"
+                    inputMode="numeric"
+                    autoComplete="cc-csc"
+                    type="password"
+                    value={cardCvv}
+                    onChange={(event) => setCardCvv(event.target.value)}
+                    placeholder="123"
+                    className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground" htmlFor="installments">
+                    Parcelas
+                  </label>
+                  <select
+                    id="installments"
+                    value={installments}
+                    onChange={(event) => setInstallments(Number(event.target.value))}
+                    className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  >
+                    {Array.from({ length: 12 }, (_, index) => index + 1).map((option) => (
+                      <option key={option} value={option}>
+                        {option}x
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <input
+                id="saved-card-id"
+                value={savedCardId}
+                onChange={(event) => setSavedCardId(event.target.value)}
+                placeholder="card_id salvo (opcional)"
+                className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          )}
         </section>
 
         <section className="card-kidario p-4 space-y-2">
@@ -395,7 +557,9 @@ export default function Checkout() {
             : authSession.isAuthenticated
               ? selectedPackagePlan
                 ? "Comprar pacote"
-                : "Pagar e agendar"
+                : paymentMethod === "credit_card"
+                  ? "Autorizar cartão e solicitar"
+                  : "Solicitar agendamento"
               : "Entrar para continuar"}
         </KidarioButton>
       </div>

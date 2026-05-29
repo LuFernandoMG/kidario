@@ -60,6 +60,16 @@ export interface ParentProfilePatchPayload {
   cpf?: string;
   birth_date?: string;
   address?: string;
+  address_detail?: {
+    street?: string;
+    number?: string;
+    complement?: string;
+    district?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
+  };
   bio?: string;
   children_ops?: {
     upsert: ParentChildUpsertPayload[];
@@ -139,9 +149,14 @@ export async function patchParentProfile(
   if (payload.cpf !== undefined) parentPayload.cpf = payload.cpf;
   if (payload.birth_date !== undefined) parentPayload.birth_date = payload.birth_date;
   if (payload.bio !== undefined) parentPayload.bio = payload.bio;
-  if (payload.address !== undefined) {
+  if (payload.address_detail !== undefined) {
+    parentPayload.address = payload.address_detail;
+  } else if (payload.address !== undefined) {
     parentPayload.address = {
       street: payload.address,
+      district: "Não informado",
+      city: "Não informado",
+      state: "NA",
     };
   }
 

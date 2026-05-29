@@ -13,6 +13,7 @@ from app.schemas.v2_profiles import (
     ParentProfileUpdateRequest,
     TeacherProfileUpdateRequest,
 )
+from app.services.address_geocoding_service import enrich_address_coordinates
 from app.services.storage_url_service import resolve_teacher_profile_photo_url
 
 
@@ -41,6 +42,7 @@ ADDRESS_FIELDS = (
     "longitude",
 )
 ADDRESS_REQUIRED_FIELDS = ("street", "district", "city", "state")
+ADDRESS_LOCATION_FIELDS = ("street", "number", "district", "city", "state", "postal_code", "country")
 
 
 def _mask_cpf(cpf: str | None) -> str | None:
@@ -201,6 +203,13 @@ def _address_values(payload: AddressInput | None, existing: dict | None, *, requ
             values[field] = existing.get(field)
     values["country"] = values.get("country") or "BR"
 
+    if payload and any(
+        field in provided and getattr(payload, field) != existing.get(field)
+        for field in ADDRESS_LOCATION_FIELDS
+    ):
+        values["latitude"] = None
+        values["longitude"] = None
+
     missing = [field for field in ADDRESS_REQUIRED_FIELDS if not values.get(field)]
     if missing and required:
         raise ProfileValidationError(f"Address is missing required fields: {', '.join(missing)}.")
@@ -210,6 +219,11 @@ def _address_values(payload: AddressInput | None, existing: dict | None, *, requ
 def _upsert_address(db: Session, address_id: UUID | str | None, payload: AddressInput | None) -> UUID:
     existing = _load_address(db, address_id) if address_id else None
     values = _address_values(payload, existing, required=existing is None)
+    should_enrich = payload is not None and (
+        existing is None or values.get("latitude") is None or values.get("longitude") is None
+    )
+    if should_enrich:
+        values = enrich_address_coordinates(get_settings(), values)
 
     if existing:
         if payload is None:

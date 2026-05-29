@@ -34,6 +34,11 @@ interface ParentFormState {
   phone: string;
   birthDate: string;
   address: string;
+  addressNumber: string;
+  district: string;
+  city: string;
+  state: string;
+  postalCode: string;
   bio: string;
   children: BackendParentChildView[];
 }
@@ -44,6 +49,11 @@ const emptyForm: ParentFormState = {
   phone: "",
   birthDate: "",
   address: "",
+  addressNumber: "",
+  district: "",
+  city: "",
+  state: "",
+  postalCode: "",
   bio: "",
   children: [],
 };
@@ -98,7 +108,12 @@ export default function ParentProfileSettings() {
         lastName: payload.profile.last_name || "",
         phone: payload.phone || "",
         birthDate: payload.birth_date || "",
-        address: payload.address || "",
+        address: payload.address_detail?.street || payload.address || "",
+        addressNumber: payload.address_detail?.number || "",
+        district: payload.address_detail?.district || "",
+        city: payload.address_detail?.city || "",
+        state: payload.address_detail?.state || "",
+        postalCode: payload.address_detail?.postal_code || "",
         bio: payload.bio || "",
         children: normalizedChildren,
       });
@@ -107,7 +122,12 @@ export default function ParentProfileSettings() {
         lastName: payload.profile.last_name || "",
         phone: payload.phone || "",
         birthDate: payload.birth_date || "",
-        address: payload.address || "",
+        address: payload.address_detail?.street || payload.address || "",
+        addressNumber: payload.address_detail?.number || "",
+        district: payload.address_detail?.district || "",
+        city: payload.address_detail?.city || "",
+        state: payload.address_detail?.state || "",
+        postalCode: payload.address_detail?.postal_code || "",
         bio: payload.bio || "",
         children: normalizedChildren,
       });
@@ -181,6 +201,11 @@ export default function ParentProfileSettings() {
       phone: initialForm.phone,
       birthDate: initialForm.birthDate,
       address: initialForm.address,
+      addressNumber: initialForm.addressNumber,
+      district: initialForm.district,
+      city: initialForm.city,
+      state: initialForm.state,
+      postalCode: initialForm.postalCode,
       bio: initialForm.bio,
     }));
     setIsEditingProfile(false);
@@ -214,7 +239,15 @@ export default function ParentProfileSettings() {
         last_name: form.lastName.trim(),
         phone: form.phone.trim() || undefined,
         birth_date: form.birthDate || undefined,
-        address: form.address.trim() || undefined,
+        address_detail: {
+          street: form.address.trim(),
+          number: form.addressNumber.trim() || undefined,
+          district: form.district.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          postal_code: form.postalCode.trim() || undefined,
+          country: "BR",
+        },
         bio: form.bio.trim() || undefined,
         children_ops: {
           upsert: form.children.map((child) => ({
@@ -311,10 +344,49 @@ export default function ParentProfileSettings() {
                   disabled={!isEditingProfile}
                 />
               </Field>
-              <Field label="Endereço">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-3">
+                <Field label="Endereço">
+                  <Input
+                    value={form.address}
+                    onChange={(event) => setField("address", event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </Field>
+                <Field label="Número">
+                  <Input
+                    value={form.addressNumber}
+                    onChange={(event) => setField("addressNumber", event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Field label="Bairro">
+                  <Input
+                    value={form.district}
+                    onChange={(event) => setField("district", event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </Field>
+                <Field label="Cidade">
+                  <Input
+                    value={form.city}
+                    onChange={(event) => setField("city", event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </Field>
+                <Field label="Estado">
+                  <Input
+                    value={form.state}
+                    onChange={(event) => setField("state", event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </Field>
+              </div>
+              <Field label="CEP">
                 <Input
-                  value={form.address}
-                  onChange={(event) => setField("address", event.target.value)}
+                  value={form.postalCode}
+                  onChange={(event) => setField("postalCode", event.target.value)}
                   disabled={!isEditingProfile}
                 />
               </Field>

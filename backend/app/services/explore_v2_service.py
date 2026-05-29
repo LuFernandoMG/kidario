@@ -268,6 +268,18 @@ def list_explore_teachers(
     settings = get_settings()
     where = ["t.is_active = true"]
     params: dict[str, object] = {"limit": limit, "offset": offset}
+    if settings.pagarme_enabled:
+        where.append(
+            """
+            exists (
+              select 1
+              from payment_provider_recipients ppr
+              where ppr.teacher_id = t.id
+                and ppr.provider = 'pagarme'
+                and ppr.status = 'active'
+            )
+            """
+        )
 
     if query:
         where.append(
@@ -520,9 +532,19 @@ def get_explore_teacher_detail(
                 ) reviews on true
                 where t.id = :teacher_id
                   and t.is_active = true
+                  and (
+                    :pagarme_enabled = false
+                    or exists (
+                      select 1
+                      from payment_provider_recipients ppr
+                      where ppr.teacher_id = t.id
+                        and ppr.provider = 'pagarme'
+                        and ppr.status = 'active'
+                    )
+                  )
                 """
             ),
-            {"teacher_id": str(teacher_id)},
+            {"teacher_id": str(teacher_id), "pagarme_enabled": settings.pagarme_enabled},
         )
         .mappings()
         .first()

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.schemas.v2_bookings import BookingModality, BookingStatus
+from app.schemas.v2_bookings import BookingModality, BookingStatus, PaymentFlowStatus, TeacherDecisionStatus
 
 
 class TeacherAgendaActionFlags(BaseModel):
@@ -30,6 +30,10 @@ class TeacherAgendaControlLesson(BaseModel):
     duration_minutes: int
     modality: BookingModality
     status: BookingStatus
+    teacher_decision_status: TeacherDecisionStatus
+    teacher_decision_reason: str | None = None
+    teacher_decision_at: datetime | None = None
+    payment_flow_status: PaymentFlowStatus
     chat_thread_id: UUID | None = None
     has_unread_messages: bool = False
     completed_lessons_with_child: int
@@ -44,6 +48,8 @@ class TeacherChatPreview(BaseModel):
     thread_id: UUID
     booking_id: UUID
     booking_status: BookingStatus
+    teacher_decision_status: TeacherDecisionStatus
+    payment_flow_status: PaymentFlowStatus
     child_name: str
     parent_name: str
     lesson_starts_at: datetime

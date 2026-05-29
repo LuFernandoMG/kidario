@@ -107,6 +107,10 @@ def _booking(status: str = "pendente", starts_at: str = "2026-06-25T14:00:00Z") 
         "duration_minutes": 60,
         "modality": "online",
         "status": status,
+        "teacher_decision_status": "pending",
+        "teacher_decision_reason": None,
+        "teacher_decision_at": None,
+        "payment_flow_status": "authorized",
         "cancellation_reason": None,
         "confirmed_at": "2026-02-25T10:00:00Z" if status == "confirmada" else None,
         "completed_at": None,
@@ -139,6 +143,7 @@ def test_post_booking_returns_created(client: TestClient, monkeypatch: pytest.Mo
             "duration_minutes": 60,
             "modality": "online",
             "payment_method": "credit_card",
+            "card_token": "card_token_test",
         },
     )
 

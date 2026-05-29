@@ -54,6 +54,23 @@ const bookingStatusClassName = {
   concluida: "bg-primary/10 text-primary",
 } as const;
 
+const teacherDecisionLabel = {
+  pending: "Aguardando professora",
+  accepted: "Horário aceito",
+  rejected: "Horário recusado",
+} as const;
+
+const paymentFlowLabel: Record<string, string> = {
+  not_started: "Pagamento não iniciado",
+  authorization_required: "Autorização pendente",
+  authorized: "Cartão autorizado",
+  awaiting_payment: "Aguardando pagamento",
+  paid: "Pago",
+  failed: "Pagamento falhou",
+  expired: "Pagamento expirado",
+  refunded: "Reembolsado",
+};
+
 const activityPlanSourceLabel = {
   llm: "Plano sugerido por IA",
   fallback: "Plano sugerido automaticamente",
@@ -77,7 +94,7 @@ export default function TeacherControlCenterPage() {
   const pendingLessons = useMemo(() => {
     if (!data?.agenda?.length) return [];
     return data.agenda
-      .filter((lesson) => lesson.status === "pendente")
+      .filter((lesson) => lesson.status === "pendente" && (lesson.teacher_decision_status || "pending") === "pending")
       .sort((a, b) => getLessonTimestamp(a) - getLessonTimestamp(b));
   }, [data?.agenda]);
 
@@ -134,7 +151,7 @@ export default function TeacherControlCenterPage() {
         bookingId,
         payload: { action: "accept" },
       });
-      toast({ title: "Aula aceita", description: "A reserva foi confirmada." });
+      toast({ title: "Horário aceito", description: "O pagamento será capturado ou gerado conforme a forma escolhida." });
       if (selectedLessonId === bookingId) {
         setSelectedLessonId(null);
       }
@@ -149,14 +166,18 @@ export default function TeacherControlCenterPage() {
   };
 
   const onReject = async (bookingId: string) => {
-    const reason = window.prompt("Motivo da recusa (opcional):")?.trim() || undefined;
+    const reason = window.prompt("Mensagem para a família (opcional):")?.trim() || undefined;
     setDecisionBookingId(bookingId);
     try {
       await decisionMutation.mutateAsync({
         bookingId,
-        payload: { action: "reject", reason },
+        payload: {
+          action: "reject",
+          reason,
+          chat_message: reason || "Não consigo atender neste horário. Podemos combinar outra opção por aqui?",
+        },
       });
-      toast({ title: "Aula recusada", description: "A reserva foi cancelada." });
+      toast({ title: "Horário recusado", description: "O chat foi aberto para combinar um novo horário." });
       if (selectedLessonId === bookingId) {
         setSelectedLessonId(null);
       }
@@ -364,9 +385,17 @@ function LessonDetailCard(props: {
             {lesson.completed_lessons_with_child} aula(s) concluída(s) com este aluno
           </p>
         </div>
-        <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${bookingStatusClassName[lesson.status]}`}>
-          {bookingStatusLabel[lesson.status]}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${bookingStatusClassName[lesson.status]}`}>
+            {bookingStatusLabel[lesson.status]}
+          </span>
+          <span className="rounded-full px-2 py-1 text-[11px] font-medium bg-muted text-muted-foreground">
+            {teacherDecisionLabel[lesson.teacher_decision_status || "pending"]}
+          </span>
+          <span className="rounded-full px-2 py-1 text-[11px] font-medium bg-muted text-muted-foreground">
+            {paymentFlowLabel[lesson.payment_flow_status || "not_started"]}
+          </span>
+        </div>
       </div>
 
       <div className="rounded-xl border border-border/60 p-3 space-y-2">

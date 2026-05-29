@@ -132,8 +132,16 @@ def get_teacher_control_center_overview(
             text(
                 """
                 select
-                  count(*) filter (where starts_at >= now() and status in ('pendente', 'confirmada')) as upcoming_lessons_count,
-                  count(*) filter (where starts_at >= now() and status = 'pendente') as pending_decisions_count
+                  count(*) filter (
+                    where starts_at >= now()
+                      and status in ('pendente', 'confirmada')
+                      and coalesce(teacher_decision_status, 'pending') <> 'rejected'
+                  ) as upcoming_lessons_count,
+                  count(*) filter (
+                    where starts_at >= now()
+                      and status = 'pendente'
+                      and coalesce(teacher_decision_status, 'pending') = 'pending'
+                  ) as pending_decisions_count
                 from bookings
                 where teacher_id = :teacher_id
                 """
@@ -159,6 +167,10 @@ def get_teacher_control_center_overview(
                   b.duration_minutes,
                   b.modality,
                   b.status,
+                  coalesce(b.teacher_decision_status, 'pending') as teacher_decision_status,
+                  b.teacher_decision_reason,
+                  b.teacher_decision_at,
+                  coalesce(b.payment_flow_status, 'not_started') as payment_flow_status,
                   ct.id as chat_thread_id,
                   coalesce(completed_counter.completed_lessons_with_child, 0) as completed_lessons_with_child,
                   latest_follow_up.summary as latest_follow_up_summary,
@@ -217,6 +229,7 @@ def get_teacher_control_center_overview(
     agenda_payload = []
     for row in agenda_rows:
         status = str(row["status"])
+        teacher_decision_status = str(row.get("teacher_decision_status") or "pending")
         completed_lessons_with_child = int(row.get("completed_lessons_with_child") or 0)
         is_first_lesson_with_child = completed_lessons_with_child == 0
         parent_focus_points = _parse_focus_points(row.get("child_focus_points")) if is_first_lesson_with_child else []
@@ -242,6 +255,10 @@ def get_teacher_control_center_overview(
                 "duration_minutes": row["duration_minutes"],
                 "modality": row["modality"],
                 "status": status,
+                "teacher_decision_status": teacher_decision_status,
+                "teacher_decision_reason": row.get("teacher_decision_reason"),
+                "teacher_decision_at": row.get("teacher_decision_at"),
+                "payment_flow_status": row.get("payment_flow_status") or "not_started",
                 "chat_thread_id": row["chat_thread_id"],
                 "has_unread_messages": has_unread_messages,
                 "completed_lessons_with_child": completed_lessons_with_child,
@@ -250,8 +267,8 @@ def get_teacher_control_center_overview(
                 "activity_plan_source": activity_plan["source"],
                 "activity_plan": activity_plan["activities"],
                 "actions": {
-                    "can_accept": status == "pendente",
-                    "can_reject": status in ("pendente", "confirmada"),
+                    "can_accept": status == "pendente" and teacher_decision_status == "pending",
+                    "can_reject": status == "pendente" and teacher_decision_status == "pending",
                     "can_reschedule": status in ("pendente", "confirmada"),
                     "can_open_chat": True,
                     "can_complete": _can_teacher_complete_booking(
@@ -273,6 +290,8 @@ def get_teacher_control_center_overview(
                     ct.id as thread_id,
                     ct.booking_id,
                     b.status as booking_status,
+                    coalesce(b.teacher_decision_status, 'pending') as teacher_decision_status,
+                    coalesce(b.payment_flow_status, 'not_started') as payment_flow_status,
                     c.name as child_name,
                     b.starts_at as lesson_starts_at,
                     u_parent.first_name as parent_first_name,
@@ -307,6 +326,8 @@ def get_teacher_control_center_overview(
             "thread_id": row["thread_id"],
             "booking_id": row["booking_id"],
             "booking_status": row["booking_status"],
+            "teacher_decision_status": row.get("teacher_decision_status") or "pending",
+            "payment_flow_status": row.get("payment_flow_status") or "not_started",
             "child_name": row["child_name"] or "Aluno",
             "parent_name": " ".join(
                 part for part in [row.get("parent_first_name"), row.get("parent_last_name")] if part
@@ -390,13 +411,14 @@ def get_teacher_control_center_overview(
             text(
                 """
                 select
-                  coalesce(sum(case when b.status = 'concluida' then po.amount_cents else 0 end), 0) as gross_revenue_total_cents,
-                  coalesce(sum(case when po.status = 'paid' and b.status in ('confirmada', 'concluida') then po.amount_cents else 0 end), 0) as paid_total_cents,
-                  coalesce(sum(case when po.status in ('created', 'pending') and b.status in ('confirmada', 'concluida') then po.amount_cents else 0 end), 0) as pending_payment_total_cents,
+                  coalesce(sum(case when b.status = 'concluida' then coalesce(ps.amount_cents, round(po.amount_cents * coalesce(ps.percentage, 0) / 100)::integer, 0) else 0 end), 0) as gross_revenue_total_cents,
+                  coalesce(sum(case when po.status = 'paid' and b.status in ('confirmada', 'concluida') then coalesce(ps.amount_cents, round(po.amount_cents * coalesce(ps.percentage, 0) / 100)::integer, 0) else 0 end), 0) as paid_total_cents,
+                  coalesce(sum(case when po.status in ('created', 'pending', 'authorized') and b.status in ('pendente', 'confirmada', 'concluida') then coalesce(ps.amount_cents, round(po.amount_cents * coalesce(ps.percentage, 0) / 100)::integer, 0) else 0 end), 0) as pending_payment_total_cents,
                   count(*) filter (where b.status = 'concluida') as completed_lessons_count,
                   count(*) filter (where po.status = 'paid' and b.status in ('confirmada', 'concluida')) as paid_lessons_count
                 from bookings b
                 left join payment_orders po on po.booking_id = b.id
+                left join payment_splits ps on ps.payment_order_id = po.id and ps.split_role = 'teacher'
                 where b.teacher_id = :teacher_id
                 """
             ),
@@ -431,6 +453,7 @@ def get_teacher_control_center_overview(
               and starts_at >= :window_start
               and starts_at < :window_end
               and status in ('pendente', 'confirmada')
+              and coalesce(teacher_decision_status, 'pending') <> 'rejected'
             """
         ),
         {

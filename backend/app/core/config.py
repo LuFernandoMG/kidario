@@ -48,6 +48,22 @@ class Settings(BaseSettings):
     teacher_activity_llm_timeout_seconds: float = 8.0
     teacher_activity_llm_ca_bundle: str | None = None
 
+    google_geocoding_api_key: str | None = None
+    google_geocoding_base_url: str = "https://maps.googleapis.com/maps/api/geocode/json"
+    google_geocoding_timeout_seconds: float = 5.0
+    google_geocoding_ca_bundle: str | None = None
+    viacep_base_url: str = "https://viacep.com.br/ws"
+    viacep_timeout_seconds: float = 4.0
+    viacep_ca_bundle: str | None = None
+
+    pagarme_secret_key: str | None = None
+    pagarme_base_url: str = "https://api.pagar.me/core/v5"
+    pagarme_webhook_secret: str | None = None
+    pagarme_platform_recipient_id: str | None = None
+    pagarme_timeout_seconds: float = 15.0
+    pagarme_ca_bundle: str | None = None
+    platform_fee_percent: float = 20.0
+
     @field_validator("api_v2_prefix")
     @classmethod
     def ensure_prefix_starts_with_slash(cls, value: str) -> str:
@@ -88,6 +104,14 @@ class Settings(BaseSettings):
         if self.signup_captcha_provider == "recaptcha":
             return "https://www.google.com/recaptcha/api/siteverify"
         return "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+    @property
+    def pagarme_enabled(self) -> bool:
+        return bool(self.pagarme_secret_key)
+
+    @property
+    def google_geocoding_enabled(self) -> bool:
+        return bool(self.google_geocoding_api_key)
 
 
 @lru_cache

@@ -61,7 +61,14 @@ async function packageRequest<TResponse>(params: {
 
 export async function createPackagePurchase(
   accessToken: string,
-  payload: { package_plan_id: string; child_id: string; payment_method: PaymentMethod },
+  payload: {
+    package_plan_id: string;
+    child_id: string;
+    payment_method: PaymentMethod;
+    card_token?: string;
+    card_id?: string;
+    installments?: number;
+  },
 ) {
   return packageRequest<BookingPackage>({
     path: "/packages/purchases",

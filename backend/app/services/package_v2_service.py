@@ -6,7 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.core.security import AuthUser
 from app.schemas.v2_packages import PackagePlanCreateRequest, PackagePlanUpdateRequest, PackagePurchaseCreateRequest
-from app.services.booking_v2_service import _map_payment_order
+from app.core.config import get_settings
+from app.services.booking_v2_service import (
+    BookingValidationError,
+    _build_pagarme_customer_payload,
+    _build_split_rules,
+    _create_payment_records,
+    _map_payment_order,
+    _order_code,
+)
+from app.services.pagarme_service import PagarmeIntegrationError, create_order
 from app.services.identity_service import (
     IdentityNotFoundError,
     IdentityPermissionError,
@@ -311,9 +320,13 @@ def _load_booking_package(db: Session, package_id: UUID) -> dict:
                   provider,
                   provider_order_id,
                   provider_order_code,
+                  requested_payment_method,
                   amount_cents,
                   currency,
                   status,
+                  authorized_at,
+                  paid_at,
+                  expires_at,
                   created_at,
                   updated_at
                 from payment_orders
@@ -352,8 +365,6 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
     final_amount = round(original_amount * (1 - discount_percent / 100))
     discount_amount = original_amount - final_amount
     package_id = uuid4()
-    payment_order_id = uuid4()
-    payment_charge_id = uuid4()
 
     package_row = (
         db.execute(
@@ -412,42 +423,53 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
     if not package_row:
         raise PackageValidationError("Could not create package purchase.")
 
-    db.execute(
-        text(
-            """
-            insert into payment_orders (
-              id, parent_id, package_id, provider, amount_cents, currency, status
-            )
-            values (
-              :id, :parent_id, :package_id, 'internal', :amount_cents, 'BRL', 'pending'
-            )
-            """
-        ),
-        {
-            "id": str(payment_order_id),
-            "parent_id": str(parent_id),
-            "package_id": str(package_id),
-            "amount_cents": final_amount,
-        },
+    try:
+        split_rules = _build_split_rules(db, plan["teacher_id"], final_amount)
+        provider_response = create_order(
+            get_settings(),
+            order_code=_order_code("package", package_id),
+            amount_cents=final_amount,
+            payment_method=payload.payment_method,
+            customer=_build_pagarme_customer_payload(db, parent_id),
+            item_description=f"Pacote Kidario - {plan['name']}",
+            split_rules=split_rules,
+            card_token=payload.card_token,
+            card_id=payload.card_id,
+            installments=payload.installments,
+            capture=payload.payment_method == "credit_card",
+        )
+    except (BookingValidationError, PagarmeIntegrationError) as exc:
+        raise PackageValidationError(str(exc)) from exc
+
+    order_status = "paid" if payload.payment_method == "credit_card" else "pending"
+    charge_status = "paid" if payload.payment_method == "credit_card" else "pending"
+    payment_record = _create_payment_records(
+        db,
+        parent_id=parent_id,
+        teacher_id=plan["teacher_id"],
+        booking_id=None,
+        package_id=package_id,
+        amount_cents=final_amount,
+        payment_method=payload.payment_method,
+        order_status=order_status,
+        charge_status=charge_status,
+        provider_response=provider_response,
+        split_rules=split_rules,
+        installments=payload.installments,
     )
-    db.execute(
-        text(
-            """
-            insert into payment_charges (
-              id, payment_order_id, provider, payment_method, status, amount_cents
-            )
-            values (
-              :id, :payment_order_id, 'internal', :payment_method, 'pending', :amount_cents
-            )
-            """
-        ),
-        {
-            "id": str(payment_charge_id),
-            "payment_order_id": str(payment_order_id),
-            "payment_method": payload.payment_method,
-            "amount_cents": final_amount,
-        },
-    )
+    if payment_record["order_status"] == "paid":
+        db.execute(
+            text(
+                """
+                update booking_packages
+                set status = 'active',
+                    valid_from = coalesce(valid_from, now()),
+                    updated_at = now()
+                where id = :package_id
+                """
+            ),
+            {"package_id": str(package_id)},
+        )
 
     return _load_booking_package(db, package_id)
 

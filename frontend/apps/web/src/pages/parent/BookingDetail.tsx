@@ -15,8 +15,10 @@ import {
   cancelBooking,
   getBookingDetail,
   getTeacherAvailabilitySlots,
+  retryBookingPayment,
   rescheduleBooking,
   type BookingDetailResponse,
+  type PaymentMethod,
 } from "@/data/api/bookings";
 import { getOrCreateChatThreadFromBooking } from "@/data/api/chat";
 import { createBookingReview } from "@/data/api/reviews";
@@ -93,6 +95,10 @@ export default function BookingDetail() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [retryPaymentMethod, setRetryPaymentMethod] = useState<PaymentMethod>("pix");
+  const [retryCardReference, setRetryCardReference] = useState("");
+  const [retryInstallments, setRetryInstallments] = useState(1);
+  const [isRetryingPayment, setIsRetryingPayment] = useState(false);
 
   useEffect(() => {
     if (!bookingId) {
@@ -205,6 +211,10 @@ export default function BookingDetail() {
     ? backendDetail.actions.can_cancel
     : booking.status !== "cancelada" && booking.status !== "concluida";
   const canReview = Boolean(backendDetail?.actions.can_review);
+  const paymentCharge = backendDetail?.payment_order?.charges?.[0];
+  const canRetryPayment = Boolean(
+    backendDetail && backendDetail.status === "pendente" && ["failed", "expired"].includes(backendDetail.payment_flow_status || ""),
+  );
 
   const priceValue = backendDetail ? backendDetail.price_total : 0;
   const priceLabel = `R$ ${Math.round(priceValue)}`;
@@ -328,6 +338,37 @@ export default function BookingDetail() {
     }
   };
 
+  const handleRetryPayment = async () => {
+    const accessToken = getSupabaseAccessToken();
+    if (!backendDetail || !accessToken) return;
+    if (retryPaymentMethod === "credit_card" && !retryCardReference.trim()) {
+      toast({
+        title: "Cartão não tokenizado",
+        description: "Informe um card_token ou card_id para tentar novamente.",
+      });
+      return;
+    }
+    setIsRetryingPayment(true);
+    try {
+      const response = await retryBookingPayment(accessToken, backendDetail.id, {
+        payment_method: retryPaymentMethod,
+        ...(retryPaymentMethod === "credit_card"
+          ? { card_token: retryCardReference.trim(), installments: retryInstallments }
+          : {}),
+      });
+      setBackendDetail(response.booking);
+      setBooking(mapBackendDetailToStoredBooking(response.booking));
+      toast({ title: "Pagamento atualizado", description: "Atualizamos o status da sua reserva." });
+    } catch (error) {
+      toast({
+        title: "Não foi possível tentar novamente",
+        description: error instanceof Error ? error.message : "Tente novamente em instantes.",
+      });
+    } finally {
+      setIsRetryingPayment(false);
+    }
+  };
+
   const cancellationReason = backendDetail?.cancellation_reason || booking.cancellationReason;
 
   return (
@@ -369,8 +410,77 @@ export default function BookingDetail() {
               <Sparkles className="w-4 h-4 text-primary" />
               Valor: {priceLabel}
             </p>
+            {backendDetail && (
+              <>
+                <p className="text-muted-foreground">
+                  Professora: {decisionStatusLabel(backendDetail.teacher_decision_status)}
+                </p>
+                <p className="text-muted-foreground">
+                  Pagamento: {paymentStatusLabel(backendDetail.payment_flow_status)}
+                </p>
+              </>
+            )}
           </div>
         </section>
+
+        {(paymentCharge?.pix_qr_code || paymentCharge?.boleto_line || paymentCharge?.payment_url || paymentCharge?.boleto_url) && (
+          <section className="card-kidario p-4 space-y-2">
+            <h2 className="font-display text-lg font-semibold text-foreground">Pagamento</h2>
+            {paymentCharge.pix_qr_code && (
+              <p className="text-sm text-foreground break-all">{paymentCharge.pix_qr_code}</p>
+            )}
+            {paymentCharge.boleto_line && (
+              <p className="text-sm text-foreground break-all">{paymentCharge.boleto_line}</p>
+            )}
+            {(paymentCharge.payment_url || paymentCharge.boleto_url) && (
+              <a
+                href={paymentCharge.payment_url || paymentCharge.boleto_url || "#"}
+                className="text-primary text-sm font-medium hover:underline"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Abrir pagamento
+              </a>
+            )}
+          </section>
+        )}
+
+        {canRetryPayment && (
+          <section className="card-kidario p-4 space-y-3">
+            <h2 className="font-display text-lg font-semibold text-foreground">Tentar pagamento novamente</h2>
+            <select
+              value={retryPaymentMethod}
+              onChange={(event) => setRetryPaymentMethod(event.target.value as PaymentMethod)}
+              className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground"
+            >
+              <option value="pix">Pix</option>
+              <option value="boleto">Boleto</option>
+              <option value="credit_card">Cartão de crédito</option>
+            </select>
+            {retryPaymentMethod === "credit_card" && (
+              <>
+                <input
+                  value={retryCardReference}
+                  onChange={(event) => setRetryCardReference(event.target.value)}
+                  placeholder="card_token ou card_id"
+                  className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground"
+                />
+                <select
+                  value={retryInstallments}
+                  onChange={(event) => setRetryInstallments(Number(event.target.value))}
+                  className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground"
+                >
+                  {Array.from({ length: 12 }, (_, index) => index + 1).map((option) => (
+                    <option key={option} value={option}>{option}x</option>
+                  ))}
+                </select>
+              </>
+            )}
+            <KidarioButton type="button" variant="hero" onClick={handleRetryPayment} disabled={isRetryingPayment}>
+              {isRetryingPayment ? "Processando..." : "Tentar novamente"}
+            </KidarioButton>
+          </section>
+        )}
 
         <section className="card-kidario p-4 space-y-3">
           <div className="flex items-start gap-2">
@@ -502,4 +612,20 @@ export default function BookingDetail() {
       />
     </AppShell>
   );
+}
+
+function decisionStatusLabel(status?: string) {
+  if (status === "accepted") return "Aceita";
+  if (status === "rejected") return "Horário recusado";
+  return "Aguardando";
+}
+
+function paymentStatusLabel(status?: string) {
+  if (status === "paid") return "Pago";
+  if (status === "authorized") return "Autorizado";
+  if (status === "awaiting_payment") return "Aguardando pagamento";
+  if (status === "failed") return "Falhou";
+  if (status === "expired") return "Expirado";
+  if (status === "refunded") return "Reembolsado";
+  return "Não iniciado";
 }

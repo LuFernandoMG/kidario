@@ -127,7 +127,7 @@ export default function TeacherAgendaPage() {
         bookingId,
         payload: { action: "accept" },
       });
-      toast({ title: "Aula aceita", description: "A reserva foi confirmada." });
+      toast({ title: "Horário aceito", description: "O pagamento será capturado ou gerado conforme a forma escolhida." });
     } catch (error) {
       toast({
         title: "Não foi possível aceitar",
@@ -138,13 +138,17 @@ export default function TeacherAgendaPage() {
 
   const onReject = async (bookingId: string) => {
     if (isMutating) return;
-    const reason = window.prompt("Motivo da recusa (opcional):")?.trim() || undefined;
+    const reason = window.prompt("Mensagem para a família (opcional):")?.trim() || undefined;
     try {
       await decisionMutation.mutateAsync({
         bookingId,
-        payload: { action: "reject", reason },
+        payload: {
+          action: "reject",
+          reason,
+          chat_message: reason || "Não consigo atender neste horário. Podemos combinar outra opção por aqui?",
+        },
       });
-      toast({ title: "Aula recusada", description: "A reserva foi cancelada." });
+      toast({ title: "Horário recusado", description: "O chat foi aberto para combinar um novo horário." });
     } catch (error) {
       toast({
         title: "Não foi possível recusar",

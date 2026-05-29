@@ -43,6 +43,7 @@ def client() -> TestClient:
 
 def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_signup_with_profile(db, settings, payload):
+        assert payload.parent.children[0].birth_month_year.isoformat() == "2017-04-01"
         return {
             "status": "ok",
             "user_id": UUID("b4f13a88-9e68-4d11-bd1b-5d03498ea5f0"),
@@ -77,7 +78,7 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
                     "city": "Sao Paulo",
                     "state": "SP",
                 },
-                "children": [{"name": "Lucas", "birth_month_year": "2017-04-01"}],
+                "children": [{"name": "Lucas", "birth_month_year": "2017-04"}],
             },
         },
     )

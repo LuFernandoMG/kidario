@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
   const backendProxyTarget = env.VITE_BACKEND_PROXY_TARGET || "http://127.0.0.1:8000";
 
   return {
+    cacheDir: path.resolve(__dirname, "../../node_modules/.vite/apps-web"),
     server: {
       host: "::",
       port: 8080,
@@ -23,6 +24,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+    optimizeDeps: {
+      force: mode === "development",
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

@@ -2,12 +2,18 @@ from datetime import date, datetime, time
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 UserRole = Literal["parent", "teacher", "admin"]
 TeacherModality = Literal["online", "presencial", "ambos"]
 ChildGender = Literal["girl", "boy", "other", "prefer not to disclose"]
+
+
+def _parse_birth_month_year(value: object) -> object:
+    if isinstance(value, str) and len(value) == 7 and value[4] == "-":
+        return f"{value}-01"
+    return value
 
 
 class UserProfile(BaseModel):
@@ -72,8 +78,6 @@ class AddressInput(BaseModel):
     state: str | None = None
     postal_code: str | None = None
     country: str | None = None
-    latitude: float | None = None
-    longitude: float | None = None
 
 
 class Child(BaseModel):
@@ -99,6 +103,11 @@ class ChildCreateRequest(BaseModel):
     school: str | None = None
     focus_points: str | None = None
 
+    @field_validator("birth_month_year", mode="before")
+    @classmethod
+    def normalize_birth_month_year(cls, value: object) -> object:
+        return _parse_birth_month_year(value)
+
 
 class ChildUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -109,6 +118,11 @@ class ChildUpdateRequest(BaseModel):
     current_grade: str | None = None
     school: str | None = None
     focus_points: str | None = None
+
+    @field_validator("birth_month_year", mode="before")
+    @classmethod
+    def normalize_birth_month_year(cls, value: object) -> object:
+        return _parse_birth_month_year(value)
 
     @model_validator(mode="after")
     def ensure_not_empty(self) -> "ChildUpdateRequest":

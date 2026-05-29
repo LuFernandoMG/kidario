@@ -25,6 +25,7 @@ import { applyBackendSignupSession } from "@/lib/authSession";
 import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 import { ROOT_PATH } from "@/routes/paths";
 import { TEACHER_CONTROL_CENTER_PATH } from "@/routes/teacher";
+import { useViaCepAutocomplete } from "@/hooks/useViaCepAutocomplete";
 
 interface AcademicFormation {
   degreeType: string;
@@ -50,8 +51,13 @@ interface TeacherSignupFormData {
   confirmPassword: string;
   phone: string;
   cpf: string;
+  address: string;
+  addressNumber: string;
+  addressComplement: string;
+  district: string;
   city: string;
   state: string;
+  postalCode: string;
   modality: string;
   miniBio: string;
   hourlyRate: string;
@@ -177,6 +183,12 @@ const formatCpfMask = (value: string): string => {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 };
 
+const formatCepMask = (value: string): string => {
+  const digits = extractDigits(value, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+};
+
 const normalizeEmailInput = (value: string): string => value.replace(/\s+/g, "");
 
 const canonicalizeEmail = (value: string): string => normalizeEmailInput(value).toLowerCase();
@@ -228,8 +240,13 @@ export default function TeacherPrivateSignup() {
     confirmPassword: "",
     phone: "",
     cpf: "",
+    address: "",
+    addressNumber: "",
+    addressComplement: "",
+    district: "",
     city: "",
     state: "",
+    postalCode: "",
     modality: "",
     miniBio: "",
     hourlyRate: "",
@@ -246,6 +263,11 @@ export default function TeacherPrivateSignup() {
   const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || "";
   const isCaptchaConfigured = Boolean(turnstileSiteKey);
   const requireCaptcha = captchaEnabledFlag && isCaptchaConfigured;
+  const { isLoading: isCepLookupLoading } = useViaCepAutocomplete({
+    postalCode: formData.postalCode,
+    setFormData,
+    setErrors,
+  });
 
   const setField = (
     field: keyof TeacherSignupFormData,
@@ -398,8 +420,15 @@ export default function TeacherPrivateSignup() {
       if (formData.cpf && formData.cpf.length < 11) {
         nextErrors.cpf = "Informe o CPF completo.";
       }
+      if (!formData.address.trim()) nextErrors.address = "Informe sua rua/avenida.";
+      if (!formData.addressNumber.trim()) nextErrors.addressNumber = "Informe o número.";
+      if (!formData.district.trim()) nextErrors.district = "Informe o bairro.";
       if (!formData.city.trim()) nextErrors.city = "Informe a cidade.";
       if (!formData.state) nextErrors.state = "Selecione a UF.";
+      if (!formData.postalCode.trim()) nextErrors.postalCode = "Informe o CEP.";
+      if (formData.postalCode && formData.postalCode.length !== 8) {
+        nextErrors.postalCode = "Informe o CEP completo.";
+      }
       if (!formData.modality) nextErrors.modality = "Selecione a modalidade.";
       if (!formData.lessonDuration) nextErrors.lessonDuration = "Selecione a duração média da aula.";
       if (!formData.hourlyRate.trim()) nextErrors.hourlyRate = "Informe o custo por hora.";
@@ -481,10 +510,14 @@ export default function TeacherPrivateSignup() {
         cpf: formData.cpf,
         professional_number: PROFESSIONAL_REGISTRATION_DEFAULT,
         address: {
-          street: "Não informado",
-          district: "Não informado",
-          city: formData.city,
+          street: formData.address.trim(),
+          number: formData.addressNumber.trim(),
+          complement: formData.addressComplement.trim() || undefined,
+          district: formData.district.trim(),
+          city: formData.city.trim(),
           state: formData.state,
+          postal_code: formData.postalCode,
+          country: "BR",
         },
         modality: formData.modality === "hibrido" ? "ambos" : formData.modality,
         biography: formData.miniBio,
@@ -542,8 +575,16 @@ export default function TeacherPrivateSignup() {
           phone: formData.phone,
           cpf: formData.cpf,
           professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
-          city: formData.city,
-          state: formData.state,
+          address: {
+            street: formData.address.trim(),
+            number: formData.addressNumber.trim(),
+            complement: formData.addressComplement.trim() || undefined,
+            district: formData.district.trim(),
+            city: formData.city.trim(),
+            state: formData.state,
+            postal_code: formData.postalCode,
+            country: "BR",
+          },
           modality: formData.modality,
           mini_bio: formData.miniBio,
           hourly_rate: Number(formData.hourlyRate),
@@ -769,12 +810,74 @@ export default function TeacherPrivateSignup() {
             <section className="card-kidario p-5 space-y-4">
               <h2 className="font-display text-xl font-semibold text-foreground">Perfil profissional</h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="CEP">
+                <Input
+                  value={formatCepMask(formData.postalCode)}
+                  onChange={(event) => setField("postalCode", extractDigits(event.target.value, 8))}
+                  placeholder="00000-000"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                {isCepLookupLoading && (
+                  <p className="text-xs text-muted-foreground" role="status">
+                    Buscando CEP...
+                  </p>
+                )}
+                <FieldError message={errors.postalCode} />
+              </FormField>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-4">
+                <FormField label="Rua / avenida">
+                  <Input
+                    value={formData.address}
+                    onChange={(event) => setField("address", event.target.value)}
+                    placeholder="Rua das Flores"
+                    autoComplete="address-line1"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.address} />
+                </FormField>
+
+                <FormField label="Número">
+                  <Input
+                    value={formData.addressNumber}
+                    onChange={(event) => setField("addressNumber", event.target.value)}
+                    placeholder="123"
+                    autoComplete="address-line2"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.addressNumber} />
+                </FormField>
+              </div>
+
+              <FormField label="Complemento">
+                <Input
+                  value={formData.addressComplement}
+                  onChange={(event) => setField("addressComplement", event.target.value)}
+                  placeholder="Apartamento, bloco, referência"
+                  autoComplete="address-line3"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+              </FormField>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField label="Bairro">
+                  <Input
+                    value={formData.district}
+                    onChange={(event) => setField("district", event.target.value)}
+                    placeholder="Centro"
+                    className="h-12 rounded-xl bg-muted/50"
+                  />
+                  <FieldError message={errors.district} />
+                </FormField>
+
                 <FormField label="Cidade">
                   <Input
                     value={formData.city}
                     onChange={(event) => setField("city", event.target.value)}
                     placeholder="Cidade"
+                    autoComplete="address-level2"
                     className="h-12 rounded-xl bg-muted/50"
                   />
                   <FieldError message={errors.city} />
@@ -783,7 +886,7 @@ export default function TeacherPrivateSignup() {
                 <FormField label="Estado (UF)">
                   <Select value={formData.state} onValueChange={(value) => setField("state", value)}>
                     <SelectTrigger className="h-12 rounded-xl bg-muted/50">
-                      <SelectValue placeholder="Selecione a UF" />
+                      <SelectValue placeholder="UF" />
                     </SelectTrigger>
                     <SelectContent>
                       {states.map((uf) => (

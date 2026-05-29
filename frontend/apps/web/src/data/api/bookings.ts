@@ -5,6 +5,16 @@ import { buildRequestIdHeader } from "@/lib/observability";
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
 export type PaymentMethod = "credit_card" | "pix" | "boleto";
+export type TeacherDecisionStatus = "pending" | "accepted" | "rejected";
+export type PaymentFlowStatus =
+  | "not_started"
+  | "authorization_required"
+  | "authorized"
+  | "awaiting_payment"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "refunded";
 export type ObjectiveFulfilmentLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface LessonObjectiveItem {
@@ -25,7 +35,18 @@ export interface PaymentCharge {
   paid_amount_cents?: number | null;
   installments: number;
   pix_qr_code_url?: string | null;
+  pix_qr_code?: string | null;
   boleto_url?: string | null;
+  card_brand?: string | null;
+  card_last_four?: string | null;
+  card_holder_name?: string | null;
+  authorization_code?: string | null;
+  authorized_at?: string | null;
+  captured_at?: string | null;
+  expires_at?: string | null;
+  payment_url?: string | null;
+  boleto_barcode?: string | null;
+  boleto_line?: string | null;
   paid_at?: string | null;
   failed_at?: string | null;
   canceled_at?: string | null;
@@ -42,9 +63,13 @@ export interface PaymentOrder {
   provider: string;
   provider_order_id?: string | null;
   provider_order_code?: string | null;
+  requested_payment_method?: PaymentMethod | null;
   amount_cents: number;
   currency: string;
   status: string;
+  authorized_at?: string | null;
+  paid_at?: string | null;
+  expires_at?: string | null;
   charges: PaymentCharge[];
   created_at: string;
   updated_at: string;
@@ -60,6 +85,10 @@ export interface BookingResponse {
   duration_minutes: number;
   modality: BookingModality;
   status: BookingStatus;
+  teacher_decision_status?: TeacherDecisionStatus;
+  teacher_decision_reason?: string | null;
+  teacher_decision_at?: string | null;
+  payment_flow_status?: PaymentFlowStatus;
   cancellation_reason?: string | null;
   confirmed_at?: string | null;
   completed_at?: string | null;
@@ -97,6 +126,9 @@ export interface CreateBookingPayload {
   modality: BookingModality;
   payment_method?: PaymentMethod;
   package_id?: string;
+  card_token?: string;
+  card_id?: string;
+  installments?: number;
 }
 
 export interface CreateBookingResponse {
@@ -105,6 +137,13 @@ export interface CreateBookingResponse {
   booking_status: BookingStatus;
   payment_status: string;
   booking: BookingDetailResponse;
+}
+
+export interface RetryBookingPaymentPayload {
+  payment_method: PaymentMethod;
+  card_token?: string;
+  card_id?: string;
+  installments?: number;
 }
 
 export interface ParentAgendaLesson {
@@ -271,6 +310,8 @@ function mapBooking(raw: BookingResponse): BookingDetailResponse {
 
   return {
     ...raw,
+    teacher_decision_status: raw.teacher_decision_status || "pending",
+    payment_flow_status: raw.payment_flow_status || "not_started",
     parent_profile_id: raw.parent_id,
     child_name: raw.child?.name || "Aluno",
     teacher_name: raw.teacher?.display_name || "Professora",
@@ -312,6 +353,28 @@ export async function createBooking(
   const booking = mapBooking(
     await backendRequest<BookingResponse>({
       path: "/bookings",
+      accessToken,
+      method: "POST",
+      body: payload as unknown as Record<string, unknown>,
+    }),
+  );
+  return {
+    status: "ok",
+    booking_id: booking.id,
+    booking_status: booking.status,
+    payment_status: booking.payment_order?.status || "created",
+    booking,
+  };
+}
+
+export async function retryBookingPayment(
+  accessToken: string,
+  bookingId: string,
+  payload: RetryBookingPaymentPayload,
+): Promise<CreateBookingResponse> {
+  const booking = mapBooking(
+    await backendRequest<BookingResponse>({
+      path: `/bookings/${bookingId}/payment/retry`,
       accessToken,
       method: "POST",
       body: payload as unknown as Record<string, unknown>,

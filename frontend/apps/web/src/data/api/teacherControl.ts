@@ -4,6 +4,16 @@ import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
+export type TeacherDecisionStatus = "pending" | "accepted" | "rejected";
+export type PaymentFlowStatus =
+  | "not_started"
+  | "authorization_required"
+  | "authorized"
+  | "awaiting_payment"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "refunded";
 export type TeacherProgressStatus = "sem_dados" | "atencao" | "consistente";
 export type ObjectiveFulfilmentLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -26,6 +36,10 @@ export interface TeacherAgendaControlLesson {
   duration_minutes: number;
   modality: BookingModality;
   status: BookingStatus;
+  teacher_decision_status?: TeacherDecisionStatus;
+  teacher_decision_reason?: string | null;
+  teacher_decision_at?: string | null;
+  payment_flow_status?: PaymentFlowStatus;
   chat_thread_id?: string | null;
   has_unread_messages: boolean;
   completed_lessons_with_child: number;
@@ -46,6 +60,8 @@ export interface TeacherChatPreview {
   thread_id: string;
   booking_id: string;
   booking_status: BookingStatus;
+  teacher_decision_status?: TeacherDecisionStatus;
+  payment_flow_status?: PaymentFlowStatus;
   child_name: string;
   parent_name: string;
   lesson_starts_at: string;
@@ -126,6 +142,7 @@ export interface TeacherControlCenterOverviewResponse {
 export interface TeacherBookingDecisionPayload {
   action: "accept" | "reject";
   reason?: string;
+  chat_message?: string;
 }
 
 export interface TeacherBookingDecisionResponse {
@@ -241,6 +258,8 @@ function mapOverviewResponse(response: TeacherControlCenterOverviewResponse): Te
       return {
         ...lesson,
         parent_profile_id: lesson.parent_profile_id || lesson.parent_id,
+        teacher_decision_status: lesson.teacher_decision_status || "pending",
+        payment_flow_status: lesson.payment_flow_status || "not_started",
         date_iso: lesson.date_iso || parts.dateIso,
         date_label: lesson.date_label || parts.dateLabel,
         time: lesson.time || parts.time,
@@ -250,6 +269,8 @@ function mapOverviewResponse(response: TeacherControlCenterOverviewResponse): Te
       const parts = deriveDateParts(thread.lesson_starts_at);
       return {
         ...thread,
+        teacher_decision_status: thread.teacher_decision_status || "pending",
+        payment_flow_status: thread.payment_flow_status || "not_started",
         lesson_date_iso: thread.lesson_date_iso || parts.dateIso,
         lesson_time: thread.lesson_time || parts.time,
       };
@@ -309,6 +330,7 @@ export async function decideTeacherBooking(
     body: {
       decision: payload.action === "accept" ? "accept" : "reject",
       reason: payload.reason,
+      chat_message: payload.chat_message,
     },
     fallback: "Não foi possível atualizar o status da aula.",
   });

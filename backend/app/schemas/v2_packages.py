@@ -92,3 +92,12 @@ class PackagePurchaseCreateRequest(BaseModel):
     package_plan_id: UUID
     child_id: UUID
     payment_method: PaymentMethod
+    card_token: str | None = None
+    card_id: str | None = None
+    installments: int = Field(default=1, ge=1, le=12)
+
+    @model_validator(mode="after")
+    def require_card_reference_for_credit_card(self) -> "PackagePurchaseCreateRequest":
+        if self.payment_method == "credit_card" and not (self.card_token or self.card_id):
+            raise ValueError("card_token or card_id is required when payment_method is 'credit_card'.")
+        return self

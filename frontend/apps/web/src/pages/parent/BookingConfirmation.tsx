@@ -55,7 +55,8 @@ export default function BookingConfirmation() {
     );
   }
 
-  const isPending = booking.status === "pendente";
+  const paymentCharge = booking.payment_order?.charges?.[0];
+  const statusCopy = getBookingPaymentCopy(booking);
 
   return (
     <AppShell hideNav>
@@ -64,7 +65,7 @@ export default function BookingConfirmation() {
       <div className="px-4 pt-8 pb-8 space-y-6">
         <section className="card-kidario p-5 text-center">
           <div className="w-14 h-14 rounded-full bg-success/10 mx-auto flex items-center justify-center">
-            {isPending ? (
+            {booking.status === "pendente" ? (
               <LoaderCircle className="w-7 h-7 text-warning" />
             ) : (
               <CheckCircle2 className="w-7 h-7 text-success" />
@@ -72,13 +73,9 @@ export default function BookingConfirmation() {
           </div>
 
           <h1 className="font-display text-2xl font-bold text-foreground mt-4">
-            {isPending ? "Reserva pendente" : "Aula agendada"}
+            {statusCopy.title}
           </h1>
-          <p className="text-muted-foreground mt-2">
-            {isPending
-              ? "Recebemos seu pedido. Assim que o pagamento for confirmado, sua aula será confirmada."
-              : "Seu agendamento foi concluído com sucesso."}
-          </p>
+          <p className="text-muted-foreground mt-2">{statusCopy.description}</p>
         </section>
 
         <BookingSummaryCard
@@ -89,9 +86,32 @@ export default function BookingConfirmation() {
             { label: "Data:", value: booking.date_label },
             { label: "Horário:", value: booking.time },
             { label: "Modalidade:", value: booking.modality === "online" ? "Online" : "Presencial" },
-            { label: "Status:", value: booking.status === "confirmada" ? "Confirmada" : "Pendente" },
+            { label: "Professora:", value: decisionStatusLabel(booking.teacher_decision_status) },
+            { label: "Pagamento:", value: paymentStatusLabel(booking.payment_flow_status) },
           ]}
         />
+
+        {(paymentCharge?.pix_qr_code || paymentCharge?.boleto_line || paymentCharge?.payment_url || paymentCharge?.boleto_url) && (
+          <section className="card-kidario p-4 space-y-2">
+            <h2 className="font-display text-lg font-semibold text-foreground">Pagamento</h2>
+            {paymentCharge.pix_qr_code && (
+              <p className="text-sm text-foreground break-all">{paymentCharge.pix_qr_code}</p>
+            )}
+            {paymentCharge.boleto_line && (
+              <p className="text-sm text-foreground break-all">{paymentCharge.boleto_line}</p>
+            )}
+            {(paymentCharge.payment_url || paymentCharge.boleto_url) && (
+              <a
+                href={paymentCharge.payment_url || paymentCharge.boleto_url || "#"}
+                className="text-primary text-sm font-medium hover:underline"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Abrir pagamento
+              </a>
+            )}
+          </section>
+        )}
 
         <div className="space-y-3">
           <KidarioButton asChild variant="hero" size="xl" fullWidth>
@@ -104,4 +124,50 @@ export default function BookingConfirmation() {
       </div>
     </AppShell>
   );
+}
+
+function decisionStatusLabel(status?: string) {
+  if (status === "accepted") return "Aceita";
+  if (status === "rejected") return "Horário recusado";
+  return "Aguardando";
+}
+
+function paymentStatusLabel(status?: string) {
+  if (status === "paid") return "Pago";
+  if (status === "authorized") return "Autorizado";
+  if (status === "awaiting_payment") return "Aguardando pagamento";
+  if (status === "failed") return "Falhou";
+  if (status === "expired") return "Expirado";
+  return "Não iniciado";
+}
+
+function getBookingPaymentCopy(booking: BookingDetailResponse) {
+  if (booking.status === "confirmada") {
+    return {
+      title: "Aula agendada",
+      description: "Pagamento confirmado e horário aceito pela professora.",
+    };
+  }
+  if (booking.teacher_decision_status === "rejected") {
+    return {
+      title: "Horário em renegociação",
+      description: "A professora não pode neste horário. Use o chat para definir uma nova opção.",
+    };
+  }
+  if (booking.payment_flow_status === "authorized") {
+    return {
+      title: "Cartão autorizado",
+      description: "A cobrança será capturada somente se a professora aceitar o horário.",
+    };
+  }
+  if (booking.payment_flow_status === "awaiting_payment") {
+    return {
+      title: "Pagamento pendente",
+      description: "Conclua o pagamento para confirmar a aula.",
+    };
+  }
+  return {
+    title: "Reserva pendente",
+    description: "Recebemos sua solicitação e estamos aguardando a professora.",
+  };
 }

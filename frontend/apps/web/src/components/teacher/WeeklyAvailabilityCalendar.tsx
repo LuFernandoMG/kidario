@@ -70,14 +70,14 @@ export function WeeklyAvailabilityCalendar({
         Toque em cada bloco para marcar disponibilidade. Cada bloco representa {duration} minutos.
       </p>
 
-      <div className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="min-w-[760px]">
+      <div className="max-h-[640px] overflow-auto rounded-lg border border-border bg-background">
+        <div className="min-w-[760px] p-[5px]">
           <div className="grid grid-cols-[72px_repeat(7,minmax(0,1fr))] gap-2">
-            <div />
+            <div className="sticky left-0 top-0 z-30 bg-background" />
             {weekDays.map((day) => (
               <div
                 key={day.value}
-                className="text-xs font-semibold text-muted-foreground text-center py-1"
+                className="sticky top-0 z-20 bg-background py-2 text-center text-xs font-semibold text-muted-foreground"
               >
                 {day.label}
               </div>
@@ -113,7 +113,7 @@ function CalendarRow({
 }) {
   return (
     <>
-      <div className="text-xs text-muted-foreground py-2">{time}</div>
+      <div className="sticky left-0 z-10 bg-background py-2 pr-2 text-xs text-muted-foreground">{time}</div>
       {weekDays.map((day) => {
         const key = `${day.value}|${time}`;
         const isActive = selectedKeys.has(key);

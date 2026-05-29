@@ -18,6 +18,7 @@ import { signUpWithBackend } from "@/data/api/auth";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
 import { childGenderOptions, childGradeOptions, normalizeChildGender, type ChildGender } from "@/lib/childProfile";
 import { TurnstileWidget } from "@/components/security/TurnstileWidget";
+import { useViaCepAutocomplete } from "@/hooks/useViaCepAutocomplete";
 
 interface ChildFormData {
   name: string;
@@ -39,6 +40,12 @@ interface ParentSignupFormData {
   confirmPassword: string;
   birthDate: string;
   address: string;
+  addressNumber: string;
+  addressComplement: string;
+  district: string;
+  city: string;
+  state: string;
+  postalCode: string;
   bio: string;
   children: ChildFormData[];
 }
@@ -85,6 +92,12 @@ const formatCpfMask = (value: string): string => {
   if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
   if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
+const formatCepMask = (value: string): string => {
+  const digits = extractDigits(value, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 };
 
 const normalizeEmailInput = (value: string): string => value.replace(/\s+/g, "");
@@ -153,6 +166,12 @@ export default function Signup() {
     confirmPassword: "",
     birthDate: "",
     address: "",
+    addressNumber: "",
+    addressComplement: "",
+    district: "",
+    city: "",
+    state: "",
+    postalCode: "",
     bio: "",
     children: [createEmptyChild()],
   });
@@ -160,6 +179,11 @@ export default function Signup() {
   const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || "";
   const isCaptchaConfigured = Boolean(turnstileSiteKey);
   const requireCaptcha = captchaEnabledFlag && isCaptchaConfigured;
+  const { isLoading: isCepLookupLoading } = useViaCepAutocomplete({
+    postalCode: formData.postalCode,
+    setFormData,
+    setErrors,
+  });
 
   const setField = (field: keyof ParentSignupFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -262,7 +286,18 @@ export default function Signup() {
     }
 
     if (step === 1) {
-      if (!formData.address.trim()) nextErrors.address = "Informe seu endereço.";
+      if (!formData.address.trim()) nextErrors.address = "Informe sua rua/avenida.";
+      if (!formData.addressNumber.trim()) nextErrors.addressNumber = "Informe o número.";
+      if (!formData.district.trim()) nextErrors.district = "Informe o bairro.";
+      if (!formData.city.trim()) nextErrors.city = "Informe a cidade.";
+      if (!formData.state.trim()) nextErrors.state = "Informe o estado.";
+      if (formData.state.trim() && formData.state.trim().length !== 2) {
+        nextErrors.state = "Use a sigla do estado com 2 letras.";
+      }
+      if (!formData.postalCode.trim()) nextErrors.postalCode = "Informe o CEP.";
+      if (formData.postalCode && formData.postalCode.length !== 8) {
+        nextErrors.postalCode = "Informe o CEP completo.";
+      }
       if (!formData.bio.trim()) {
         nextErrors.bio = "Conte um pouco sobre o que você busca para seus filhos.";
       }
@@ -325,10 +360,14 @@ export default function Signup() {
         cpf: formData.cpf,
         birth_date: formData.birthDate,
         address: {
-          street: formData.address,
-          district: "Não informado",
-          city: "Não informado",
-          state: "NA",
+          street: formData.address.trim(),
+          number: formData.addressNumber.trim(),
+          complement: formData.addressComplement.trim() || undefined,
+          district: formData.district.trim(),
+          city: formData.city.trim(),
+          state: formData.state.trim().toUpperCase(),
+          postal_code: formData.postalCode,
+          country: "BR",
         },
         bio: formData.bio,
         children: formData.children.map((child) => ({
@@ -357,7 +396,16 @@ export default function Signup() {
           phone: formData.phone,
           cpf: formData.cpf,
           birth_date: formData.birthDate,
-          address: formData.address,
+          address: {
+            street: formData.address.trim(),
+            number: formData.addressNumber.trim(),
+            complement: formData.addressComplement.trim() || undefined,
+            district: formData.district.trim(),
+            city: formData.city.trim(),
+            state: formData.state.trim().toUpperCase(),
+            postal_code: formData.postalCode,
+            country: "BR",
+          },
           bio: formData.bio,
           children: formData.children.map((child) => ({
             name: child.name,
@@ -631,17 +679,116 @@ export default function Signup() {
             <h2 className="font-display text-xl font-semibold text-foreground">Perfil da família</h2>
 
             <div className="space-y-2">
-              <label htmlFor="address" className="text-sm font-medium text-foreground">
-                Endereço
+              <label htmlFor="postalCode" className="text-sm font-medium text-foreground">
+                CEP
               </label>
               <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setField("address", e.target.value)}
-                placeholder="Rua, número, bairro, cidade"
+                id="postalCode"
+                value={formatCepMask(formData.postalCode)}
+                onChange={(e) => setField("postalCode", extractDigits(e.target.value, 8))}
+                placeholder="00000-000"
+                inputMode="numeric"
+                autoComplete="postal-code"
                 className="h-12 rounded-xl bg-muted/50"
               />
-              <FieldError message={errors.address} />
+              {isCepLookupLoading && (
+                <p className="text-xs text-muted-foreground" role="status">
+                  Buscando CEP...
+                </p>
+              )}
+              <FieldError message={errors.postalCode} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-4">
+              <div className="space-y-2">
+                <label htmlFor="address" className="text-sm font-medium text-foreground">
+                  Rua / avenida
+                </label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setField("address", e.target.value)}
+                  placeholder="Rua das Flores"
+                  autoComplete="address-line1"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.address} />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="addressNumber" className="text-sm font-medium text-foreground">
+                  Número
+                </label>
+                <Input
+                  id="addressNumber"
+                  value={formData.addressNumber}
+                  onChange={(e) => setField("addressNumber", e.target.value)}
+                  placeholder="123"
+                  autoComplete="address-line2"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.addressNumber} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="addressComplement" className="text-sm font-medium text-foreground">
+                Complemento
+              </label>
+              <Input
+                id="addressComplement"
+                value={formData.addressComplement}
+                onChange={(e) => setField("addressComplement", e.target.value)}
+                placeholder="Apartamento, bloco, referência"
+                autoComplete="address-line3"
+                className="h-12 rounded-xl bg-muted/50"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="district" className="text-sm font-medium text-foreground">
+                  Bairro
+                </label>
+                <Input
+                  id="district"
+                  value={formData.district}
+                  onChange={(e) => setField("district", e.target.value)}
+                  placeholder="Centro"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.district} />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="city" className="text-sm font-medium text-foreground">
+                  Cidade
+                </label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => setField("city", e.target.value)}
+                  placeholder="São Paulo"
+                  autoComplete="address-level2"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.city} />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="state" className="text-sm font-medium text-foreground">
+                  Estado
+                </label>
+                <Input
+                  id="state"
+                  value={formData.state}
+                  onChange={(e) => setField("state", e.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="SP"
+                  autoComplete="address-level1"
+                  className="h-12 rounded-xl bg-muted/50"
+                />
+                <FieldError message={errors.state} />
+              </div>
             </div>
 
             <div className="space-y-2">

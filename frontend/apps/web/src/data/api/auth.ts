@@ -10,8 +10,6 @@ interface AddressInputPayload {
   state?: string;
   postal_code?: string;
   country?: string;
-  latitude?: number;
-  longitude?: number;
 }
 
 interface ChildSignupPayload {

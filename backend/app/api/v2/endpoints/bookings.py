@@ -17,6 +17,7 @@ from app.schemas.v2_bookings import (
     BookingCompleteRequest,
     BookingCreateRequest,
     BookingDecisionRequest,
+    BookingPaymentRetryRequest,
     BookingRescheduleRequest,
     BookingsResponse,
     TeacherAvailabilitySlotsResponse,
@@ -37,6 +38,7 @@ from app.services.booking_v2_service import (
     list_parent_bookings_v2,
     list_teacher_bookings_v2,
     reschedule_booking_v2,
+    retry_booking_payment_v2,
     teacher_reschedule_booking_v2,
 )
 
@@ -182,6 +184,20 @@ def post_booking_decision_endpoint(
 ) -> Booking:
     try:
         data = _run_write_transaction(db, lambda: decide_booking_v2(db, user, booking_id, payload))
+    except Exception as exc:
+        _handle_booking_error(exc)
+    return Booking(**data)
+
+
+@router.post("/bookings/{booking_id}/payment/retry", response_model=Booking)
+def post_booking_payment_retry_endpoint(
+    booking_id: UUID,
+    payload: BookingPaymentRetryRequest,
+    user: AuthUser = Security(get_current_user),
+    db: Session = Depends(get_db),
+) -> Booking:
+    try:
+        data = _run_write_transaction(db, lambda: retry_booking_payment_v2(db, user, booking_id, payload))
     except Exception as exc:
         _handle_booking_error(exc)
     return Booking(**data)

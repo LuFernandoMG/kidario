@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,12 @@ from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.db.session import get_db
 from app.schemas.v2_bookings import PaymentOrder, PaymentOrdersResponse
+from app.schemas.v2_payments import (
+    PagarmeWebhookResponse,
+    TeacherPaymentRecipientSyncResponse,
+    TeacherPayoutProfile,
+    TeacherPayoutProfileUpsertRequest,
+)
 from app.services.booking_v2_service import (
     BookingNotFoundError,
     BookingPermissionError,
@@ -16,6 +22,15 @@ from app.services.booking_v2_service import (
     get_booking_payment_v2,
     list_parent_payments_v2,
     list_teacher_payments_v2,
+)
+from app.services.payment_v2_service import (
+    PaymentNotFoundError,
+    PaymentPermissionError,
+    PaymentValidationError,
+    get_teacher_payout_profile_v2,
+    process_pagarme_webhook_v2,
+    sync_teacher_payment_recipient_v2,
+    upsert_teacher_payout_profile_v2,
 )
 
 router = APIRouter(tags=["v2-payments"])
@@ -42,6 +57,12 @@ def _handle_payment_error(exc: Exception) -> None:
     if isinstance(exc, BookingPermissionError):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     if isinstance(exc, BookingValidationError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if isinstance(exc, PaymentNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, PaymentPermissionError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if isinstance(exc, PaymentValidationError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if isinstance(exc, SQLAlchemyError):
         _raise_http_from_sql_error(exc)
@@ -87,3 +108,59 @@ def list_teacher_payments_endpoint(
     except Exception as exc:
         _handle_payment_error(exc)
     return PaymentOrdersResponse(**data)
+
+
+@router.get("/teachers/me/payout-profile", response_model=TeacherPayoutProfile)
+def get_teacher_payout_profile_endpoint(
+    user: AuthUser = Security(get_current_teacher_user),
+    db: Session = Depends(get_db),
+) -> TeacherPayoutProfile:
+    try:
+        data = get_teacher_payout_profile_v2(db, user)
+    except Exception as exc:
+        _handle_payment_error(exc)
+    return TeacherPayoutProfile(**data)
+
+
+@router.patch("/teachers/me/payout-profile", response_model=TeacherPayoutProfile)
+def patch_teacher_payout_profile_endpoint(
+    payload: TeacherPayoutProfileUpsertRequest,
+    user: AuthUser = Security(get_current_teacher_user),
+    db: Session = Depends(get_db),
+) -> TeacherPayoutProfile:
+    try:
+        with db.begin():
+            data = upsert_teacher_payout_profile_v2(db, user, payload)
+    except Exception as exc:
+        _handle_payment_error(exc)
+    return TeacherPayoutProfile(**data)
+
+
+@router.post("/teachers/me/payment-recipient/sync", response_model=TeacherPaymentRecipientSyncResponse)
+def post_teacher_payment_recipient_sync_endpoint(
+    user: AuthUser = Security(get_current_teacher_user),
+    db: Session = Depends(get_db),
+) -> TeacherPaymentRecipientSyncResponse:
+    try:
+        with db.begin():
+            data = sync_teacher_payment_recipient_v2(db, user)
+    except Exception as exc:
+        _handle_payment_error(exc)
+    return TeacherPaymentRecipientSyncResponse(**data)
+
+
+@router.post("/payments/pagarme/webhook", response_model=PagarmeWebhookResponse)
+async def post_pagarme_webhook_endpoint(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> PagarmeWebhookResponse:
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload.") from exc
+    try:
+        with db.begin():
+            data = process_pagarme_webhook_v2(db, payload)
+    except Exception as exc:
+        _handle_payment_error(exc)
+    return PagarmeWebhookResponse(**data)

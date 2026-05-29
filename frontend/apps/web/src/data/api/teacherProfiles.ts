@@ -10,6 +10,20 @@ import {
   profileBackendRequest,
 } from "@/data/api/profiles";
 
+interface AddressDetail {
+  id?: string;
+  street: string;
+  number?: string | null;
+  complement?: string | null;
+  district: string;
+  city: string;
+  state: string;
+  postal_code?: string | null;
+  country?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 export interface BackendTeacherProfileResponse {
   id: string;
   profile: BackendProfileView;
@@ -18,6 +32,7 @@ export interface BackendTeacherProfileResponse {
   professional_registration?: string | null;
   city?: string | null;
   state?: string | null;
+  address_detail?: AddressDetail | null;
   modality?: string | null;
   mini_bio?: string | null;
   hourly_rate?: number | null;
@@ -83,6 +98,16 @@ export interface TeacherProfilePatchPayload {
   professional_registration?: string;
   city?: string;
   state?: string;
+  address_detail?: {
+    street?: string;
+    number?: string;
+    complement?: string;
+    district?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
+  };
   modality?: string;
   mini_bio?: string;
   hourly_rate?: number;
@@ -126,10 +151,7 @@ interface V2TeacherProfile {
   profile_photo_file_name?: string | null;
   profile_photo_url?: string | null;
   hide_experience: boolean;
-  address: {
-    city: string;
-    state: string;
-  };
+  address: AddressDetail;
   skills: { id: string; skill: string }[];
   academic_records: BackendTeacherProfileResponse["formations"];
   experiences: {
@@ -174,6 +196,7 @@ function mapTeacherProfile(payload: V2TeacherProfile): BackendTeacherProfileResp
     professional_registration: payload.professional_number,
     city: payload.address?.city,
     state: payload.address?.state,
+    address_detail: payload.address,
     modality: fromBackendModality(payload.modality),
     mini_bio: payload.biography,
     hourly_rate: payload.hourly_rate_cents != null ? Math.round(payload.hourly_rate_cents / 100) : null,
@@ -209,7 +232,9 @@ function mapTeacherPatchPayload(payload: TeacherProfilePatchPayload): Record<str
   if (payload.lesson_duration_minutes !== undefined) next.lesson_duration_minutes = payload.lesson_duration_minutes;
   if (payload.profile_photo_file_name !== undefined) next.profile_photo_file_name = payload.profile_photo_file_name;
   if (payload.request_experience_anonymity !== undefined) next.hide_experience = payload.request_experience_anonymity;
-  if (payload.city !== undefined || payload.state !== undefined) {
+  if (payload.address_detail !== undefined) {
+    next.address = payload.address_detail;
+  } else if (payload.city !== undefined || payload.state !== undefined) {
     next.address = {
       city: payload.city,
       state: payload.state,

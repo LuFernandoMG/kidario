@@ -201,6 +201,25 @@ def test_patch_parent_returns_normalized_profile(client: TestClient, monkeypatch
     assert "cpf" not in body
 
 
+def test_patch_parent_rejects_client_side_coordinates(client: TestClient) -> None:
+    response = client.patch(
+        "/api/v2/parents/me",
+        json={
+            "address": {
+                "street": "Rua A",
+                "number": "123",
+                "district": "Centro",
+                "city": "Sao Paulo",
+                "state": "SP",
+                "latitude": -23.55,
+                "longitude": -46.63,
+            },
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_patch_teacher_returns_normalized_profile(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(profiles_endpoints, "update_teacher_profile_v2", lambda db, user, payload: _teacher_profile())
 
