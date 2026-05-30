@@ -282,7 +282,7 @@ export function HomePage() {
         <div className="container hero-layout">
           <div className="hero-copy">
             <p data-hero-reveal className="section-eyebrow">
-              Aprendizagem personalizada para famílias
+              Aulas personalizadas para crianças
             </p>
             <h1 data-hero-reveal className="section-title">
               Reforço certo para cada fase do <em>aprendizado</em>.
