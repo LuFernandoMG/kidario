@@ -13,7 +13,13 @@ export interface TeacherPayoutProfile {
   account_number_masked: string;
   account_check_digit?: string | null;
   account_type: "checking" | "savings";
+  birthdate?: string | null;
+  monthly_income_cents?: number | null;
+  professional_occupation?: string | null;
   status: "pending" | "active" | "rejected" | "disabled";
+  provider?: string | null;
+  provider_recipient_id?: string | null;
+  recipient_status?: "pending" | "active" | "rejected" | "disabled" | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +34,23 @@ export interface TeacherPayoutProfilePayload {
   account_number: string;
   account_check_digit?: string;
   account_type: "checking" | "savings";
+  birthdate?: string | null;
+  monthly_income_cents?: number | null;
+  professional_occupation?: string | null;
+  current_password?: string;
+}
+
+class MissingTeacherPayoutProfileError extends Error {
+  status = 404;
+
+  constructor() {
+    super("Teacher payout profile not found.");
+  }
+}
+
+export function isMissingTeacherPayoutProfileError(error: unknown) {
+  return error instanceof MissingTeacherPayoutProfileError
+    || (error instanceof Error && error.message.toLowerCase().includes("teacher payout profile not found"));
 }
 
 async function paymentRequest<TResponse>(params: {
@@ -53,6 +76,10 @@ async function paymentRequest<TResponse>(params: {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 404 && path === "/teachers/me/payout-profile") {
+      throw new MissingTeacherPayoutProfileError();
+    }
+
     throwBackendError({
       status: response.status,
       payload,
@@ -68,6 +95,15 @@ export async function getTeacherPayoutProfile(accessToken: string) {
     path: "/teachers/me/payout-profile",
     accessToken,
   });
+}
+
+export async function getTeacherPayoutProfileOrNull(accessToken: string) {
+  try {
+    return await getTeacherPayoutProfile(accessToken);
+  } catch (error) {
+    if (isMissingTeacherPayoutProfileError(error)) return null;
+    throw error;
+  }
 }
 
 export async function patchTeacherPayoutProfile(accessToken: string, payload: TeacherPayoutProfilePayload) {

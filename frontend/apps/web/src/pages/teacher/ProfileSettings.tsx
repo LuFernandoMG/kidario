@@ -1,6 +1,15 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { CalendarDays, Camera, Check, LogOut, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Camera,
+  Check,
+  LogOut,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Input } from "@/components/ui/input";
@@ -33,12 +42,6 @@ import {
   patchTeacherProfile,
   uploadTeacherProfilePhoto,
 } from "@/data/api/teacherProfiles";
-import {
-  getTeacherPayoutProfile,
-  patchTeacherPayoutProfile,
-  syncTeacherPaymentRecipient,
-  type TeacherPayoutProfilePayload,
-} from "@/data/api/payments";
 
 interface FormationForm {
   id?: string;
@@ -82,8 +85,6 @@ interface TeacherFormState {
   weeklyAvailability: (WeeklyAvailabilitySlot & { id?: string })[];
 }
 
-type PayoutFormState = TeacherPayoutProfilePayload;
-
 const emptyForm: TeacherFormState = {
   firstName: "",
   lastName: "",
@@ -106,18 +107,6 @@ const emptyForm: TeacherFormState = {
   formations: [],
   experiences: [],
   weeklyAvailability: [],
-};
-
-const emptyPayoutForm: PayoutFormState = {
-  legal_name: "",
-  document_type: "cpf",
-  document_number: "",
-  bank_code: "",
-  branch_number: "",
-  branch_check_digit: "",
-  account_number: "",
-  account_check_digit: "",
-  account_type: "checking",
 };
 
 const durationOptions = [
@@ -222,9 +211,6 @@ export default function TeacherProfileSettings() {
   const [notice, setNotice] = useState("");
   const [email, setEmail] = useState("");
   const [form, setForm] = useState<TeacherFormState>(emptyForm);
-  const [payoutForm, setPayoutForm] = useState<PayoutFormState>(emptyPayoutForm);
-  const [payoutStatus, setPayoutStatus] = useState<string>("pending");
-  const [isSavingPayout, setIsSavingPayout] = useState(false);
   const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false);
   const [isAvailabilityModalEditing, setIsAvailabilityModalEditing] = useState(false);
   const [availabilityModalSnapshot, setAvailabilityModalSnapshot] = useState<TeacherFormState["weeklyAvailability"]>([]);
@@ -310,23 +296,6 @@ export default function TeacherProfileSettings() {
       setIsEditing(false);
       setIsAvailabilityModalEditing(false);
       setAvailabilityModalSnapshot([]);
-      try {
-        const payout = await getTeacherPayoutProfile(accessToken);
-        setPayoutForm((current) => ({
-          ...current,
-          legal_name: payout.legal_name,
-          document_type: payout.document_type,
-          bank_code: payout.bank_code,
-          branch_number: payout.branch_number,
-          branch_check_digit: payout.branch_check_digit || "",
-          account_check_digit: payout.account_check_digit || "",
-          account_type: payout.account_type,
-        }));
-        setPayoutStatus(payout.status);
-      } catch {
-        setPayoutForm(emptyPayoutForm);
-        setPayoutStatus("pending");
-      }
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : "Não foi possível carregar o perfil da professora.",
@@ -345,29 +314,6 @@ export default function TeacherProfileSettings() {
     value: string | boolean,
   ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const setPayoutField = <K extends keyof PayoutFormState>(field: K, value: PayoutFormState[K]) => {
-    setPayoutForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSavePayout = async () => {
-    const accessToken = getSupabaseAccessToken();
-    if (!accessToken) return;
-    setIsSavingPayout(true);
-    setNotice("");
-    setError("");
-    try {
-      const payout = await patchTeacherPayoutProfile(accessToken, payoutForm);
-      setPayoutStatus(payout.status);
-      await syncTeacherPaymentRecipient(accessToken);
-      setPayoutStatus("active");
-      setNotice("Dados financeiros atualizados.");
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Não foi possível salvar os dados financeiros.");
-    } finally {
-      setIsSavingPayout(false);
-    }
   };
 
   const updateFormation = (index: number, field: keyof FormationForm, value: string) => {
@@ -989,94 +935,6 @@ export default function TeacherProfileSettings() {
                   Solicitar anonimato da experiência profissional
                 </label>
               </div>
-            </section>
-
-            <section className="card-kidario p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="font-display text-lg font-semibold text-foreground">Dados financeiros</h2>
-                <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                  {payoutStatus === "active" ? "Recipient ativo" : "Pendente"}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Nome legal">
-                  <Input
-                    value={payoutForm.legal_name}
-                    onChange={(event) => setPayoutField("legal_name", event.target.value)}
-                  />
-                </Field>
-                <Field label="Documento">
-                  <div className="grid grid-cols-[110px_1fr] gap-2">
-                    <Select
-                      value={payoutForm.document_type}
-                      onValueChange={(value) => setPayoutField("document_type", value as PayoutFormState["document_type"])}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cpf">CPF</SelectItem>
-                        <SelectItem value="cnpj">CNPJ</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      value={payoutForm.document_number}
-                      onChange={(event) => setPayoutField("document_number", event.target.value)}
-                    />
-                  </div>
-                </Field>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Field label="Banco">
-                  <Input
-                    value={payoutForm.bank_code}
-                    onChange={(event) => setPayoutField("bank_code", event.target.value)}
-                  />
-                </Field>
-                <Field label="Agência">
-                  <Input
-                    value={payoutForm.branch_number}
-                    onChange={(event) => setPayoutField("branch_number", event.target.value)}
-                  />
-                </Field>
-                <Field label="Dígito agência">
-                  <Input
-                    value={payoutForm.branch_check_digit || ""}
-                    onChange={(event) => setPayoutField("branch_check_digit", event.target.value)}
-                  />
-                </Field>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Field label="Conta">
-                  <Input
-                    value={payoutForm.account_number}
-                    onChange={(event) => setPayoutField("account_number", event.target.value)}
-                  />
-                </Field>
-                <Field label="Dígito conta">
-                  <Input
-                    value={payoutForm.account_check_digit || ""}
-                    onChange={(event) => setPayoutField("account_check_digit", event.target.value)}
-                  />
-                </Field>
-                <Field label="Tipo">
-                  <Select
-                    value={payoutForm.account_type}
-                    onValueChange={(value) => setPayoutField("account_type", value as PayoutFormState["account_type"])}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="checking">Conta corrente</SelectItem>
-                      <SelectItem value="savings">Poupança</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-              <KidarioButton type="button" variant="outline" onClick={handleSavePayout} disabled={isSavingPayout}>
-                {isSavingPayout ? "Salvando..." : "Salvar e sincronizar recipient"}
-              </KidarioButton>
             </section>
 
             <section className="card-kidario p-4 space-y-3">

@@ -331,6 +331,19 @@ Configure in `.env`:
 - `KIDARIO_PAGARME_WEBHOOK_SECRET=<webhook-secret>`
 - `KIDARIO_PAGARME_PLATFORM_RECIPIENT_ID=<kidario-recipient-id>`
 - `KIDARIO_PLATFORM_FEE_PERCENT=20`
+- `KIDARIO_PUBLIC_SITE_URL=https://use.kidario.app` (sent as recipient `site_url`)
+
+For local/sandbox validation, use Pagar.me test keys. The backend only calls Pagar.me
+when `KIDARIO_PAGARME_SECRET_KEY` is present; without it, deterministic fake PSP
+responses are used.
+
+To sync an existing teacher payout profile with Pagar.me test:
+
+```bash
+PYTHONPATH=. .venv/bin/python scripts/sync_pagarme_recipient.py --email hello@luisfernando.io
+```
+
+The script rejects non-test-looking secret keys unless `--allow-live-key` is passed.
 
 ## Teacher Activity Planner (LLM)
 

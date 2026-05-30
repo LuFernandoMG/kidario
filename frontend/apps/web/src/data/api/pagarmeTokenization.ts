@@ -36,7 +36,6 @@ export async function tokenizePagarmeCard(input: PagarmeCardTokenizeInput): Prom
   const response = await fetch(`https://api.pagar.me/core/v5/tokens?appId=${encodeURIComponent(appId)}`, {
     method: "POST",
     headers: {
-      Accept: "application/json",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

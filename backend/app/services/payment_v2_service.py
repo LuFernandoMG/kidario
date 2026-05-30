@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import AuthUser
 from app.schemas.v2_payments import TeacherPayoutProfileUpsertRequest
+from app.services.auth_service import AuthPasswordVerificationError, verify_supabase_password
 from app.services.identity_service import (
     IdentityNotFoundError,
     IdentityPermissionError,
@@ -42,6 +43,29 @@ def _digits_only(value: str | None) -> str:
     return "".join(ch for ch in str(value or "") if ch.isdigit())
 
 
+def _optional_bank_digit(value: str | None) -> str | None:
+    cleaned = str(value or "").strip()
+    return cleaned or None
+
+
+def _has_payout_profile(db: Session, teacher_id: UUID) -> bool:
+    return bool(
+        db.execute(
+            text("select 1 from teacher_payout_profiles where teacher_id = :teacher_id"),
+            {"teacher_id": str(teacher_id)},
+        ).scalar()
+    )
+
+
+def _resolve_user_email(db: Session, user: AuthUser) -> str | None:
+    if user.email:
+        return user.email
+    return db.execute(
+        text("select email from users where id = :user_id"),
+        {"user_id": str(user.user_id)},
+    ).scalar()
+
+
 def _mask_tail(value: str | None, visible: int = 4) -> str:
     digits = _digits_only(value)
     if not digits:
@@ -62,7 +86,13 @@ def _map_payout_profile(row: dict) -> dict:
         "account_number_masked": _mask_tail(row.get("account_number")),
         "account_check_digit": row["account_check_digit"],
         "account_type": row["account_type"],
+        "birthdate": row.get("birthdate"),
+        "monthly_income_cents": row.get("monthly_income_cents"),
+        "professional_occupation": row.get("professional_occupation"),
         "status": row["status"],
+        "provider": row.get("provider"),
+        "provider_recipient_id": row.get("provider_recipient_id"),
+        "recipient_status": row.get("recipient_status"),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -74,9 +104,16 @@ def get_teacher_payout_profile_v2(db: Session, user: AuthUser) -> dict:
         db.execute(
             text(
                 """
-                select *
-                from teacher_payout_profiles
-                where teacher_id = :teacher_id
+                select
+                  tpp.*,
+                  ppr.provider,
+                  ppr.provider_recipient_id,
+                  ppr.status as recipient_status
+                from teacher_payout_profiles tpp
+                left join payment_provider_recipients ppr
+                  on ppr.teacher_id = tpp.teacher_id
+                 and ppr.provider = 'pagarme'
+                where tpp.teacher_id = :teacher_id
                 """
             ),
             {"teacher_id": str(teacher_id)},
@@ -91,6 +128,19 @@ def get_teacher_payout_profile_v2(db: Session, user: AuthUser) -> dict:
 
 def upsert_teacher_payout_profile_v2(db: Session, user: AuthUser, payload: TeacherPayoutProfileUpsertRequest) -> dict:
     teacher_id = _require_teacher(db, user)
+    if _has_payout_profile(db, teacher_id):
+        if not payload.current_password:
+            raise PaymentValidationError("Informe sua senha para alterar os dados de recebimento.")
+        try:
+            verify_supabase_password(
+                get_settings(),
+                email=_resolve_user_email(db, user),
+                password=payload.current_password,
+                expected_user_id=user.user_id,
+            )
+        except AuthPasswordVerificationError as exc:
+            raise PaymentValidationError(str(exc)) from exc
+
     row = (
         db.execute(
             text(
@@ -106,6 +156,9 @@ def upsert_teacher_payout_profile_v2(db: Session, user: AuthUser, payload: Teach
                   account_number,
                   account_check_digit,
                   account_type,
+                  birthdate,
+                  monthly_income_cents,
+                  professional_occupation,
                   status
                 )
                 values (
@@ -119,6 +172,9 @@ def upsert_teacher_payout_profile_v2(db: Session, user: AuthUser, payload: Teach
                   :account_number,
                   :account_check_digit,
                   :account_type,
+                  :birthdate,
+                  :monthly_income_cents,
+                  :professional_occupation,
                   'pending'
                 )
                 on conflict (teacher_id) do update
@@ -131,6 +187,9 @@ def upsert_teacher_payout_profile_v2(db: Session, user: AuthUser, payload: Teach
                     account_number = excluded.account_number,
                     account_check_digit = excluded.account_check_digit,
                     account_type = excluded.account_type,
+                    birthdate = excluded.birthdate,
+                    monthly_income_cents = excluded.monthly_income_cents,
+                    professional_occupation = excluded.professional_occupation,
                     status = 'pending',
                     updated_at = now()
                 returning *
@@ -143,10 +202,15 @@ def upsert_teacher_payout_profile_v2(db: Session, user: AuthUser, payload: Teach
                 "document_number": _digits_only(payload.document_number),
                 "bank_code": _digits_only(payload.bank_code) or payload.bank_code.strip(),
                 "branch_number": _digits_only(payload.branch_number) or payload.branch_number.strip(),
-                "branch_check_digit": payload.branch_check_digit,
+                "branch_check_digit": _optional_bank_digit(payload.branch_check_digit),
                 "account_number": _digits_only(payload.account_number) or payload.account_number.strip(),
-                "account_check_digit": payload.account_check_digit,
+                "account_check_digit": _optional_bank_digit(payload.account_check_digit),
                 "account_type": payload.account_type,
+                "birthdate": payload.birthdate,
+                "monthly_income_cents": payload.monthly_income_cents,
+                "professional_occupation": (
+                    payload.professional_occupation.strip() if payload.professional_occupation else None
+                ),
             },
         )
         .mappings()
@@ -161,10 +225,22 @@ def sync_teacher_payment_recipient_v2(db: Session, user: AuthUser) -> dict:
         db.execute(
             text(
                 """
-                select tpp.*, u.email
+                select
+                  tpp.*,
+                  u.email,
+                  t.phone,
+                  a.street as address_street,
+                  a.number as address_number,
+                  a.complement as address_complement,
+                  a.district as address_district,
+                  a.city as address_city,
+                  a.state as address_state,
+                  a.postal_code as address_postal_code,
+                  a.country as address_country
                 from teacher_payout_profiles tpp
                 join teachers t on t.id = tpp.teacher_id
                 join users u on u.id = t.user_id
+                join addresses a on a.id = t.address_id
                 where tpp.teacher_id = :teacher_id
                 """
             ),

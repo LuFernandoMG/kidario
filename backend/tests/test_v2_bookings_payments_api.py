@@ -17,6 +17,8 @@ from app.api.v2.endpoints import payments as payments_endpoints
 from app.core.security import AuthUser
 from app.db.session import get_db
 from app.main import app
+from app.schemas.v2_payments import TeacherPayoutProfileUpsertRequest
+from app.services import payment_v2_service
 
 
 NOW = "2026-05-26T10:00:00Z"
@@ -33,6 +35,52 @@ class _DummyTransaction(AbstractContextManager[None]):
 class _DummySession:
     def begin(self) -> _DummyTransaction:
         return _DummyTransaction()
+
+
+class _ActiveDummySession(_DummySession):
+    def __init__(self) -> None:
+        self.commits = 0
+        self.rollbacks = 0
+
+    def in_transaction(self) -> bool:
+        return True
+
+    def commit(self) -> None:
+        self.commits += 1
+
+    def rollback(self) -> None:
+        self.rollbacks += 1
+
+
+class _ScalarResult:
+    def __init__(self, value) -> None:
+        self.value = value
+
+    def scalar(self):
+        return self.value
+
+
+class _MappingResult:
+    def __init__(self, value: dict) -> None:
+        self.value = value
+
+    def mappings(self):
+        return self
+
+    def first(self):
+        return self.value
+
+
+class _PayoutUpsertSession:
+    def __init__(self, *, existing_profile: bool) -> None:
+        self.existing_profile = existing_profile
+        self.statements = 0
+
+    def execute(self, statement, params=None):
+        self.statements += 1
+        if self.statements == 1:
+            return _ScalarResult(1 if self.existing_profile else None)
+        return _MappingResult(_payout_profile())
 
 
 @pytest.fixture
@@ -86,6 +134,31 @@ def _payment_order() -> dict:
                 "updated_at": NOW,
             }
         ],
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+
+
+def _payout_profile() -> dict:
+    return {
+        "id": UUID("88888888-8888-8888-8888-888888888888"),
+        "teacher_id": UUID("33333333-3333-3333-3333-333333333333"),
+        "legal_name": "Ana Silva",
+        "document_type": "cpf",
+        "document_number_masked": "*********01",
+        "bank_code": "260",
+        "branch_number": "0001",
+        "branch_check_digit": None,
+        "account_number_masked": "****6789",
+        "account_check_digit": None,
+        "account_type": "checking",
+        "birthdate": "1984-10-30",
+        "monthly_income_cents": 350000,
+        "professional_occupation": "Professor(a)",
+        "status": "pending",
+        "provider": None,
+        "provider_recipient_id": None,
+        "recipient_status": None,
         "created_at": NOW,
         "updated_at": NOW,
     }
@@ -267,3 +340,120 @@ def test_get_v2_parent_payments(client: TestClient, monkeypatch: pytest.MonkeyPa
 
     assert response.status_code == 200
     assert response.json()["payments"][0]["provider"] == "legacy"
+
+
+def test_patch_teacher_payout_profile_commits_existing_transaction(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    active_session = _ActiveDummySession()
+    app.dependency_overrides[get_db] = lambda: active_session
+
+    def _fake_upsert_teacher_payout_profile_v2(db, user, payload):
+        assert db is active_session
+        assert payload.bank_code == "260"
+        assert payload.branch_check_digit is None
+        assert payload.account_check_digit is None
+        return _payout_profile()
+
+    monkeypatch.setattr(
+        payments_endpoints,
+        "upsert_teacher_payout_profile_v2",
+        _fake_upsert_teacher_payout_profile_v2,
+    )
+
+    response = client.patch(
+        "/api/v2/teachers/me/payout-profile",
+        json={
+            "legal_name": "Ana Silva",
+            "document_type": "cpf",
+            "document_number": "12345678901",
+            "bank_code": "260",
+            "branch_number": "0001",
+            "account_number": "123456789",
+            "account_type": "checking",
+            "birthdate": "1984-10-30",
+            "monthly_income_cents": 350000,
+            "professional_occupation": "Professor(a)",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["bank_code"] == "260"
+    assert active_session.commits == 1
+    assert active_session.rollbacks == 0
+
+
+def test_upsert_teacher_payout_profile_requires_password_for_existing_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        payment_v2_service,
+        "_require_teacher",
+        lambda db, user: UUID("33333333-3333-3333-3333-333333333333"),
+    )
+
+    payload = TeacherPayoutProfileUpsertRequest(
+        legal_name="Ana Silva",
+        document_type="cpf",
+        document_number="12345678901",
+        bank_code="260",
+        branch_number="0001",
+        account_number="123456789",
+        account_type="checking",
+        birthdate="1984-10-30",
+        monthly_income_cents=350000,
+        professional_occupation="Professor(a)",
+    )
+
+    with pytest.raises(payment_v2_service.PaymentValidationError, match="senha"):
+        payment_v2_service.upsert_teacher_payout_profile_v2(
+            _PayoutUpsertSession(existing_profile=True),
+            AuthUser(user_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", email="ana@example.com"),
+            payload,
+        )
+
+
+def test_upsert_teacher_payout_profile_verifies_password_for_existing_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        payment_v2_service,
+        "_require_teacher",
+        lambda db, user: UUID("33333333-3333-3333-3333-333333333333"),
+    )
+    captured: dict[str, str | None] = {}
+
+    def _fake_verify_password(settings, *, email, password, expected_user_id):
+        captured["email"] = email
+        captured["password"] = password
+        captured["expected_user_id"] = expected_user_id
+
+    monkeypatch.setattr(payment_v2_service, "verify_supabase_password", _fake_verify_password)
+
+    payload = TeacherPayoutProfileUpsertRequest(
+        legal_name="Ana Silva",
+        document_type="cpf",
+        document_number="12345678901",
+        bank_code="260",
+        branch_number="0001",
+        account_number="123456789",
+        account_type="checking",
+        birthdate="1984-10-30",
+        monthly_income_cents=350000,
+        professional_occupation="Professor(a)",
+        current_password="secret-pass",
+    )
+
+    data = payment_v2_service.upsert_teacher_payout_profile_v2(
+        _PayoutUpsertSession(existing_profile=True),
+        AuthUser(user_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", email="ana@example.com"),
+        payload,
+    )
+
+    assert data["bank_code"] == "260"
+    assert captured == {
+        "email": "ana@example.com",
+        "password": "secret-pass",
+        "expected_user_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    }

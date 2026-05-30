@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -22,7 +22,13 @@ class TeacherPayoutProfile(BaseModel):
     account_number_masked: str
     account_check_digit: str | None = None
     account_type: PayoutAccountType
+    birthdate: date | None = None
+    monthly_income_cents: int | None = None
+    professional_occupation: str | None = None
     status: PayoutStatus
+    provider: str | None = None
+    provider_recipient_id: str | None = None
+    recipient_status: PayoutStatus | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -39,6 +45,26 @@ class TeacherPayoutProfileUpsertRequest(BaseModel):
     account_number: str = Field(min_length=1, max_length=24)
     account_check_digit: str | None = Field(default=None, max_length=8)
     account_type: PayoutAccountType
+    birthdate: date | None = None
+    monthly_income_cents: int | None = Field(default=None, ge=1)
+    professional_occupation: str | None = Field(default=None, max_length=120)
+    current_password: str | None = Field(default=None, min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def require_individual_kyc_fields(self) -> "TeacherPayoutProfileUpsertRequest":
+        if self.document_type != "cpf":
+            return self
+
+        missing = []
+        if self.birthdate is None:
+            missing.append("birthdate")
+        if self.monthly_income_cents is None:
+            missing.append("monthly_income_cents")
+        if not str(self.professional_occupation or "").strip():
+            missing.append("professional_occupation")
+        if missing:
+            raise ValueError("CPF payout profiles require: " + ", ".join(missing))
+        return self
 
 
 class TeacherPaymentRecipientSyncResponse(BaseModel):

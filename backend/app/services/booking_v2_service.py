@@ -674,6 +674,8 @@ def _normalize_payment_order_status(raw_status: str | None, payment_method: str 
 
 def _normalize_payment_charge_status(raw_status: str | None, payment_method: str | None = None) -> str:
     status = str(raw_status or "").strip().lower()
+    if payment_method == "credit_card" and status in {"authorized_pending_capture", "waiting_capture"}:
+        return "authorized"
     if status in {
         "pending",
         "processing",
@@ -861,7 +863,10 @@ def _build_split_rules(db: Session, teacher_id: UUID | str, amount_cents: int) -
     settings = get_settings()
     platform_percent = max(0.0, min(float(settings.platform_fee_percent or 0), 100.0))
     teacher_percent = round(100.0 - platform_percent, 4)
-    platform_recipient = settings.pagarme_platform_recipient_id or "rp_fake_kidario_platform"
+    platform_recipient = settings.pagarme_platform_recipient_id
+    if settings.pagarme_enabled and not platform_recipient:
+        raise BookingValidationError("KIDARIO_PAGARME_PLATFORM_RECIPIENT_ID is required when Pagar.me is enabled.")
+    platform_recipient = platform_recipient or "rp_fake_kidario_platform"
     teacher_recipient = _resolve_teacher_recipient_id(db, teacher_id)
     return [
         PagarmeSplitRule(
@@ -958,7 +963,12 @@ def _payment_fields_from_provider_response(
     transaction = _last_transaction(charge)
     card = transaction.get("card") if isinstance(transaction.get("card"), dict) else {}
     order_status = _normalize_payment_order_status(provider_response.get("status"), payment_method)
-    charge_status = _normalize_payment_charge_status(charge.get("status") or transaction.get("status"), payment_method)
+    raw_charge_status = (
+        transaction.get("status")
+        if payment_method == "credit_card" and transaction.get("status")
+        else charge.get("status") or transaction.get("status")
+    )
+    charge_status = _normalize_payment_charge_status(raw_charge_status, payment_method)
     if payment_method == "credit_card" and order_status in {"created", "pending"}:
         if charge_status in {"authorized", "waiting_capture"}:
             order_status = "authorized"
@@ -986,7 +996,7 @@ def _payment_fields_from_provider_response(
         "card_brand": card.get("brand"),
         "card_last_four": card.get("last_four_digits") or card.get("last_four"),
         "card_holder_name": card.get("holder_name"),
-        "authorization_code": transaction.get("authorization_code"),
+        "authorization_code": transaction.get("authorization_code") or transaction.get("acquirer_auth_code"),
         "authorized_at": _parse_optional_datetime(charge.get("authorized_at") or transaction.get("authorized_at")),
         "captured_at": _parse_optional_datetime(charge.get("captured_at") or transaction.get("captured_at")),
         "expires_at": _parse_optional_datetime(charge.get("expires_at") or transaction.get("expires_at")),

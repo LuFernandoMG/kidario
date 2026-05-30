@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -49,6 +49,16 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     if settings.env != "production":
         detail = f"{detail} Reason: {exc}"
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail) from exc
+
+
+def _run_write_transaction(db: Session, operation: Callable[[], dict]) -> dict:
+    try:
+        data = operation()
+        db.commit()
+        return data
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _handle_payment_error(exc: Exception) -> None:
@@ -129,8 +139,7 @@ def patch_teacher_payout_profile_endpoint(
     db: Session = Depends(get_db),
 ) -> TeacherPayoutProfile:
     try:
-        with db.begin():
-            data = upsert_teacher_payout_profile_v2(db, user, payload)
+        data = _run_write_transaction(db, lambda: upsert_teacher_payout_profile_v2(db, user, payload))
     except Exception as exc:
         _handle_payment_error(exc)
     return TeacherPayoutProfile(**data)
@@ -142,8 +151,7 @@ def post_teacher_payment_recipient_sync_endpoint(
     db: Session = Depends(get_db),
 ) -> TeacherPaymentRecipientSyncResponse:
     try:
-        with db.begin():
-            data = sync_teacher_payment_recipient_v2(db, user)
+        data = _run_write_transaction(db, lambda: sync_teacher_payment_recipient_v2(db, user))
     except Exception as exc:
         _handle_payment_error(exc)
     return TeacherPaymentRecipientSyncResponse(**data)
@@ -159,8 +167,7 @@ async def post_pagarme_webhook_endpoint(
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload.") from exc
     try:
-        with db.begin():
-            data = process_pagarme_webhook_v2(db, payload)
+        data = _run_write_transaction(db, lambda: process_pagarme_webhook_v2(db, payload))
     except Exception as exc:
         _handle_payment_error(exc)
     return PagarmeWebhookResponse(**data)

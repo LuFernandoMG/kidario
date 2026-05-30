@@ -34,6 +34,7 @@ import TeacherLessonClosurePage from "./pages/teacher/LessonClosure";
 import TeacherPrivateSignup from "./pages/teacher/PrivateSignup";
 import TeacherProfileSettings from "./pages/teacher/ProfileSettings";
 import { RequireRoleRoute } from "@/components/auth/RequireRoleRoute";
+import { TeacherPayoutProfileGate } from "@/components/teacher/TeacherPayoutProfileGate";
 import { getAuthSession } from "@/lib/authSession";
 import { ADMIN_HIDDEN_DASHBOARD_PATH } from "@/routes/admin";
 import {
@@ -105,6 +106,7 @@ const App = () => (
       <Analytics />
       <BrowserRouter>
         <AdminSessionGuard />
+        <TeacherPayoutProfileGate />
         <Routes>
           {/* Auth Flow */}
           <Route path={ROOT_PATH} element={<Welcome />} />

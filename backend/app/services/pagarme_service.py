@@ -81,6 +81,21 @@ def _split_payload(split_rules: list[PagarmeSplitRule]) -> list[dict[str, Any]]:
     return payload
 
 
+def _billing_address_payload(customer: dict[str, Any]) -> dict[str, Any]:
+    address = customer.get("address")
+    if not isinstance(address, dict):
+        return {}
+    billing_address = {
+        "line_1": address.get("line_1"),
+        "line_2": address.get("line_2"),
+        "zip_code": address.get("zip_code"),
+        "city": address.get("city"),
+        "state": address.get("state"),
+        "country": address.get("country") or "BR",
+    }
+    return {key: value for key, value in billing_address.items() if value}
+
+
 def _fake_order_response(
     *,
     order_code: str,
@@ -178,23 +193,29 @@ def create_order(
     else:
         raise PagarmeIntegrationError(f"Unsupported payment method: {payment_method}")
 
+    body: dict[str, Any] = {
+        "code": order_code,
+        "customer": customer,
+        "items": [
+            {
+                "amount": amount_cents,
+                "description": item_description,
+                "quantity": 1,
+                "code": order_code,
+            }
+        ],
+        "payments": [payment],
+    }
+    if payment_method == "credit_card":
+        billing_address = _billing_address_payload(customer)
+        if billing_address:
+            body["billing_address"] = billing_address
+
     return _json_request(
         settings,
         method="POST",
         path="/orders",
-        body={
-            "code": order_code,
-            "customer": customer,
-            "items": [
-                {
-                    "amount": amount_cents,
-                    "description": item_description,
-                    "quantity": 1,
-                    "code": order_code,
-                }
-            ],
-            "payments": [payment],
-        },
+        body=body,
     )
 
 
@@ -225,6 +246,106 @@ def cancel_charge(settings: Settings, *, provider_charge_id: str, amount_cents: 
     return _json_request(settings, method="DELETE", path=f"/charges/{provider_charge_id}", body=body)
 
 
+def _digits_only(value: str | None) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _phone_number_payload(phone: str | None) -> dict[str, str]:
+    digits = _digits_only(phone)
+    if digits.startswith("55") and len(digits) >= 12:
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) >= 11:
+        digits = digits[1:]
+    if len(digits) < 10:
+        raise PagarmeIntegrationError("Teacher phone must include DDD and number before syncing Pagar.me recipient.")
+    return {
+        "ddd": digits[:2],
+        "number": digits[2:],
+        "type": "primary",
+    }
+
+
+def _text_value(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _required_text(payout_profile: dict[str, Any], key: str, label: str) -> str:
+    value = _text_value(payout_profile.get(key))
+    if not value:
+        raise PagarmeIntegrationError(f"Teacher payout profile is missing {label} before syncing Pagar.me recipient.")
+    return value
+
+
+def _address_value(payout_profile: dict[str, Any], key: str) -> str:
+    return _text_value(payout_profile.get(f"address_{key}") or payout_profile.get(key))
+
+
+def _register_address_payload(payout_profile: dict[str, Any]) -> dict[str, str]:
+    street = _address_value(payout_profile, "street")
+    district = _address_value(payout_profile, "district")
+    city = _address_value(payout_profile, "city")
+    state = _address_value(payout_profile, "state")
+    postal_code = _digits_only(_address_value(payout_profile, "postal_code"))
+
+    missing = []
+    if not street:
+        missing.append("address.street")
+    if not district:
+        missing.append("address.district")
+    if not city:
+        missing.append("address.city")
+    if not state:
+        missing.append("address.state")
+    if len(postal_code) != 8:
+        missing.append("address.postal_code")
+    if missing:
+        raise PagarmeIntegrationError(
+            "Teacher profile is missing Pagar.me recipient address fields: " + ", ".join(missing) + "."
+        )
+
+    return {
+        "street": street,
+        "complementary": _address_value(payout_profile, "complement") or "S/N",
+        "street_number": _address_value(payout_profile, "number") or "S/N",
+        "neighborhood": district,
+        "city": city,
+        "state": state,
+        "zip_code": postal_code,
+        "reference_point": "Nao informado",
+    }
+
+
+def _birthdate_payload(value: Any) -> str:
+    birthdate = _text_value(value)
+    if not birthdate:
+        raise PagarmeIntegrationError("Teacher payout profile is missing birthdate before syncing Pagar.me recipient.")
+    if "/" in birthdate:
+        return birthdate
+    try:
+        parsed = datetime.fromisoformat(birthdate[:10])
+    except ValueError as exc:
+        raise PagarmeIntegrationError("Teacher payout profile birthdate must be a valid date.") from exc
+    return parsed.strftime("%d/%m/%Y")
+
+
+def _monthly_income_payload(value: Any) -> int:
+    try:
+        monthly_income = int(value or 0)
+    except (TypeError, ValueError) as exc:
+        raise PagarmeIntegrationError(
+            "Teacher payout profile monthly income must be informed in cents before syncing Pagar.me recipient."
+        ) from exc
+    if monthly_income <= 0:
+        raise PagarmeIntegrationError(
+            "Teacher payout profile monthly income must be greater than zero before syncing Pagar.me recipient."
+        )
+    return monthly_income
+
+
+def _recipient_site_url(settings: Settings) -> str:
+    return str(getattr(settings, "public_site_url", "") or "https://use.kidario.app").strip()
+
+
 def create_recipient(settings: Settings, *, payout_profile: dict[str, Any]) -> dict[str, Any]:
     if not settings.pagarme_enabled:
         return {
@@ -233,26 +354,56 @@ def create_recipient(settings: Settings, *, payout_profile: dict[str, Any]) -> d
             "metadata": {"teacher_id": str(payout_profile["teacher_id"])},
         }
 
+    is_individual = payout_profile["document_type"] == "cpf"
+    register_information: dict[str, Any] = {
+        "email": payout_profile.get("email"),
+        "document": payout_profile["document_number"],
+        "type": "individual" if is_individual else "corporation",
+        "site_url": _recipient_site_url(settings),
+        "phone_numbers": [_phone_number_payload(payout_profile.get("phone"))],
+    }
+    if is_individual:
+        register_information.update(
+            {
+                "name": payout_profile["legal_name"],
+                "birthdate": _birthdate_payload(payout_profile.get("birthdate")),
+                "monthly_income": _monthly_income_payload(payout_profile.get("monthly_income_cents")),
+                "professional_occupation": _required_text(
+                    payout_profile,
+                    "professional_occupation",
+                    "professional_occupation",
+                ),
+                "address": _register_address_payload(payout_profile),
+            }
+        )
+    else:
+        register_information["company_name"] = payout_profile["legal_name"]
+        register_information["trading_name"] = payout_profile["legal_name"]
+
+    default_bank_account = {
+        "holder_name": payout_profile["legal_name"],
+        "holder_type": "individual" if is_individual else "company",
+        "holder_document": payout_profile["document_number"],
+        "bank": payout_profile["bank_code"],
+        "branch_number": payout_profile["branch_number"],
+        "account_number": payout_profile["account_number"],
+        "type": "checking" if payout_profile["account_type"] == "checking" else "savings",
+    }
+    branch_check_digit = str(payout_profile.get("branch_check_digit") or "").strip()
+    account_check_digit = str(payout_profile.get("account_check_digit") or "").strip()
+    if branch_check_digit:
+        default_bank_account["branch_check_digit"] = branch_check_digit
+    if account_check_digit:
+        default_bank_account["account_check_digit"] = account_check_digit
+
     return _json_request(
         settings,
         method="POST",
         path="/recipients",
         body={
-            "name": payout_profile["legal_name"],
-            "email": payout_profile.get("email"),
-            "document": payout_profile["document_number"],
-            "type": "individual" if payout_profile["document_type"] == "cpf" else "company",
-            "default_bank_account": {
-                "holder_name": payout_profile["legal_name"],
-                "holder_type": "individual" if payout_profile["document_type"] == "cpf" else "company",
-                "holder_document": payout_profile["document_number"],
-                "bank": payout_profile["bank_code"],
-                "branch_number": payout_profile["branch_number"],
-                "branch_check_digit": payout_profile.get("branch_check_digit"),
-                "account_number": payout_profile["account_number"],
-                "account_check_digit": payout_profile.get("account_check_digit"),
-                "type": "checking" if payout_profile["account_type"] == "checking" else "savings",
-            },
+            "code": str(payout_profile["teacher_id"]),
+            "register_information": register_information,
+            "default_bank_account": default_bank_account,
             "metadata": {"teacher_id": str(payout_profile["teacher_id"])},
         },
     )

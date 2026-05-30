@@ -26,6 +26,13 @@ class AuthSignupError(Exception):
         self.status_code = status_code
 
 
+class AuthPasswordVerificationError(Exception):
+    def __init__(self, detail: str, status_code: int = 422) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
+
+
 def _http_json_request(
     *,
     url: str,
@@ -105,6 +112,53 @@ def _extract_signup_session_payload(signup_payload: dict[str, Any]) -> dict[str,
             "token_type": signup_payload.get("token_type"),
         }
     return {}
+
+
+def _extract_session_user_payload(session_payload: dict[str, Any]) -> dict[str, Any]:
+    user = session_payload.get("user")
+    return user if isinstance(user, dict) else {}
+
+
+def verify_supabase_password(
+    settings: Settings,
+    *,
+    email: str | None,
+    password: str,
+    expected_user_id: str,
+) -> None:
+    if not settings.supabase_anon_key:
+        raise AuthPasswordVerificationError(
+            "Supabase anon key is not configured (KIDARIO_SUPABASE_ANON_KEY).",
+            status_code=503,
+        )
+    if not email:
+        raise AuthPasswordVerificationError("Não foi possível confirmar o e-mail da sessão.", status_code=422)
+
+    token_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/token?grant_type=password"
+    try:
+        status_code, payload = _http_json_request(
+            url=token_url,
+            method="POST",
+            headers={
+                "apikey": settings.supabase_anon_key,
+                "Content-Type": "application/json",
+            },
+            body={
+                "email": email,
+                "password": password,
+            },
+            timeout_seconds=settings.supabase_http_timeout_seconds,
+            ca_bundle_path=settings.supabase_jwks_ca_bundle,
+        )
+    except AuthSignupError as exc:
+        raise AuthPasswordVerificationError(str(exc), status_code=exc.status_code) from exc
+
+    if status_code < 200 or status_code >= 300:
+        raise AuthPasswordVerificationError("Senha incorreta. Verifique e tente novamente.", status_code=403)
+
+    auth_user_id = str(_extract_session_user_payload(payload).get("id") or "").strip()
+    if auth_user_id != str(expected_user_id):
+        raise AuthPasswordVerificationError("A senha informada não pertence à sessão atual.", status_code=403)
 
 
 def _try_delete_auth_user(settings: Settings, auth_user_id: str) -> tuple[bool, str | None]:

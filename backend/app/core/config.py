@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     env: str = "development"
     api_v2_prefix: str = "/api/v2"
     cors_origins: str = "http://localhost:5173"
+    public_site_url: str = "https://use.kidario.app"
 
     supabase_url: str
     supabase_anon_key: str | None = None

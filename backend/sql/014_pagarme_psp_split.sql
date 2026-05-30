@@ -152,6 +152,9 @@ create table if not exists public.teacher_payout_profiles (
   account_number text not null,
   account_check_digit text,
   account_type text not null check (account_type in ('checking', 'savings')),
+  birthdate date,
+  monthly_income_cents integer check (monthly_income_cents is null or monthly_income_cents > 0),
+  professional_occupation text,
   status text not null default 'pending'
     check (status in ('pending', 'active', 'rejected', 'disabled')),
   provider_response jsonb,

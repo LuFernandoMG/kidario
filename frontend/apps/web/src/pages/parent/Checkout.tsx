@@ -45,7 +45,6 @@ export default function Checkout() {
   const modality: BookingModality = modalityQuery === "presencial" ? "presencial" : "online";
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
-  const [savedCardId, setSavedCardId] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [cardHolderName, setCardHolderName] = useState("");
   const [cardExpMonth, setCardExpMonth] = useState("");
@@ -197,9 +196,8 @@ export default function Checkout() {
       return;
     }
 
-    const shouldTokenizeCard = paymentMethod === "credit_card" && !savedCardId.trim();
     if (
-      shouldTokenizeCard
+      paymentMethod === "credit_card"
       && (!cardNumber.trim() || !cardHolderName.trim() || !cardExpMonth.trim() || !cardExpYear.trim() || !cardCvv.trim())
     ) {
       setIsSubmitting(false);
@@ -223,17 +221,15 @@ export default function Checkout() {
     try {
       const cardPaymentReference =
         paymentMethod === "credit_card"
-          ? savedCardId.trim()
-            ? { card_id: savedCardId.trim() }
-            : {
-                card_token: await tokenizePagarmeCard({
-                  number: cardNumber,
-                  holderName: cardHolderName,
-                  expMonth: cardExpMonth,
-                  expYear: cardExpYear,
-                  cvv: cardCvv,
-                }),
-              }
+          ? {
+              card_token: await tokenizePagarmeCard({
+                number: cardNumber,
+                holderName: cardHolderName,
+                expMonth: cardExpMonth,
+                expYear: cardExpYear,
+                cvv: cardCvv,
+              }),
+            }
           : {};
 
       if (selectedPackagePlan) {
@@ -504,13 +500,6 @@ export default function Checkout() {
                   </select>
                 </div>
               </div>
-              <input
-                id="saved-card-id"
-                value={savedCardId}
-                onChange={(event) => setSavedCardId(event.target.value)}
-                placeholder="card_id salvo (opcional)"
-                className="w-full h-11 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              />
             </div>
           )}
         </section>
