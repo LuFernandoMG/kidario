@@ -23,5 +23,10 @@ def get_db() -> Generator[Session, None, None]:
     db = get_session_maker()()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
+        if db.in_transaction():
+            db.rollback()
         db.close()

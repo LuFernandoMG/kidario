@@ -47,6 +47,14 @@ def _can_teacher_complete_booking(*, status: str, starts_at: datetime, duration_
     return lesson_end <= now_value
 
 
+def _can_teacher_accept_booking(*, status: str, teacher_decision_status: str, payment_flow_status: str) -> bool:
+    return (
+        status == "pendente"
+        and teacher_decision_status == "pending"
+        and payment_flow_status not in {"failed", "expired", "refunded"}
+    )
+
+
 def _normalize_objectives(raw_value: object) -> list[dict]:
     if raw_value is None:
         return []
@@ -112,6 +120,23 @@ def _build_lesson_objectives(
 
 def _build_recent_objectives(*, follow_up_next_objectives: object, follow_up_objectives: object) -> list[dict]:
     return _normalize_objectives(follow_up_next_objectives) or _normalize_objectives(follow_up_objectives)
+
+
+def _count_availability_slots(availability: dict) -> int:
+    slots = availability.get("slots")
+    if not isinstance(slots, list):
+        return 0
+
+    total = 0
+    for day in slots:
+        if not isinstance(day, dict):
+            continue
+        if isinstance(day.get("times"), list):
+            total += len(day["times"])
+            continue
+        if isinstance(day.get("starts_at"), list):
+            total += len(day["starts_at"])
+    return total
 
 
 def get_teacher_control_center_overview(
@@ -245,6 +270,7 @@ def get_teacher_control_center_overview(
             and row.get("last_message_sender_user_id") is not None
             and str(row["last_message_sender_user_id"]) == str(row["parent_user_id"])
         )
+        payment_flow_status = row.get("payment_flow_status") or "not_started"
         agenda_payload.append(
             {
                 "id": row["id"],
@@ -258,7 +284,7 @@ def get_teacher_control_center_overview(
                 "teacher_decision_status": teacher_decision_status,
                 "teacher_decision_reason": row.get("teacher_decision_reason"),
                 "teacher_decision_at": row.get("teacher_decision_at"),
-                "payment_flow_status": row.get("payment_flow_status") or "not_started",
+                "payment_flow_status": payment_flow_status,
                 "chat_thread_id": row["chat_thread_id"],
                 "has_unread_messages": has_unread_messages,
                 "completed_lessons_with_child": completed_lessons_with_child,
@@ -267,7 +293,11 @@ def get_teacher_control_center_overview(
                 "activity_plan_source": activity_plan["source"],
                 "activity_plan": activity_plan["activities"],
                 "actions": {
-                    "can_accept": status == "pendente" and teacher_decision_status == "pending",
+                    "can_accept": _can_teacher_accept_booking(
+                        status=status,
+                        teacher_decision_status=teacher_decision_status,
+                        payment_flow_status=payment_flow_status,
+                    ),
                     "can_reject": status == "pendente" and teacher_decision_status == "pending",
                     "can_reschedule": status in ("pendente", "confirmada"),
                     "can_open_chat": True,
@@ -440,7 +470,7 @@ def get_teacher_control_center_overview(
             date_to=window_end,
             duration_minutes=int(lesson_duration_minutes or 60),
         )
-        available_slots_count = sum(len(day["starts_at"]) for day in availability["slots"])
+        available_slots_count = _count_availability_slots(availability)
     except (BookingValidationError, BookingNotFoundError):
         available_slots_count = 0
 

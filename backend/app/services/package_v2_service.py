@@ -10,8 +10,10 @@ from app.core.config import get_settings
 from app.services.booking_v2_service import (
     BookingValidationError,
     _build_pagarme_customer_payload,
+    _build_payment_pricing,
     _build_split_rules,
     _create_payment_records,
+    _resolve_pagarme_credit_card_reference,
     _map_payment_order,
     _order_code,
 )
@@ -364,6 +366,8 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
     discount_percent = float(plan["discount_percent"] or 0)
     final_amount = round(original_amount * (1 - discount_percent / 100))
     discount_amount = original_amount - final_amount
+    payment_pricing = _build_payment_pricing(final_amount)
+    charge_amount = payment_pricing["charge_amount_cents"]
     package_id = uuid4()
 
     package_row = (
@@ -425,16 +429,29 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
 
     try:
         split_rules = _build_split_rules(db, plan["teacher_id"], final_amount)
+        customer_payload = _build_pagarme_customer_payload(db, parent_id)
+        card_reference = (
+            _resolve_pagarme_credit_card_reference(
+                db,
+                parent_id=parent_id,
+                customer=customer_payload,
+                card_token=payload.card_token,
+                card_id=payload.card_id,
+            )
+            if payload.payment_method == "credit_card"
+            else {"card_token": payload.card_token, "card_id": payload.card_id, "customer_id": None}
+        )
         provider_response = create_order(
             get_settings(),
             order_code=_order_code("package", package_id),
-            amount_cents=final_amount,
+            amount_cents=charge_amount,
             payment_method=payload.payment_method,
-            customer=_build_pagarme_customer_payload(db, parent_id),
+            customer=customer_payload,
+            customer_id=card_reference["customer_id"],
             item_description=f"Pacote Kidario - {plan['name']}",
             split_rules=split_rules,
-            card_token=payload.card_token,
-            card_id=payload.card_id,
+            card_token=card_reference["card_token"],
+            card_id=card_reference["card_id"],
             installments=payload.installments,
             capture=payload.payment_method == "credit_card",
         )
@@ -449,7 +466,7 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
         teacher_id=plan["teacher_id"],
         booking_id=None,
         package_id=package_id,
-        amount_cents=final_amount,
+        amount_cents=charge_amount,
         payment_method=payload.payment_method,
         order_status=order_status,
         charge_status=charge_status,

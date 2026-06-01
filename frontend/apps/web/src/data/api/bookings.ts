@@ -1,5 +1,5 @@
 import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
-import { formatDateLong, toDateIso } from "@/lib/bookingUtils";
+import { formatDateLong, formatRelativeDateLabel, toDateIso } from "@/lib/bookingUtils";
 import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
@@ -160,6 +160,8 @@ export interface ParentAgendaLesson {
   time: string;
   modality: BookingModality;
   status: BookingStatus;
+  teacher_decision_status: TeacherDecisionStatus;
+  payment_flow_status: PaymentFlowStatus;
   created_at_iso: string;
   updated_at_iso: string;
 }
@@ -250,6 +252,20 @@ export interface TeacherAvailabilitySlotsResponse {
   slots: TeacherAvailabilityDay[];
 }
 
+interface RawTeacherAvailabilityDay {
+  date?: string;
+  starts_at?: string[];
+  date_iso?: string;
+  date_label?: string;
+  times?: string[];
+}
+
+interface RawTeacherAvailabilitySlotsResponse {
+  teacher_id: string;
+  teacher_profile_id?: string;
+  slots?: RawTeacherAvailabilityDay[];
+}
+
 async function backendRequest<TResponse>(params: {
   path: string;
   accessToken: string;
@@ -302,6 +318,60 @@ function composeStartsAt(dateIso: string, time: string) {
   return date.toISOString();
 }
 
+function normalizeClockTime(value: string) {
+  const trimmed = value.trim();
+  const timeOnlyMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+  if (timeOnlyMatch) {
+    return `${timeOnlyMatch[1].padStart(2, "0")}:${timeOnlyMatch[2]}`;
+  }
+
+  const isoTimeMatch = trimmed.match(/T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?/);
+  if (isoTimeMatch) {
+    return `${isoTimeMatch[1]}:${isoTimeMatch[2]}`;
+  }
+
+  return formatTimeFromIso(trimmed);
+}
+
+function formatAvailabilityDateLabel(dateIso: string) {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  if (Number.isNaN(date.getTime())) return dateIso;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dateStart = new Date(date);
+  dateStart.setHours(0, 0, 0, 0);
+  const dayOffset = Math.round((dateStart.getTime() - today.getTime()) / 86_400_000);
+  return formatRelativeDateLabel(date, dayOffset);
+}
+
+function normalizeDateLabel(value: string) {
+  if (!value) return value;
+  return `${value.charAt(0).toLocaleUpperCase("pt-BR")}${value.slice(1)}`;
+}
+
+function normalizeAvailabilityDay(raw: RawTeacherAvailabilityDay): TeacherAvailabilityDay | null {
+  const startsAtValues = Array.isArray(raw.starts_at) ? raw.starts_at : [];
+  const dateIso = raw.date_iso || raw.date || startsAtValues[0]?.slice(0, 10);
+  if (!dateIso) return null;
+
+  const rawTimes = Array.isArray(raw.times) ? raw.times : startsAtValues;
+  const times = Array.from(
+    new Set(
+      rawTimes
+        .map((time) => normalizeClockTime(time))
+        .filter((time): time is string => Boolean(time)),
+    ),
+  );
+
+  return {
+    date_iso: dateIso,
+    date_label: normalizeDateLabel(raw.date_label || formatAvailabilityDateLabel(dateIso)),
+    times,
+  };
+}
+
 function mapBooking(raw: BookingResponse): BookingDetailResponse {
   const startsAtDate = new Date(raw.starts_at);
   const dateIso = Number.isNaN(startsAtDate.getTime()) ? raw.starts_at.slice(0, 10) : toDateIso(startsAtDate);
@@ -341,6 +411,8 @@ function mapAgendaLesson(raw: BookingResponse): ParentAgendaLesson {
     time: detail.time,
     modality: detail.modality,
     status: detail.status,
+    teacher_decision_status: detail.teacher_decision_status || "pending",
+    payment_flow_status: detail.payment_flow_status || "not_started",
     created_at_iso: detail.created_at,
     updated_at_iso: detail.updated_at,
   };
@@ -522,8 +594,16 @@ export async function getTeacherAvailabilitySlots(
   query.set("to", params.to);
   query.set("duration_minutes", String(params.durationMinutes));
 
-  return backendRequest<TeacherAvailabilitySlotsResponse>({
+  const response = await backendRequest<RawTeacherAvailabilitySlotsResponse>({
     path: `/teachers/${params.teacherProfileId}/availability/slots?${query.toString()}`,
     accessToken,
   });
+
+  return {
+    teacher_id: response.teacher_id,
+    teacher_profile_id: response.teacher_profile_id || response.teacher_id,
+    slots: (response.slots || [])
+      .map((slot) => normalizeAvailabilityDay(slot))
+      .filter((slot): slot is TeacherAvailabilityDay => Boolean(slot)),
+  };
 }

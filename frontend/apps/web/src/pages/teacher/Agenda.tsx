@@ -27,7 +27,7 @@ interface RescheduleState {
   time: string;
 }
 
-type AgendaFilter = "todas" | "pendentes" | "confirmadas" | "concluidas" | "canceladas";
+type AgendaFilter = "todas" | "pendentes" | "confirmadas" | "concluidas" | "canceladas" | "recusadas";
 
 const agendaFilters: { value: AgendaFilter; label: string }[] = [
   { value: "todas", label: "Todas" },
@@ -35,6 +35,7 @@ const agendaFilters: { value: AgendaFilter; label: string }[] = [
   { value: "confirmadas", label: "Confirmadas" },
   { value: "concluidas", label: "Concluídas" },
   { value: "canceladas", label: "Canceladas" },
+  { value: "recusadas", label: "Recusadas" },
 ];
 
 const activityPlanSourceLabel = {
@@ -79,7 +80,9 @@ export default function TeacherAgendaPage() {
 
   const filteredLessons = useMemo(() => {
     if (activeFilter === "pendentes") {
-      return sortedLessons.filter((lesson) => lesson.status === "pendente");
+      return sortedLessons.filter(
+        (lesson) => lesson.status === "pendente" && (lesson.teacher_decision_status || "pending") === "pending",
+      );
     }
     if (activeFilter === "confirmadas") {
       return sortedLessons.filter((lesson) => lesson.status === "confirmada");
@@ -89,6 +92,11 @@ export default function TeacherAgendaPage() {
     }
     if (activeFilter === "canceladas") {
       return sortedLessons.filter((lesson) => lesson.status === "cancelada");
+    }
+    if (activeFilter === "recusadas") {
+      return sortedLessons.filter(
+        (lesson) => lesson.status === "pendente" && lesson.teacher_decision_status === "rejected",
+      );
     }
     return sortedLessons;
   }, [activeFilter, sortedLessons]);
@@ -102,13 +110,16 @@ export default function TeacherAgendaPage() {
     const now = new Date();
     return lessons.filter((lesson) => {
       if (lesson.status !== "pendente" && lesson.status !== "confirmada") return false;
+      if (lesson.teacher_decision_status === "rejected") return false;
       const lessonTime = new Date(`${lesson.date_iso}T${lesson.time}:00`);
       return lessonTime >= now;
     }).length;
   }, [lessons]);
 
   const pendingCount = useMemo(
-    () => lessons.filter((lesson) => lesson.status === "pendente").length,
+    () => lessons.filter(
+      (lesson) => lesson.status === "pendente" && (lesson.teacher_decision_status || "pending") === "pending",
+    ).length,
     [lessons],
   );
 
@@ -296,6 +307,8 @@ export default function TeacherAgendaPage() {
                   ? "Sem reservas pendentes de decisão."
                   : activeFilter === "confirmadas"
                     ? "Sem reservas confirmadas no momento."
+                    : activeFilter === "recusadas"
+                      ? "Sem reservas recusadas no momento."
                     : "No tienes clases próximamente."}
               </div>
             ) : (

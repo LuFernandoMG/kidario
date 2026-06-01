@@ -123,6 +123,7 @@ Create `.env.local` from `.env.example` and set:
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_BACKEND_API_URL`
 - `VITE_PAGARME_PUBLIC_KEY`
+- `VITE_PAGARME_BASE_URL` (optional; defaults to `https://api.pagar.me/core/v5`; do not use `sdx-api` for card tokenization)
 - `VITE_SIGNUP_CAPTCHA_ENABLED`
 - `VITE_TURNSTILE_SITE_KEY`
 

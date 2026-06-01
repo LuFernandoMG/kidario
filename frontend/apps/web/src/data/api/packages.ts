@@ -2,6 +2,31 @@ import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } 
 import { buildRequestIdHeader } from "@/lib/observability";
 import type { PaymentOrder, PaymentMethod } from "@/data/api/bookings";
 
+export interface PackagePlan {
+  id: string;
+  teacher_id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  sessions_count: number;
+  discount_percent: number;
+  is_active: boolean;
+  estimated_original_amount_cents?: number | null;
+  estimated_final_amount_cents?: number | null;
+  currency: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PackagePlanPayload {
+  code: string;
+  name: string;
+  description?: string | null;
+  sessions_count: number;
+  discount_percent: number;
+  is_active: boolean;
+}
+
 export interface BookingPackage {
   id: string;
   package_plan_id: string;
@@ -29,7 +54,7 @@ export interface BookingPackage {
 async function packageRequest<TResponse>(params: {
   path: string;
   accessToken: string;
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH";
   body?: Record<string, unknown>;
 }) {
   const { path, accessToken, method = "GET", body } = params;
@@ -59,6 +84,38 @@ async function packageRequest<TResponse>(params: {
   return payload as TResponse;
 }
 
+export async function listMyPackagePlans(accessToken: string) {
+  return packageRequest<{ package_plans: PackagePlan[] }>({
+    path: "/teachers/me/package-plans",
+    accessToken,
+  });
+}
+
+export async function createMyPackagePlan(
+  accessToken: string,
+  payload: PackagePlanPayload,
+) {
+  return packageRequest<PackagePlan>({
+    path: "/teachers/me/package-plans",
+    accessToken,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateMyPackagePlan(
+  accessToken: string,
+  packagePlanId: string,
+  payload: Partial<PackagePlanPayload>,
+) {
+  return packageRequest<PackagePlan>({
+    path: `/teachers/me/package-plans/${packagePlanId}`,
+    accessToken,
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export async function createPackagePurchase(
   accessToken: string,
   payload: {
@@ -81,6 +138,13 @@ export async function createPackagePurchase(
 export async function listParentPackages(accessToken: string) {
   return packageRequest<{ packages: BookingPackage[] }>({
     path: "/parents/me/packages",
+    accessToken,
+  });
+}
+
+export async function listTeacherPackages(accessToken: string) {
+  return packageRequest<{ packages: BookingPackage[] }>({
+    path: "/teachers/me/packages",
     accessToken,
   });
 }

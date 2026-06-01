@@ -1,7 +1,9 @@
 import { cn } from "@/lib/utils";
+import type { TeacherDecisionStatus } from "@/data/api/bookings";
 
 interface StatusPillProps {
   status: "confirmada" | "pendente" | "cancelada" | "concluida";
+  teacherDecisionStatus?: TeacherDecisionStatus;
   className?: string;
 }
 
@@ -22,10 +24,16 @@ const statusConfig = {
     label: "Concluída",
     className: "bg-muted text-muted-foreground",
   },
+  recusada: {
+    label: "Recusada",
+    className: "bg-destructive/10 text-destructive",
+  },
 };
 
-export function BookingStatusPill({ status, className }: StatusPillProps) {
-  const config = statusConfig[status];
+export function BookingStatusPill({ status, teacherDecisionStatus, className }: StatusPillProps) {
+  const config = status === "pendente" && teacherDecisionStatus === "rejected"
+    ? statusConfig.recusada
+    : statusConfig[status];
 
   return (
     <span className={cn(

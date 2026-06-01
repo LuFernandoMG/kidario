@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { BookingSummaryCard } from "@/components/booking/BookingSummaryCard";
+import { PaymentInstructionsCard } from "@/components/booking/PaymentInstructionsCard";
 import { getBookingDetail, type BookingDetailResponse } from "@/data/api/bookings";
 import { getSupabaseAccessToken } from "@/lib/authSession";
 
@@ -91,27 +92,7 @@ export default function BookingConfirmation() {
           ]}
         />
 
-        {(paymentCharge?.pix_qr_code || paymentCharge?.boleto_line || paymentCharge?.payment_url || paymentCharge?.boleto_url) && (
-          <section className="card-kidario p-4 space-y-2">
-            <h2 className="font-display text-lg font-semibold text-foreground">Pagamento</h2>
-            {paymentCharge.pix_qr_code && (
-              <p className="text-sm text-foreground break-all">{paymentCharge.pix_qr_code}</p>
-            )}
-            {paymentCharge.boleto_line && (
-              <p className="text-sm text-foreground break-all">{paymentCharge.boleto_line}</p>
-            )}
-            {(paymentCharge.payment_url || paymentCharge.boleto_url) && (
-              <a
-                href={paymentCharge.payment_url || paymentCharge.boleto_url || "#"}
-                className="text-primary text-sm font-medium hover:underline"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Abrir pagamento
-              </a>
-            )}
-          </section>
-        )}
+        <PaymentInstructionsCard paymentOrder={booking.payment_order} paymentCharge={paymentCharge} />
 
         <div className="space-y-3">
           <KidarioButton asChild variant="hero" size="xl" fullWidth>

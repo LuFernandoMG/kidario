@@ -17,6 +17,7 @@ import {
 } from "@/data/api/explore";
 import { DEFAULT_TEACHER_AVATAR } from "@/lib/avatarUrl";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrencyCents } from "@/lib/pricing";
 
 function formatExperiencePeriod(periodFrom: string, periodTo?: string | null, currentPosition?: boolean) {
   if (currentPosition) {
@@ -321,7 +322,7 @@ export default function TeacherProfile() {
                         </div>
                         {plan.estimated_final_amount_cents != null && (
                           <span className="font-display font-semibold text-primary">
-                            R$ {Math.round(plan.estimated_final_amount_cents / 100)}
+                            {formatCurrencyCents(plan.estimated_final_amount_cents)}
                           </span>
                         )}
                       </div>
@@ -331,7 +332,7 @@ export default function TeacherProfile() {
                       <button
                         type="button"
                         className="text-primary text-sm font-medium hover:underline mt-3"
-                        onClick={() => navigate(`/checkout/${teacher.id}?packagePlanId=${plan.id}`)}
+                        onClick={() => navigate(`/agendar/${teacher.id}?packagePlanId=${plan.id}`)}
                       >
                         Comprar pacote
                       </button>

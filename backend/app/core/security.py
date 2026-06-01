@@ -31,6 +31,7 @@ class SupabaseJWTVerifier:
         self._audience = settings.supabase_jwt_audience
         self._issuer = settings.jwt_issuer
         self._jwt_secret = settings.supabase_jwt_secret
+        self._jwt_leeway_seconds = settings.supabase_jwt_leeway_seconds
         self._jwks_url = settings.jwt_jwks_url
         self._ssl_context = self._build_ssl_context(settings.supabase_jwks_ca_bundle)
         self._jwk_client = None
@@ -65,6 +66,7 @@ class SupabaseJWTVerifier:
                 algorithms=[algorithm],
                 audience=self._audience,
                 issuer=self._issuer,
+                leeway=self._jwt_leeway_seconds,
             )
         except Exception as exc:
             if isinstance(exc, pyjwt_invalid):
@@ -86,6 +88,7 @@ class SupabaseJWTVerifier:
                 algorithms=["HS256"],
                 audience=self._audience,
                 issuer=self._issuer,
+                leeway=self._jwt_leeway_seconds,
             )
         except Exception as exc:
             if isinstance(exc, pyjwt_invalid):

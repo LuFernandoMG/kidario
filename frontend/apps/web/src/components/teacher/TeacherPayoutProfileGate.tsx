@@ -29,7 +29,7 @@ export function TeacherPayoutProfileGate() {
       .then((nextProfile) => {
         if (cancelled) return;
         setProfile(nextProfile);
-        setIsOpen(!nextProfile);
+        setIsOpen(!nextProfile?.provider_recipient_id);
       })
       .catch(() => {
         if (!cancelled) setIsOpen(false);

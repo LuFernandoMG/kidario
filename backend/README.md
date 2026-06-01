@@ -276,6 +276,11 @@ If your Supabase project signs JWTs with `HS256`, configure:
 
 - `KIDARIO_SUPABASE_JWT_SECRET` in `.env` (Project Settings -> API -> JWT secret)
 
+JWT validation allows a small clock-skew tolerance for freshly issued tokens:
+
+- `KIDARIO_SUPABASE_JWT_LEEWAY_SECONDS=60` by default.
+- If you still see `The token is not yet valid (iat)` in local development, first sync the machine clock. You can temporarily raise this value, but avoid a large leeway in production.
+
 If you get SSL errors calling Supabase (JWKS or Auth endpoints like `/auth/v1/signup`, e.g. `CERTIFICATE_VERIFY_FAILED`):
 
 - Upgrade deps to install `certifi`: `pip install -e ".[dev]"`

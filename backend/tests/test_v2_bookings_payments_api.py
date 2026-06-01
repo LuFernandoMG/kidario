@@ -52,14 +52,6 @@ class _ActiveDummySession(_DummySession):
         self.rollbacks += 1
 
 
-class _ScalarResult:
-    def __init__(self, value) -> None:
-        self.value = value
-
-    def scalar(self):
-        return self.value
-
-
 class _MappingResult:
     def __init__(self, value: dict) -> None:
         self.value = value
@@ -72,14 +64,7 @@ class _MappingResult:
 
 
 class _PayoutUpsertSession:
-    def __init__(self, *, existing_profile: bool) -> None:
-        self.existing_profile = existing_profile
-        self.statements = 0
-
     def execute(self, statement, params=None):
-        self.statements += 1
-        if self.statements == 1:
-            return _ScalarResult(1 if self.existing_profile else None)
         return _MappingResult(_payout_profile())
 
 
@@ -384,7 +369,7 @@ def test_patch_teacher_payout_profile_commits_existing_transaction(
     assert active_session.rollbacks == 0
 
 
-def test_upsert_teacher_payout_profile_requires_password_for_existing_profile(
+def test_upsert_teacher_payout_profile_requires_password(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -408,13 +393,13 @@ def test_upsert_teacher_payout_profile_requires_password_for_existing_profile(
 
     with pytest.raises(payment_v2_service.PaymentValidationError, match="senha"):
         payment_v2_service.upsert_teacher_payout_profile_v2(
-            _PayoutUpsertSession(existing_profile=True),
+            _PayoutUpsertSession(),
             AuthUser(user_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", email="ana@example.com"),
             payload,
         )
 
 
-def test_upsert_teacher_payout_profile_verifies_password_for_existing_profile(
+def test_upsert_teacher_payout_profile_verifies_password(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -446,7 +431,7 @@ def test_upsert_teacher_payout_profile_verifies_password_for_existing_profile(
     )
 
     data = payment_v2_service.upsert_teacher_payout_profile_v2(
-        _PayoutUpsertSession(existing_profile=True),
+        _PayoutUpsertSession(),
         AuthUser(user_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", email="ana@example.com"),
         payload,
     )

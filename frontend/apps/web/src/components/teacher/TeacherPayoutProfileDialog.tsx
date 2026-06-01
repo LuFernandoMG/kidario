@@ -71,9 +71,9 @@ export function TeacherPayoutProfileDialog({
   const [isUsingCustomBankCode, setIsUsingCustomBankCode] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [monthlyIncomeInput, setMonthlyIncomeInput] = useState("");
-  const shouldShowIntro = required && !initialProfile && !hasSeenIntro;
-  const canClose = !required || Boolean(initialProfile);
-  const requiresPasswordConfirmation = Boolean(initialProfile);
+  const hasSyncedRecipient = Boolean(initialProfile?.provider_recipient_id);
+  const shouldShowIntro = required && !hasSyncedRecipient && !hasSeenIntro;
+  const canClose = !required || hasSyncedRecipient;
   const bankSelectValue = isUsingCustomBankCode ? CUSTOM_BANK_VALUE : form.bank_code;
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function TeacherPayoutProfileDialog({
     setMonthlyIncomeInput(
       initialProfile?.monthly_income_cents ? centsToCurrencyInput(initialProfile.monthly_income_cents) : "",
     );
-    setHasSeenIntro(!(required && !initialProfile));
+    setHasSeenIntro(!(required && !hasSyncedRecipient));
     setIsUsingCustomBankCode(
       Boolean(initialProfile?.bank_code && !brazilianBanks.some((bank) => bank.code === initialProfile.bank_code)),
     );
@@ -101,7 +101,7 @@ export function TeacherPayoutProfileDialog({
       monthly_income_cents: initialProfile?.monthly_income_cents || null,
       professional_occupation: initialProfile?.professional_occupation || "Professor(a)",
     });
-  }, [defaultLegalName, initialProfile, open, required]);
+  }, [defaultLegalName, hasSyncedRecipient, initialProfile, open, required]);
 
   const setField = <K extends keyof PayoutFormState>(field: K, value: PayoutFormState[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -165,8 +165,8 @@ export function TeacherPayoutProfileDialog({
       setError("Informe banco, agência e conta bancária.");
       return;
     }
-    if (requiresPasswordConfirmation && !currentPassword.trim()) {
-      setError("Informe sua senha para confirmar a alteração dos dados financeiros.");
+    if (!currentPassword.trim()) {
+      setError("Informe sua senha para salvar os dados financeiros.");
       return;
     }
 
@@ -185,7 +185,7 @@ export function TeacherPayoutProfileDialog({
         birthdate: form.document_type === "cpf" ? form.birthdate : undefined,
         monthly_income_cents: form.document_type === "cpf" ? monthlyIncomeCents : undefined,
         professional_occupation: form.document_type === "cpf" ? professionalOccupation : undefined,
-        current_password: requiresPasswordConfirmation ? currentPassword : undefined,
+        current_password: currentPassword,
       });
       await syncTeacherPaymentRecipient(accessToken);
       const refreshed = await getTeacherPayoutProfile(accessToken);
@@ -409,17 +409,15 @@ export function TeacherPayoutProfileDialog({
                     </p>
                   </div>
 
-                  {requiresPasswordConfirmation && (
-                    <Field label="Senha da conta">
-                      <Input
-                        value={currentPassword}
-                        onChange={(event) => setCurrentPassword(event.target.value)}
-                        type="password"
-                        autoComplete="current-password"
-                        placeholder="Confirme sua senha para salvar alterações"
-                      />
-                    </Field>
-                  )}
+                  <Field label="Senha da conta">
+                    <Input
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="Confirme sua senha para salvar"
+                    />
+                  </Field>
 
                   {error && <p className="text-sm text-destructive">{error}</p>}
                 </div>

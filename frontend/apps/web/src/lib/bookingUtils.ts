@@ -64,11 +64,16 @@ export function formatRelativeDateLabel(date: Date, dayOffset: number) {
   if (dayOffset === 0) return "Hoje";
   if (dayOffset === 1) return "Amanhã";
 
-  return date.toLocaleDateString("pt-BR", {
+  return capitalizeFirstLetter(date.toLocaleDateString("pt-BR", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
-  });
+  }));
+}
+
+function capitalizeFirstLetter(value: string) {
+  if (!value) return value;
+  return `${value.charAt(0).toLocaleUpperCase("pt-BR")}${value.slice(1)}`;
 }
 
 export function formatDateLong(dateIso: string) {

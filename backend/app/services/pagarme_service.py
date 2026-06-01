@@ -2,8 +2,9 @@ import base64
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
-from urllib import error, request
+from urllib import error, parse, request
 from uuid import uuid4
 
 from app.core.config import Settings
@@ -12,6 +13,18 @@ from app.core.ssl_utils import build_ssl_context
 
 class PagarmeIntegrationError(Exception):
     pass
+
+
+def _ensure_pagarme_environment_matches_key(settings: Settings) -> None:
+    secret_key = str(settings.pagarme_secret_key or "")
+    base_url = str(settings.pagarme_base_url or "")
+    parsed_base_url = parse.urlparse(base_url)
+    if secret_key and (
+        parsed_base_url.scheme != "https"
+        or parsed_base_url.netloc != "api.pagar.me"
+        or parsed_base_url.path.rstrip("/") != "/core/v5"
+    ):
+        raise PagarmeIntegrationError("Pagar.me API v5 must use https://api.pagar.me/core/v5.")
 
 
 @dataclass(frozen=True)
@@ -35,6 +48,7 @@ def _json_request(
 ) -> dict[str, Any]:
     if not settings.pagarme_secret_key:
         raise PagarmeIntegrationError("Pagar.me secret key is not configured.")
+    _ensure_pagarme_environment_matches_key(settings)
 
     credentials = base64.b64encode(f"{settings.pagarme_secret_key}:".encode("utf-8")).decode("ascii")
     data = json.dumps(body).encode("utf-8") if body is not None else None
@@ -46,6 +60,7 @@ def _json_request(
             "Authorization": f"Basic {credentials}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "User-Agent": "kidario-backend/1.0",
         },
     )
     ssl_context = build_ssl_context(settings.pagarme_ca_bundle)
@@ -61,7 +76,37 @@ def _json_request(
         raise PagarmeIntegrationError(f"Could not reach Pagar.me: {exc.reason}") from exc
 
 
-def _split_payload(split_rules: list[PagarmeSplitRule]) -> list[dict[str, Any]]:
+def create_customer(settings: Settings, *, customer: dict[str, Any]) -> dict[str, Any]:
+    if not settings.pagarme_enabled:
+        return {"id": f"cus_fake_{uuid4().hex[:24]}", **customer}
+
+    return _json_request(settings, method="POST", path="/customers", body=customer)
+
+
+def create_card(
+    settings: Settings,
+    *,
+    customer_id: str,
+    card_token: str,
+    billing_address: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not settings.pagarme_enabled:
+        return {"id": f"card_fake_{uuid4().hex[:24]}"}
+
+    body: dict[str, Any] = {"token": card_token}
+    if billing_address:
+        body["billing_address"] = billing_address
+    return _json_request(settings, method="POST", path=f"/customers/{customer_id}/cards", body=body)
+
+
+def _split_payload(split_rules: list[PagarmeSplitRule], *, total_amount_cents: int | None = None) -> list[dict[str, Any]]:
+    split_types = {split.type for split in split_rules}
+    unknown_types = split_types - {"flat", "percentage"}
+    if unknown_types:
+        raise PagarmeIntegrationError(f"Unsupported Pagar.me split type: {', '.join(sorted(unknown_types))}")
+    if len(split_types) > 1:
+        raise PagarmeIntegrationError("Pagar.me split rules cannot mix flat and percentage types.")
+
     payload = []
     for split in split_rules:
         item = {
@@ -74,10 +119,35 @@ def _split_payload(split_rules: list[PagarmeSplitRule]) -> list[dict[str, Any]]:
             },
         }
         if split.type == "flat":
-            item["amount"] = split.amount_cents or 0
+            if split.amount_cents is None:
+                raise PagarmeIntegrationError(f"Flat split rule for {split.split_role} requires an amount.")
+            amount = int(split.amount_cents)
+            if amount < 0:
+                raise PagarmeIntegrationError(f"Flat split rule for {split.split_role} cannot be negative.")
+            item["amount"] = amount
         else:
-            item["percentage"] = split.percentage or 0
+            if split.percentage is None:
+                raise PagarmeIntegrationError(f"Percentage split rule for {split.split_role} requires a percentage.")
+            percentage = Decimal(str(split.percentage)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if percentage < 0 or percentage > 100:
+                raise PagarmeIntegrationError(f"Percentage split rule for {split.split_role} must be between 0 and 100.")
+            if percentage != percentage.to_integral_value():
+                raise PagarmeIntegrationError(
+                    f"Percentage split rule for {split.split_role} must be a whole percentage for Pagar.me v5."
+                )
+            item["amount"] = int(percentage)
         payload.append(item)
+
+    if split_types == {"percentage"}:
+        percentage_total = sum(Decimal(str(item["amount"])) for item in payload)
+        if percentage_total != Decimal("100.0000"):
+            raise PagarmeIntegrationError(f"Pagar.me percentage split rules must sum to 100; got {percentage_total}.")
+    if split_types == {"flat"} and total_amount_cents is not None:
+        amount_total = sum(int(item["amount"]) for item in payload)
+        if amount_total != int(total_amount_cents):
+            raise PagarmeIntegrationError(
+                f"Pagar.me flat split rules must sum to the order amount; got {amount_total} for {total_amount_cents}."
+            )
     return payload
 
 
@@ -153,6 +223,7 @@ def create_order(
     amount_cents: int,
     payment_method: str,
     customer: dict[str, Any],
+    customer_id: str | None = None,
     item_description: str,
     split_rules: list[PagarmeSplitRule],
     card_token: str | None = None,
@@ -174,7 +245,7 @@ def create_order(
 
     payment: dict[str, Any] = {
         "payment_method": payment_method,
-        "split": _split_payload(split_rules),
+        "split": _split_payload(split_rules, total_amount_cents=amount_cents),
     }
     if payment_method == "credit_card":
         credit_card: dict[str, Any] = {
@@ -183,8 +254,10 @@ def create_order(
         }
         if card_id:
             credit_card["card_id"] = card_id
-        else:
+        elif card_token:
             credit_card["card_token"] = card_token
+        else:
+            raise PagarmeIntegrationError("A card_token or card_id is required for credit card payments.")
         payment["credit_card"] = credit_card
     elif payment_method == "pix":
         payment["pix"] = {"expires_in": 24 * 60 * 60}
@@ -195,7 +268,7 @@ def create_order(
 
     body: dict[str, Any] = {
         "code": order_code,
-        "customer": customer,
+        "closed": True,
         "items": [
             {
                 "amount": amount_cents,
@@ -206,6 +279,10 @@ def create_order(
         ],
         "payments": [payment],
     }
+    if customer_id:
+        body["customer_id"] = customer_id
+    else:
+        body["customer"] = customer
     if payment_method == "credit_card":
         billing_address = _billing_address_payload(customer)
         if billing_address:
@@ -236,6 +313,25 @@ def capture_charge(settings: Settings, *, provider_charge_id: str, amount_cents:
         path=f"/charges/{provider_charge_id}/capture",
         body={"amount": amount_cents},
     )
+
+
+def get_charge(settings: Settings, *, provider_charge_id: str) -> dict[str, Any]:
+    if not settings.pagarme_enabled:
+        now = datetime.now(timezone.utc)
+        return {
+            "id": provider_charge_id,
+            "status": "paid",
+            "amount": 0,
+            "paid_amount": 0,
+            "paid_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "last_transaction": {
+                "id": f"tran_fake_{uuid4().hex[:24]}",
+                "status": "captured",
+                "operation_type": "capture",
+            },
+        }
+    return _json_request(settings, method="GET", path=f"/charges/{provider_charge_id}")
 
 
 def cancel_charge(settings: Settings, *, provider_charge_id: str, amount_cents: int | None = None) -> dict[str, Any]:

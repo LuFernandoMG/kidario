@@ -204,6 +204,7 @@ function toTeacherModel(response: ExploreTeacherSummaryResponse): Teacher {
     rating: Number(response.rating_summary?.average || 0),
     reviewCount: Number(response.rating_summary?.count || 0),
     pricePerClass: Math.round(pricePerLessonCents(response) / 100),
+    pricePerClassCents: pricePerLessonCents(response),
     specialties: Array.isArray(response.skills) ? response.skills : [],
     isVerified: true,
     isOnline: flags.isOnline,

@@ -5,7 +5,7 @@ import { Calendar, Clock, Video, MapPin } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { BookingStatusPill } from "@/components/booking/BookingStatusPill";
 import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
-import { getParentAgenda } from "@/data/api/bookings";
+import { getParentAgenda, type TeacherDecisionStatus } from "@/data/api/bookings";
 import { DEFAULT_TEACHER_AVATAR, resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -19,6 +19,7 @@ interface Booking {
   dateIso?: string;
   time: string;
   status: "confirmada" | "pendente" | "cancelada" | "concluida";
+  teacherDecisionStatus: TeacherDecisionStatus;
   isOnline: boolean;
   specialty: string;
 }
@@ -56,6 +57,7 @@ export default function Agenda() {
           dateIso: lesson.date_iso,
           time: lesson.time,
           status: lesson.status,
+          teacherDecisionStatus: lesson.teacher_decision_status,
           isOnline: lesson.modality === "online",
           specialty: lesson.specialty || "Apoio pedagógico",
         }));
@@ -191,7 +193,7 @@ function BookingCard({ booking, index }: { booking: Booking; index: number }) {
                 </h3>
                 <p className="text-sm text-muted-foreground">{booking.specialty}</p>
               </div>
-              <BookingStatusPill status={booking.status} />
+              <BookingStatusPill status={booking.status} teacherDecisionStatus={booking.teacherDecisionStatus} />
             </div>
 
             <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">

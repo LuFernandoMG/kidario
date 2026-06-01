@@ -38,4 +38,19 @@ describe("TeacherPayoutProfileGate", () => {
     expect(await screen.findByRole("dialog")).toHaveTextContent("Dados para recebimento");
     expect(getTeacherPayoutProfileOrNullMock).toHaveBeenCalledWith("token");
   });
+
+  it("keeps the required dialog open when the payout profile has no synced recipient", async () => {
+    getTeacherPayoutProfileOrNullMock.mockResolvedValue({
+      id: "profile-1",
+      provider_recipient_id: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/inicio"]}>
+        <TeacherPayoutProfileGate />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Dados para recebimento");
+  });
 });

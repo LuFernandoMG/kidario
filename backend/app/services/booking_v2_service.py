@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime, time, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -35,7 +36,10 @@ from app.services.pagarme_service import (
     PagarmeSplitRule,
     cancel_charge,
     capture_charge,
+    create_card,
+    create_customer,
     create_order,
+    get_charge,
 )
 
 
@@ -57,6 +61,57 @@ class BookingPermissionError(Exception):
 
 MIN_BOOKING_LEAD_MINUTES = 60
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
+DEFAULT_PARENT_SERVICE_FEE_PERCENT = 8.0
+
+
+def _percentage_amount_cents(amount_cents: int, percent: float) -> int:
+    value = Decimal(int(amount_cents)) * Decimal(str(percent)) / Decimal("100")
+    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _percentage_of_total(amount_cents: int, total_amount_cents: int) -> Decimal:
+    if total_amount_cents <= 0:
+        return Decimal("0.0000")
+    value = Decimal(int(amount_cents)) * Decimal("100") / Decimal(int(total_amount_cents))
+    return value.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+def _base_amount_from_charge_amount(charge_amount_cents: int) -> int:
+    settings = get_settings()
+    parent_service_fee_percent = max(
+        0.0,
+        float(getattr(settings, "parent_service_fee_percent", DEFAULT_PARENT_SERVICE_FEE_PERCENT) or 0),
+    )
+    divisor = Decimal("1") + (Decimal(str(parent_service_fee_percent)) / Decimal("100"))
+    if divisor <= 0:
+        return max(int(charge_amount_cents), 0)
+    value = Decimal(int(charge_amount_cents)) / divisor
+    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _build_payment_pricing(base_amount_cents: int) -> dict[str, int]:
+    settings = get_settings()
+    base_amount_cents = max(int(base_amount_cents), 0)
+    parent_service_fee_percent = max(
+        0.0,
+        float(getattr(settings, "parent_service_fee_percent", DEFAULT_PARENT_SERVICE_FEE_PERCENT) or 0),
+    )
+    platform_fee_percent = max(0.0, float(settings.platform_fee_percent or 0))
+    platform_fee_percent = max(platform_fee_percent, parent_service_fee_percent)
+
+    parent_service_fee_cents = _percentage_amount_cents(base_amount_cents, parent_service_fee_percent)
+    charge_amount_cents = base_amount_cents + parent_service_fee_cents
+    platform_amount_cents = _percentage_amount_cents(base_amount_cents, platform_fee_percent)
+    teacher_amount_cents = max(charge_amount_cents - platform_amount_cents, 0)
+    platform_amount_cents = charge_amount_cents - teacher_amount_cents
+
+    return {
+        "base_amount_cents": base_amount_cents,
+        "parent_service_fee_cents": parent_service_fee_cents,
+        "charge_amount_cents": charge_amount_cents,
+        "platform_amount_cents": platform_amount_cents,
+        "teacher_amount_cents": teacher_amount_cents,
+    }
 
 
 def _require_parent(db: Session, user: AuthUser) -> UUID:
@@ -713,6 +768,21 @@ def _payment_flow_from_order_status(status: str) -> str:
     return "not_started"
 
 
+def _ensure_credit_card_is_authorized(payment_record: dict) -> None:
+    order_status = str(payment_record.get("order_status") or "").strip().lower()
+    if order_status in {"authorized", "paid"}:
+        return
+    charge_status = str(payment_record.get("charge_status") or "").strip().lower()
+    received_status = f"order={order_status or 'unknown'}, charge={charge_status or 'unknown'}"
+    failure_reason = _payment_failure_reason(payment_record.get("provider_response"))
+    reason_suffix = f" Motivo informado pela Pagar.me: {failure_reason}." if failure_reason else ""
+    raise BookingValidationError(
+        "Não foi possível autorizar o cartão. "
+        f"Status recebido da Pagar.me: {received_status}. "
+        f"Tente outro cartão ou revise os dados informados.{reason_suffix}"
+    )
+
+
 def _first_charge(provider_response: dict) -> dict:
     charges = provider_response.get("charges")
     if isinstance(charges, list) and charges:
@@ -724,6 +794,35 @@ def _first_charge(provider_response: dict) -> dict:
 def _last_transaction(charge: dict) -> dict:
     transaction = charge.get("last_transaction")
     return transaction if isinstance(transaction, dict) else {}
+
+
+def _payment_failure_reason(provider_response: object) -> str:
+    if not isinstance(provider_response, dict):
+        return ""
+    charge = _first_charge(provider_response)
+    transaction = _last_transaction(charge)
+    details: list[str] = []
+    for source in (transaction, charge, provider_response):
+        for key in (
+            "acquirer_message",
+            "acquirer_return_message",
+            "gateway_response",
+            "gateway_response_code",
+            "refuse_reason",
+            "status_reason",
+            "message",
+            "reason",
+        ):
+            value = source.get(key) if isinstance(source, dict) else None
+            if value and str(value) not in details:
+                details.append(str(value))
+    antifraud_response = transaction.get("antifraud_response")
+    if isinstance(antifraud_response, dict):
+        for key in ("status", "return_message", "message", "reason"):
+            value = antifraud_response.get(key)
+            if value and str(value) not in details:
+                details.append(str(value))
+    return "; ".join(details[:3])
 
 
 def _parse_optional_datetime(value: object) -> datetime | None:
@@ -835,6 +934,114 @@ def _build_pagarme_customer_payload(db: Session, parent_id: UUID | str) -> dict:
     }
 
 
+def _load_parent_provider_customer_id(db: Session, parent_id: UUID | str) -> str | None:
+    row = (
+        db.execute(
+            text(
+                """
+                select provider_customer_id
+                from payment_provider_customers
+                where parent_id = :parent_id
+                  and provider = 'pagarme'
+                """
+            ),
+            {"parent_id": str(parent_id)},
+        )
+        .mappings()
+        .first()
+    )
+    if not row:
+        return None
+    provider_customer_id = str(row["provider_customer_id"] or "").strip()
+    return provider_customer_id or None
+
+
+def _upsert_parent_provider_customer_id(db: Session, parent_id: UUID | str, provider_customer_id: str) -> None:
+    db.execute(
+        text(
+            """
+            insert into payment_provider_customers (
+              parent_id,
+              provider,
+              provider_customer_id
+            )
+            values (
+              :parent_id,
+              'pagarme',
+              :provider_customer_id
+            )
+            on conflict (parent_id, provider) do update
+            set provider_customer_id = excluded.provider_customer_id,
+                updated_at = now()
+            """
+        ),
+        {"parent_id": str(parent_id), "provider_customer_id": provider_customer_id},
+    )
+
+
+def _ensure_pagarme_parent_customer_id(
+    db: Session,
+    *,
+    parent_id: UUID | str,
+    customer: dict,
+) -> str:
+    provider_customer_id = _load_parent_provider_customer_id(db, parent_id)
+    if provider_customer_id:
+        return provider_customer_id
+
+    metadata = customer.get("metadata") if isinstance(customer.get("metadata"), dict) else {}
+    customer_payload = {
+        **customer,
+        "code": str(parent_id),
+        "metadata": {"parent_id": str(parent_id), **metadata},
+    }
+    try:
+        provider_response = create_customer(get_settings(), customer=customer_payload)
+    except PagarmeIntegrationError as exc:
+        raise BookingValidationError(str(exc)) from exc
+    provider_customer_id = str(provider_response.get("id") or "").strip()
+    if not provider_customer_id:
+        raise BookingValidationError("Pagar.me customer response did not include an id.")
+    _upsert_parent_provider_customer_id(db, parent_id, provider_customer_id)
+    return provider_customer_id
+
+
+def _resolve_pagarme_credit_card_reference(
+    db: Session,
+    *,
+    parent_id: UUID | str,
+    customer: dict,
+    card_token: str | None,
+    card_id: str | None,
+) -> dict[str, str | None]:
+    if not get_settings().pagarme_enabled:
+        return {"card_token": card_token, "card_id": card_id, "customer_id": None}
+
+    if card_id:
+        return {
+            "card_token": None,
+            "card_id": card_id,
+            "customer_id": _load_parent_provider_customer_id(db, parent_id),
+        }
+    if not card_token:
+        raise BookingValidationError("Informe um card_token ou card_id para pagar com cartão de crédito.")
+
+    customer_id = _ensure_pagarme_parent_customer_id(db, parent_id=parent_id, customer=customer)
+    try:
+        provider_response = create_card(
+            get_settings(),
+            customer_id=customer_id,
+            card_token=card_token,
+            billing_address=customer.get("address") if isinstance(customer.get("address"), dict) else None,
+        )
+    except PagarmeIntegrationError as exc:
+        raise BookingValidationError(str(exc)) from exc
+    provider_card_id = str(provider_response.get("id") or "").strip()
+    if not provider_card_id:
+        raise BookingValidationError("Pagar.me card response did not include an id.")
+    return {"card_token": None, "card_id": provider_card_id, "customer_id": customer_id}
+
+
 def _resolve_teacher_recipient_id(db: Session, teacher_id: UUID | str) -> str:
     settings = get_settings()
     row = (
@@ -859,21 +1066,24 @@ def _resolve_teacher_recipient_id(db: Session, teacher_id: UUID | str) -> str:
     return f"rp_fake_teacher_{str(teacher_id).replace('-', '')[:16]}"
 
 
-def _build_split_rules(db: Session, teacher_id: UUID | str, amount_cents: int) -> list[PagarmeSplitRule]:
+def _build_split_rules(db: Session, teacher_id: UUID | str, base_amount_cents: int) -> list[PagarmeSplitRule]:
     settings = get_settings()
-    platform_percent = max(0.0, min(float(settings.platform_fee_percent or 0), 100.0))
-    teacher_percent = round(100.0 - platform_percent, 4)
+    pricing = _build_payment_pricing(base_amount_cents)
     platform_recipient = settings.pagarme_platform_recipient_id
     if settings.pagarme_enabled and not platform_recipient:
         raise BookingValidationError("KIDARIO_PAGARME_PLATFORM_RECIPIENT_ID is required when Pagar.me is enabled.")
+    if settings.pagarme_enabled and str(platform_recipient or "").startswith("acc_"):
+        raise BookingValidationError(
+            "KIDARIO_PAGARME_PLATFORM_RECIPIENT_ID must be a Pagar.me recipient id, not an account id."
+        )
     platform_recipient = platform_recipient or "rp_fake_kidario_platform"
     teacher_recipient = _resolve_teacher_recipient_id(db, teacher_id)
     return [
         PagarmeSplitRule(
             recipient_id=platform_recipient,
             split_role="platform",
-            type="percentage",
-            percentage=platform_percent,
+            type="flat",
+            amount_cents=pricing["platform_amount_cents"],
             liable=True,
             charge_processing_fee=True,
             charge_remainder_fee=True,
@@ -881,10 +1091,62 @@ def _build_split_rules(db: Session, teacher_id: UUID | str, amount_cents: int) -
         PagarmeSplitRule(
             recipient_id=teacher_recipient,
             split_role="teacher",
-            type="percentage",
-            percentage=teacher_percent,
+            type="flat",
+            amount_cents=pricing["teacher_amount_cents"],
         ),
     ]
+
+
+def _load_payment_split_rules(db: Session, payment_order_id: UUID | str) -> list[PagarmeSplitRule]:
+    rows = (
+        db.execute(
+            text(
+                """
+                select
+                  provider_recipient_id,
+                  split_role,
+                  type,
+                  amount_cents,
+                  percentage,
+                  liable,
+                  charge_processing_fee,
+                  charge_remainder_fee
+                from payment_splits
+                where payment_order_id = :payment_order_id
+                order by case split_role when 'platform' then 0 when 'teacher' then 1 else 2 end, created_at asc
+                """
+            ),
+            {"payment_order_id": str(payment_order_id)},
+        )
+        .mappings()
+        .all()
+    )
+    return [
+        PagarmeSplitRule(
+            recipient_id=str(row["provider_recipient_id"]),
+            split_role=str(row["split_role"]),
+            type=str(row["type"]),
+            amount_cents=int(row["amount_cents"]) if row["amount_cents"] is not None else None,
+            percentage=float(row["percentage"]) if row["percentage"] is not None else None,
+            liable=bool(row["liable"]),
+            charge_processing_fee=bool(row["charge_processing_fee"]),
+            charge_remainder_fee=bool(row["charge_remainder_fee"]),
+        )
+        for row in rows
+    ]
+
+
+def _split_rules_for_payment_retry(
+    db: Session,
+    *,
+    payment_order_id: UUID | str,
+    teacher_id: UUID | str,
+    amount_cents: int,
+    payment_order_status: str,
+) -> list[PagarmeSplitRule]:
+    if payment_order_status in {"payment_failed", "canceled", "expired"}:
+        return _build_split_rules(db, teacher_id, _base_amount_from_charge_amount(amount_cents))
+    return _load_payment_split_rules(db, payment_order_id)
 
 
 def _order_code(prefix: str, target_id: UUID | str) -> str:
@@ -999,7 +1261,12 @@ def _payment_fields_from_provider_response(
         "authorization_code": transaction.get("authorization_code") or transaction.get("acquirer_auth_code"),
         "authorized_at": _parse_optional_datetime(charge.get("authorized_at") or transaction.get("authorized_at")),
         "captured_at": _parse_optional_datetime(charge.get("captured_at") or transaction.get("captured_at")),
-        "expires_at": _parse_optional_datetime(charge.get("expires_at") or transaction.get("expires_at")),
+        "expires_at": _parse_optional_datetime(
+            charge.get("expires_at")
+            or transaction.get("expires_at")
+            or charge.get("due_at")
+            or transaction.get("due_at")
+        ),
         "paid_at": _parse_optional_datetime(charge.get("paid_at") or provider_response.get("paid_at")),
     }
 
@@ -1201,7 +1468,7 @@ def _create_payment_records(
             teacher_id=teacher_id,
             split_rules=split_rules,
         )
-    return {"payment_order_id": payment_order_id, **fields}
+    return {"payment_order_id": payment_order_id, "provider_response": provider_response, **fields}
 
 
 def _update_payment_order_from_provider_response(
@@ -1363,6 +1630,108 @@ def _latest_charge_row_for_payment_order(db: Session, payment_order_id: UUID | s
     return dict(row) if row else None
 
 
+def _charge_snapshot_to_order_response(
+    *,
+    payment_order: dict,
+    charge_response: dict,
+    booking_id: UUID | str,
+) -> dict:
+    order = charge_response.get("order") if isinstance(charge_response.get("order"), dict) else {}
+    return {
+        "id": order.get("id") or payment_order.get("provider_order_id"),
+        "code": order.get("code") or _order_code("booking", UUID(str(booking_id))),
+        "status": order.get("status") or charge_response.get("status"),
+        "amount": charge_response.get("amount") or payment_order.get("amount_cents"),
+        "paid_at": charge_response.get("paid_at") or order.get("paid_at"),
+        "charges": [charge_response],
+    }
+
+
+def _is_paid_provider_charge(charge_response: dict | None) -> bool:
+    if not charge_response:
+        return False
+    charge_status = _normalize_payment_charge_status(charge_response.get("status"), "credit_card")
+    transaction = _last_transaction(charge_response)
+    transaction_status = _normalize_payment_charge_status(transaction.get("status"), "credit_card")
+    order = charge_response.get("order") if isinstance(charge_response.get("order"), dict) else {}
+    order_status = _normalize_payment_order_status(order.get("status") or charge_response.get("status"), "credit_card")
+    return charge_status == "paid" or transaction_status == "paid" or order_status == "paid"
+
+
+def _get_provider_charge_snapshot(provider_charge_id: str) -> dict | None:
+    try:
+        return get_charge(get_settings(), provider_charge_id=provider_charge_id)
+    except PagarmeIntegrationError:
+        return None
+
+
+def _sync_paid_credit_card_charge(
+    db: Session,
+    *,
+    payment_order: dict,
+    charge_response: dict,
+    booking_id: UUID | str,
+) -> None:
+    provider_response = _charge_snapshot_to_order_response(
+        payment_order=payment_order,
+        charge_response=charge_response,
+        booking_id=booking_id,
+    )
+    _update_payment_order_from_provider_response(
+        db,
+        payment_order_id=payment_order["id"],
+        payment_method="credit_card",
+        amount_cents=int(payment_order["amount_cents"] or 0),
+        provider_response=provider_response,
+        order_status="paid",
+        charge_status="paid",
+    )
+
+
+def _capture_or_sync_credit_card_charge(
+    db: Session,
+    *,
+    payment_order: dict,
+    charge: dict,
+    booking_id: UUID | str,
+) -> None:
+    provider_charge_id = str(charge["provider_charge_id"])
+    try:
+        capture_response = capture_charge(
+            get_settings(),
+            provider_charge_id=provider_charge_id,
+            amount_cents=int(payment_order["amount_cents"] or 0),
+        )
+    except PagarmeIntegrationError as exc:
+        charge_snapshot = _get_provider_charge_snapshot(provider_charge_id)
+        if _is_paid_provider_charge(charge_snapshot):
+            _sync_paid_credit_card_charge(
+                db,
+                payment_order=payment_order,
+                charge_response=charge_snapshot,
+                booking_id=booking_id,
+            )
+            return
+        raise BookingValidationError(str(exc)) from exc
+
+    provider_response = {
+        "id": payment_order.get("provider_order_id"),
+        "code": _order_code("booking", UUID(str(booking_id))),
+        "status": "paid",
+        "amount": int(payment_order["amount_cents"] or 0),
+        "charges": [capture_response],
+    }
+    _update_payment_order_from_provider_response(
+        db,
+        payment_order_id=payment_order["id"],
+        payment_method="credit_card",
+        amount_cents=int(payment_order["amount_cents"] or 0),
+        provider_response=provider_response,
+        order_status="paid",
+        charge_status="paid",
+    )
+
+
 def create_booking_v2(db: Session, user: AuthUser, payload: BookingCreateRequest) -> dict:
     parent_id = _require_parent(db, user)
     resolved_child_id = _resolve_child_id(db, parent_id, payload.child_id)
@@ -1376,7 +1745,9 @@ def create_booking_v2(db: Session, user: AuthUser, payload: BookingCreateRequest
 
     effective_duration_minutes = int(payload.duration_minutes or teacher["lesson_duration_minutes"] or 60)
     hourly_rate_cents = int(teacher["hourly_rate_cents"] or 0)
-    amount_cents = 0 if payload.package_id else round(hourly_rate_cents * (effective_duration_minutes / 60))
+    base_amount_cents = 0 if payload.package_id else round(hourly_rate_cents * (effective_duration_minutes / 60))
+    payment_pricing = _build_payment_pricing(base_amount_cents)
+    amount_cents = 0 if payload.package_id else payment_pricing["charge_amount_cents"]
     payment_method = payload.payment_method or "pix"
     initial_payment_flow_status = (
         "paid" if payload.package_id else "authorization_required" if payment_method == "credit_card" else "not_started"
@@ -1454,22 +1825,31 @@ def create_booking_v2(db: Session, user: AuthUser, payload: BookingCreateRequest
             charge_status="paid",
         )
     else:
-        split_rules = _build_split_rules(db, payload.teacher_id, amount_cents)
+        split_rules = _build_split_rules(db, payload.teacher_id, base_amount_cents)
         provider_response: dict | None = None
         order_status = "created"
         charge_status = "pending"
         if payment_method == "credit_card":
+            customer_payload = _build_pagarme_customer_payload(db, parent_id)
+            card_reference = _resolve_pagarme_credit_card_reference(
+                db,
+                parent_id=parent_id,
+                customer=customer_payload,
+                card_token=payload.card_token,
+                card_id=payload.card_id,
+            )
             try:
                 provider_response = create_order(
                     get_settings(),
                     order_code=_order_code("booking", booking_id),
                     amount_cents=amount_cents,
                     payment_method=payment_method,
-                    customer=_build_pagarme_customer_payload(db, parent_id),
+                    customer=customer_payload,
+                    customer_id=card_reference["customer_id"],
                     item_description="Aula Kidario",
                     split_rules=split_rules,
-                    card_token=payload.card_token,
-                    card_id=payload.card_id,
+                    card_token=card_reference["card_token"],
+                    card_id=card_reference["card_id"],
                     installments=payload.installments,
                     capture=False,
                 )
@@ -1492,6 +1872,8 @@ def create_booking_v2(db: Session, user: AuthUser, payload: BookingCreateRequest
             split_rules=split_rules,
             installments=payload.installments,
         )
+        if payment_method == "credit_card":
+            _ensure_credit_card_is_authorized(payment_record)
         db.execute(
             text(
                 """
@@ -1526,26 +1908,45 @@ def retry_booking_payment_v2(db: Session, user: AuthUser, booking_id: UUID, payl
         raise BookingPermissionError("Only the parent owner can retry the booking payment.")
     if booking["status"] != "pendente":
         raise BookingConflictError("Payment can only be retried for pending bookings.")
-    amount_cents = int(_latest_payment_order_row_for_booking(db, booking_id).get("amount_cents") or 0)
+    payment_order = _latest_payment_order_row_for_booking(db, booking_id)
+    amount_cents = int(payment_order.get("amount_cents") or 0)
     if amount_cents <= 0:
         raise BookingValidationError("Booking does not require a paid retry.")
 
-    split_rules = _build_split_rules(db, booking["teacher_id"], amount_cents)
+    payment_order_status = str(payment_order.get("status") or "created")
+    split_rules = _split_rules_for_payment_retry(
+        db,
+        payment_order_id=payment_order["id"],
+        teacher_id=booking["teacher_id"],
+        amount_cents=amount_cents,
+        payment_order_status=payment_order_status,
+    )
+    if not split_rules:
+        raise BookingValidationError("Payment split rules are missing for this booking.")
     provider_response: dict | None = None
     order_status = "created"
     charge_status = "pending"
     if payload.payment_method == "credit_card":
+        customer_payload = _build_pagarme_customer_payload(db, booking["parent_id"])
+        card_reference = _resolve_pagarme_credit_card_reference(
+            db,
+            parent_id=booking["parent_id"],
+            customer=customer_payload,
+            card_token=payload.card_token,
+            card_id=payload.card_id,
+        )
         try:
             provider_response = create_order(
                 get_settings(),
                 order_code=f"{_order_code('booking_retry', booking_id)}_{uuid4().hex[:8]}",
                 amount_cents=amount_cents,
                 payment_method=payload.payment_method,
-                customer=_build_pagarme_customer_payload(db, booking["parent_id"]),
+                customer=customer_payload,
+                customer_id=card_reference["customer_id"],
                 item_description="Aula Kidario",
                 split_rules=split_rules,
-                card_token=payload.card_token,
-                card_id=payload.card_id,
+                card_token=card_reference["card_token"],
+                card_id=card_reference["card_id"],
                 installments=payload.installments,
                 capture=booking["teacher_decision_status"] == "accepted",
             )
@@ -1632,6 +2033,8 @@ def decide_booking_v2(db: Session, user: AuthUser, booking_id: UUID, payload: Bo
         payment_order = _latest_payment_order_row_for_booking(db, booking_id)
         payment_method = str(payment_order.get("requested_payment_method") or "pix")
         payment_order_status = str(payment_order.get("status") or "created")
+        if payment_method == "credit_card" and payment_order_status in {"payment_failed", "canceled", "expired"}:
+            raise BookingConflictError("Credit card authorization failed. The parent must retry payment before acceptance.")
         next_booking_status = "pendente"
         next_payment_flow_status = _payment_flow_from_order_status(payment_order_status)
 
@@ -1642,34 +2045,18 @@ def decide_booking_v2(db: Session, user: AuthUser, booking_id: UUID, payload: Bo
             charge = _latest_charge_row_for_payment_order(db, payment_order["id"])
             if not charge or not charge.get("provider_charge_id"):
                 raise BookingValidationError("Authorized credit card charge was not found.")
-            try:
-                capture_response = capture_charge(
-                    get_settings(),
-                    provider_charge_id=str(charge["provider_charge_id"]),
-                    amount_cents=int(payment_order["amount_cents"] or 0),
-                )
-            except PagarmeIntegrationError as exc:
-                raise BookingValidationError(str(exc)) from exc
-            provider_response = {
-                "id": payment_order.get("provider_order_id"),
-                "code": _order_code("booking", booking_id),
-                "status": "paid",
-                "amount": int(payment_order["amount_cents"] or 0),
-                "charges": [capture_response],
-            }
-            _update_payment_order_from_provider_response(
+            _capture_or_sync_credit_card_charge(
                 db,
-                payment_order_id=payment_order["id"],
-                payment_method=payment_method,
-                amount_cents=int(payment_order["amount_cents"] or 0),
-                provider_response=provider_response,
-                order_status="paid",
-                charge_status="paid",
+                payment_order=payment_order,
+                charge=charge,
+                booking_id=booking_id,
             )
             next_booking_status = "confirmada"
             next_payment_flow_status = "paid"
         else:
-            split_rules = _build_split_rules(db, booking["teacher_id"], int(payment_order["amount_cents"] or 0))
+            split_rules = _load_payment_split_rules(db, payment_order["id"])
+            if not split_rules:
+                raise BookingValidationError("Payment split rules are missing for this booking.")
             try:
                 provider_response = create_order(
                     get_settings(),
@@ -2188,10 +2575,30 @@ def get_teacher_availability_slots_v2(
                     available_starts.append(starts_at)
                 minute += duration_minutes
         if available_starts:
-            slots.append({"date": current_date, "starts_at": sorted(set(available_starts))})
+            slots.append(_availability_slot_day(current_date, sorted(set(available_starts))))
         current_date += timedelta(days=1)
 
-    return {"teacher_id": teacher_id, "slots": slots}
+    return {"teacher_id": teacher_id, "teacher_profile_id": teacher_id, "slots": slots}
+
+
+_WEEKDAY_LABELS_PT_BR = ("Seg.", "Ter.", "Qua.", "Qui.", "Sex.", "Sáb.", "Dom.")
+
+
+def _format_availability_date_label(date_value: date, today: date | None = None) -> str:
+    reference_date = today or datetime.now(LOCAL_TZ).date()
+    if date_value == reference_date:
+        return "Hoje"
+    if date_value == reference_date + timedelta(days=1):
+        return "Amanhã"
+    return f"{_WEEKDAY_LABELS_PT_BR[date_value.weekday()]} {date_value:%d/%m}"
+
+
+def _availability_slot_day(date_value: date, available_starts: list[datetime]) -> dict:
+    return {
+        "date_iso": date_value.isoformat(),
+        "date_label": _format_availability_date_label(date_value),
+        "times": [starts_at.strftime("%H:%M") for starts_at in available_starts],
+    }
 
 
 def _time_to_minutes(value: object) -> int:

@@ -55,9 +55,8 @@ def get_or_create_teacher_activity_plan_for_booking(
     resolved_settings = settings or get_settings()
     context_hash = _build_context_hash(planner_input)
 
-    try:
-        cached_plan_row = _load_cached_plan_row(db, booking_id)
-    except SQLAlchemyError:
+    cache_ok, cached_plan_row = _safe_plan_db_operation(db, lambda: _load_cached_plan_row(db, booking_id))
+    if not cache_ok:
         return generate_teacher_activity_plan(planner_input, resolved_settings)
 
     if cached_plan_row:
@@ -69,8 +68,9 @@ def get_or_create_teacher_activity_plan_for_booking(
             }
 
     generated_plan = generate_teacher_activity_plan(planner_input, resolved_settings)
-    try:
-        _persist_booking_activity_plan(
+    _safe_plan_db_operation(
+        db,
+        lambda: _persist_booking_activity_plan(
             db=db,
             booking_id=booking_id,
             teacher_id=teacher_id,
@@ -78,9 +78,8 @@ def get_or_create_teacher_activity_plan_for_booking(
             source=str(generated_plan["source"]),
             activities=generated_plan["activities"],
             context_hash=context_hash,
-        )
-    except SQLAlchemyError:
-        return generated_plan
+        ),
+    )
     return generated_plan
 
 
@@ -89,9 +88,8 @@ def get_cached_teacher_activity_plan_for_booking(
     db: Session,
     booking_id: str,
 ) -> dict | None:
-    try:
-        cached_plan_row = _load_cached_plan_row(db, booking_id)
-    except SQLAlchemyError:
+    cache_ok, cached_plan_row = _safe_plan_db_operation(db, lambda: _load_cached_plan_row(db, booking_id))
+    if not cache_ok:
         return None
     if not cached_plan_row:
         return None
@@ -101,6 +99,14 @@ def get_cached_teacher_activity_plan_for_booking(
         "source": str(cached_plan_row.get("source") or "fallback"),
         "activities": cached_activities,
     }
+
+
+def _safe_plan_db_operation(db: Session, operation):
+    try:
+        with db.begin_nested():
+            return True, operation()
+    except SQLAlchemyError:
+        return False, None
 
 
 def _generate_with_openai(

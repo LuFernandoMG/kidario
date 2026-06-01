@@ -13,8 +13,18 @@ type PagarmeTokenResponse = {
   };
 };
 
+const PAGARME_V5_BASE_URL = "https://api.pagar.me/core/v5";
+
 function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
+}
+
+function getPagarmeTokenizationBaseUrl() {
+  const configuredBaseUrl = (import.meta.env.VITE_PAGARME_BASE_URL?.trim() || PAGARME_V5_BASE_URL).replace(
+    /\/+$/,
+    "",
+  );
+  return configuredBaseUrl === "https://sdx-api.pagar.me/core/v5" ? PAGARME_V5_BASE_URL : configuredBaseUrl;
 }
 
 export async function tokenizePagarmeCard(input: PagarmeCardTokenizeInput): Promise<string> {
@@ -22,6 +32,7 @@ export async function tokenizePagarmeCard(input: PagarmeCardTokenizeInput): Prom
   if (!appId) {
     throw new Error("Configure VITE_PAGARME_PUBLIC_KEY para tokenizar cartões no checkout.");
   }
+  const pagarmeBaseUrl = getPagarmeTokenizationBaseUrl();
 
   const number = digitsOnly(input.number);
   const cvv = digitsOnly(input.cvv);
@@ -33,7 +44,7 @@ export async function tokenizePagarmeCard(input: PagarmeCardTokenizeInput): Prom
     throw new Error("Preencha os dados do cartão para gerar o token.");
   }
 
-  const response = await fetch(`https://api.pagar.me/core/v5/tokens?appId=${encodeURIComponent(appId)}`, {
+  const response = await fetch(`${pagarmeBaseUrl}/tokens?appId=${encodeURIComponent(appId)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

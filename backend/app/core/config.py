@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str = "authenticated"
     supabase_jwt_issuer: str | None = None
     supabase_jwt_secret: str | None = None
+    supabase_jwt_leeway_seconds: int = 60
     supabase_jwks_ca_bundle: str | None = None
     supabase_http_timeout_seconds: float = 15.0
     trust_proxy_headers: bool = True
@@ -66,6 +67,7 @@ class Settings(BaseSettings):
     pagarme_timeout_seconds: float = 15.0
     pagarme_ca_bundle: str | None = None
     platform_fee_percent: float = 20.0
+    parent_service_fee_percent: float = 8.0
 
     @field_validator("api_v2_prefix")
     @classmethod
@@ -81,6 +83,11 @@ class Settings(BaseSettings):
         if normalized not in {"turnstile", "recaptcha"}:
             raise ValueError("signup_captcha_provider must be 'turnstile' or 'recaptcha'.")
         return normalized
+
+    @field_validator("supabase_jwt_leeway_seconds")
+    @classmethod
+    def validate_supabase_jwt_leeway_seconds(cls, value: int) -> int:
+        return max(0, value)
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -17,6 +17,7 @@ from app.api.v2.endpoints import teacher_control as teacher_control_endpoints
 from app.core.security import AuthUser
 from app.db.session import get_db
 from app.main import app
+from app.services.teacher_control_service import _can_teacher_accept_booking, _count_availability_slots
 
 
 class _DummyTransaction(AbstractContextManager[None]):
@@ -147,6 +148,37 @@ def test_get_teacher_control_center_overview_returns_ok(
     assert body["upcoming_lessons_count"] == 3
     assert body["pending_decisions_count"] == 1
     assert len(body["agenda"]) == 1
+
+
+def test_count_availability_slots_accepts_current_and_legacy_contracts() -> None:
+    assert _count_availability_slots(
+        {
+            "slots": [
+                {"date_iso": "2026-06-01", "date_label": "Seg. 01/06", "times": ["12:00", "14:00"]},
+                {"date": "2026-06-02", "starts_at": ["2026-06-02T12:00:00Z"]},
+                {"date_iso": "2026-06-03", "date_label": "Qua. 03/06"},
+            ]
+        }
+    ) == 3
+
+
+def test_can_teacher_accept_booking_blocks_failed_payment_flow() -> None:
+    assert (
+        _can_teacher_accept_booking(
+            status="pendente",
+            teacher_decision_status="pending",
+            payment_flow_status="failed",
+        )
+        is False
+    )
+    assert (
+        _can_teacher_accept_booking(
+            status="pendente",
+            teacher_decision_status="pending",
+            payment_flow_status="authorized",
+        )
+        is True
+    )
 
 
 def test_get_teacher_student_timeline_returns_ok(

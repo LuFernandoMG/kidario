@@ -102,12 +102,14 @@ class PaymentOrdersResponse(BaseModel):
 
 
 class TeacherAvailabilitySlotDay(BaseModel):
-    date: date
-    starts_at: list[datetime] = Field(default_factory=list)
+    date_iso: str
+    date_label: str
+    times: list[str] = Field(default_factory=list)
 
 
 class TeacherAvailabilitySlotsResponse(BaseModel):
     teacher_id: UUID
+    teacher_profile_id: UUID
     slots: list[TeacherAvailabilitySlotDay] = Field(default_factory=list)
 
 

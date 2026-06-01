@@ -387,6 +387,9 @@ begin
 end
 $$;
 
+alter table if exists public.bookings
+  drop constraint if exists bookings_child_id_fkey;
+
 create table if not exists public.booking_reviews (
   id uuid primary key default gen_random_uuid(),
   booking_id uuid not null unique references public.bookings(id) on delete restrict,
@@ -427,19 +430,28 @@ create table if not exists public.payment_orders (
   provider text not null default 'pagarme',
   provider_order_id text unique,
   provider_order_code text unique,
+  requested_payment_method text check (
+    requested_payment_method is null
+    or requested_payment_method in ('credit_card', 'pix', 'boleto')
+  ),
   amount_cents integer not null check (amount_cents >= 0),
   currency text not null default 'BRL',
   status text not null check (
     status in (
       'created',
       'pending',
+      'authorized',
       'paid',
       'payment_failed',
       'canceled',
+      'expired',
       'refunded',
       'partially_refunded'
     )
   ),
+  authorized_at timestamptz,
+  paid_at timestamptz,
+  expires_at timestamptz,
   idempotency_key text unique,
   billing_address_snapshot jsonb,
   provider_response jsonb,
@@ -468,10 +480,13 @@ create table if not exists public.payment_charges (
     status in (
       'pending',
       'processing',
+      'authorized',
+      'waiting_capture',
       'paid',
       'payment_failed',
       'failed',
       'canceled',
+      'expired',
       'refunded',
       'chargedback'
     )
@@ -484,6 +499,16 @@ create table if not exists public.payment_charges (
   pix_expires_at timestamptz,
   boleto_url text,
   boleto_expires_at timestamptz,
+  card_brand text,
+  card_last_four text,
+  card_holder_name text,
+  authorization_code text,
+  authorized_at timestamptz,
+  captured_at timestamptz,
+  expires_at timestamptz,
+  payment_url text,
+  boleto_barcode text,
+  boleto_line text,
   paid_at timestamptz,
   failed_at timestamptz,
   canceled_at timestamptz,
@@ -537,6 +562,9 @@ alter table if exists public.chat_threads
   add column if not exists status text not null default 'active'
     check (status in ('active', 'archived', 'blocked'));
 
+alter table if exists public.chat_threads
+  drop constraint if exists chat_threads_child_id_fkey;
+
 alter table if exists public.chat_messages
   add column if not exists sender_user_id uuid,
   add column if not exists booking_id uuid,
@@ -567,6 +595,19 @@ begin
       foreign key (teacher_id)
       references public.teachers(id)
       on delete cascade
+      not valid;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'chat_threads_parent_child_fkey'
+      and conrelid = 'public.chat_threads'::regclass
+  ) then
+    alter table public.chat_threads
+      add constraint chat_threads_parent_child_fkey
+      foreign key (parent_id, child_id)
+      references public.children(parent_id, id)
+      on delete restrict
       not valid;
   end if;
 
@@ -1656,6 +1697,50 @@ create trigger trg_sync_booking_normalized_fields
 before insert or update on public.bookings
 for each row execute function public.sync_booking_normalized_fields();
 
+create or replace function public.validate_booking_child_parent_match()
+returns trigger
+language plpgsql
+as $$
+declare
+  resolved_parent_id uuid;
+  resolved_parent_profile_id uuid;
+begin
+  if new.parent_id is not null then
+    select c.parent_id
+    into resolved_parent_id
+    from public.children c
+    where c.id = new.child_id;
+
+    if resolved_parent_id is null then
+      raise exception 'child_id does not exist in children';
+    end if;
+
+    if resolved_parent_id <> new.parent_id then
+      raise exception 'child_id does not belong to parent_id';
+    end if;
+
+    return new;
+  end if;
+
+  if new.parent_profile_id is not null then
+    select pc.profile_id
+    into resolved_parent_profile_id
+    from public.parent_children pc
+    where pc.id = new.child_id;
+
+    if resolved_parent_profile_id is null then
+      raise exception 'child_id does not exist in parent_children';
+    end if;
+
+    if resolved_parent_profile_id <> new.parent_profile_id then
+      raise exception 'child_id does not belong to parent_profile_id';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
 create or replace function public.sync_payment_from_booking()
 returns trigger
 language plpgsql
@@ -1750,9 +1835,6 @@ end;
 $$;
 
 drop trigger if exists trg_sync_payment_from_booking on public.bookings;
-create trigger trg_sync_payment_from_booking
-after insert or update on public.bookings
-for each row execute function public.sync_payment_from_booking();
 
 create or replace function public.sync_chat_thread_normalized_fields()
 returns trigger
@@ -1782,6 +1864,64 @@ create trigger trg_sync_chat_thread_normalized_fields
 before insert or update on public.chat_threads
 for each row execute function public.sync_chat_thread_normalized_fields();
 
+create or replace function public.validate_chat_thread_booking_match()
+returns trigger
+language plpgsql
+as $$
+declare
+  booking_parent_id uuid;
+  booking_teacher_id uuid;
+  booking_child_id uuid;
+  booking_parent_profile_id uuid;
+  booking_teacher_profile_id uuid;
+begin
+  select b.parent_id, b.teacher_id, b.child_id, b.parent_profile_id, b.teacher_profile_id
+  into booking_parent_id, booking_teacher_id, booking_child_id, booking_parent_profile_id, booking_teacher_profile_id
+  from public.bookings b
+  where b.id = new.booking_id;
+
+  if booking_child_id is null then
+    raise exception 'booking_id does not exist';
+  end if;
+
+  if new.parent_id is not null then
+    if booking_parent_id is null or new.parent_id <> booking_parent_id then
+      raise exception 'parent_id does not match booking';
+    end if;
+  elsif new.parent_profile_id is not null then
+    if booking_parent_profile_id is null or new.parent_profile_id <> booking_parent_profile_id then
+      raise exception 'parent_profile_id does not match booking';
+    end if;
+  else
+    raise exception 'parent_id is required';
+  end if;
+
+  if new.teacher_id is not null then
+    if booking_teacher_id is null or new.teacher_id <> booking_teacher_id then
+      raise exception 'teacher_id does not match booking';
+    end if;
+  elsif new.teacher_profile_id is not null then
+    if booking_teacher_profile_id is null or new.teacher_profile_id <> booking_teacher_profile_id then
+      raise exception 'teacher_profile_id does not match booking';
+    end if;
+  else
+    raise exception 'teacher_id is required';
+  end if;
+
+  if new.child_id <> booking_child_id then
+    raise exception 'child_id does not match booking';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_validate_chat_thread_booking_match on public.chat_threads;
+create trigger trg_validate_chat_thread_booking_match
+before insert or update of booking_id, parent_id, teacher_id, parent_profile_id, teacher_profile_id, child_id
+on public.chat_threads
+for each row execute function public.validate_chat_thread_booking_match();
+
 create or replace function public.sync_chat_message_normalized_fields()
 returns trigger
 language plpgsql
@@ -1796,6 +1936,60 @@ drop trigger if exists trg_sync_chat_message_normalized_fields on public.chat_me
 create trigger trg_sync_chat_message_normalized_fields
 before insert or update on public.chat_messages
 for each row execute function public.sync_chat_message_normalized_fields();
+
+create or replace function public.validate_chat_message_sender()
+returns trigger
+language plpgsql
+as $$
+declare
+  sender_user_id uuid;
+  resolved_parent_user_id uuid;
+  resolved_teacher_user_id uuid;
+  resolved_parent_profile_id uuid;
+  resolved_teacher_profile_id uuid;
+begin
+  if new.sender_user_id is not null
+    and new.sender_profile_id is not null
+    and new.sender_user_id <> new.sender_profile_id
+  then
+    raise exception 'sender_user_id does not match sender_profile_id';
+  end if;
+
+  sender_user_id := coalesce(new.sender_user_id, new.sender_profile_id);
+
+  if sender_user_id is null then
+    raise exception 'sender_user_id is required';
+  end if;
+
+  select p.user_id, teacher.user_id, t.parent_profile_id, t.teacher_profile_id
+  into resolved_parent_user_id, resolved_teacher_user_id, resolved_parent_profile_id, resolved_teacher_profile_id
+  from public.chat_threads t
+  left join public.parents p on p.id = t.parent_id
+  left join public.teachers teacher on teacher.id = t.teacher_id
+  where t.id = new.thread_id;
+
+  if not found then
+    raise exception 'thread_id does not exist';
+  end if;
+
+  if not coalesce(sender_user_id = resolved_parent_user_id, false)
+    and not coalesce(sender_user_id = resolved_teacher_user_id, false)
+    and not coalesce(sender_user_id = resolved_parent_profile_id, false)
+    and not coalesce(sender_user_id = resolved_teacher_profile_id, false)
+  then
+    raise exception 'sender_user_id is not part of this chat thread';
+  end if;
+
+  new.sender_user_id := sender_user_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_validate_chat_message_sender on public.chat_messages;
+create trigger trg_validate_chat_message_sender
+before insert or update of thread_id, sender_user_id, sender_profile_id
+on public.chat_messages
+for each row execute function public.validate_chat_message_sender();
 
 create or replace function public.validate_booking_review()
 returns trigger
@@ -1872,8 +2066,8 @@ create index if not exists idx_booking_reviews_public_status_submitted_at
 create index if not exists idx_booking_reviews_rating
   on public.booking_reviews(rating);
 
-create unique index if not exists idx_payment_orders_booking_unique
-  on public.payment_orders(booking_id)
+create index if not exists idx_payment_orders_booking_created_at
+  on public.payment_orders(booking_id, created_at desc)
   where booking_id is not null;
 
 create unique index if not exists idx_payment_orders_package_unique

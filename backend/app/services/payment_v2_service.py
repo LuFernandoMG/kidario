@@ -48,15 +48,6 @@ def _optional_bank_digit(value: str | None) -> str | None:
     return cleaned or None
 
 
-def _has_payout_profile(db: Session, teacher_id: UUID) -> bool:
-    return bool(
-        db.execute(
-            text("select 1 from teacher_payout_profiles where teacher_id = :teacher_id"),
-            {"teacher_id": str(teacher_id)},
-        ).scalar()
-    )
-
-
 def _resolve_user_email(db: Session, user: AuthUser) -> str | None:
     if user.email:
         return user.email
@@ -128,18 +119,17 @@ def get_teacher_payout_profile_v2(db: Session, user: AuthUser) -> dict:
 
 def upsert_teacher_payout_profile_v2(db: Session, user: AuthUser, payload: TeacherPayoutProfileUpsertRequest) -> dict:
     teacher_id = _require_teacher(db, user)
-    if _has_payout_profile(db, teacher_id):
-        if not payload.current_password:
-            raise PaymentValidationError("Informe sua senha para alterar os dados de recebimento.")
-        try:
-            verify_supabase_password(
-                get_settings(),
-                email=_resolve_user_email(db, user),
-                password=payload.current_password,
-                expected_user_id=user.user_id,
-            )
-        except AuthPasswordVerificationError as exc:
-            raise PaymentValidationError(str(exc)) from exc
+    if not payload.current_password:
+        raise PaymentValidationError("Informe sua senha para salvar os dados de recebimento.")
+    try:
+        verify_supabase_password(
+            get_settings(),
+            email=_resolve_user_email(db, user),
+            password=payload.current_password,
+            expected_user_id=user.user_id,
+        )
+    except AuthPasswordVerificationError as exc:
+        raise PaymentValidationError(str(exc)) from exc
 
     row = (
         db.execute(

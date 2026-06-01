@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { TeacherPayoutProfileSection } from "@/components/teacher/TeacherPayoutProfileSection";
+import { TeacherPackagePlansPanel } from "@/components/teacher/TeacherPackagePlansPanel";
 import { useTeacherControlCenterOverview } from "@/data/queries/teacherControl";
 import { TEACHER_AGENDA_PATH, TEACHER_PLANNING_PATH } from "@/routes/teacher";
 
@@ -30,6 +31,7 @@ export default function TeacherFinancePage() {
       <TopBar title="Receitas e Pagamentos" />
       <div className="px-4 pt-4 pb-8 space-y-3">
         <TeacherPayoutProfileSection />
+        <TeacherPackagePlansPanel />
 
         {overviewQuery.isLoading ? (
           <div className="card-kidario p-4 text-sm text-muted-foreground">Carregando dados financeiros...</div>

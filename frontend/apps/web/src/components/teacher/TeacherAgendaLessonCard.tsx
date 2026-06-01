@@ -10,6 +10,7 @@ const statusLabelByBooking = {
   confirmada: "Confirmada",
   cancelada: "Cancelada",
   concluida: "Concluída",
+  recusada: "Recusada",
 } as const;
 
 const statusClassNameByBooking = {
@@ -17,6 +18,7 @@ const statusClassNameByBooking = {
   confirmada: "bg-success/10 text-success",
   cancelada: "bg-destructive/10 text-destructive",
   concluida: "bg-primary/10 text-primary",
+  recusada: "bg-destructive/10 text-destructive",
 } as const;
 
 const teacherDecisionLabel = {
@@ -76,6 +78,9 @@ export function TeacherAgendaLessonCard({
 }: TeacherAgendaLessonCardProps) {
   const isConcluded = lesson.status === "concluida";
   const canViewActivityPlan = lesson.status === "confirmada" || lesson.status === "concluida";
+  const visualStatus = lesson.status === "pendente" && lesson.teacher_decision_status === "rejected"
+    ? "recusada"
+    : lesson.status;
 
   return (
     <div className="card-kidario p-4 space-y-3">
@@ -91,8 +96,8 @@ export function TeacherAgendaLessonCard({
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusClassNameByBooking[lesson.status]}`}>
-            {statusLabelByBooking[lesson.status]}
+          <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusClassNameByBooking[visualStatus]}`}>
+            {statusLabelByBooking[visualStatus]}
           </span>
           <span className="rounded-full px-2 py-1 text-[11px] font-medium bg-muted text-muted-foreground">
             {teacherDecisionLabel[lesson.teacher_decision_status || "pending"]}

@@ -6,6 +6,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { KidarioButton } from "@/components/ui/KidarioButton";
 import { TeacherBookingHeaderCard } from "@/components/booking/TeacherBookingHeaderCard";
 import { BookingStatusPill } from "@/components/booking/BookingStatusPill";
+import { PaymentInstructionsCard } from "@/components/booking/PaymentInstructionsCard";
 import { type DayAvailability } from "@/lib/bookingUtils";
 import { BookingActionModal, type BookingActionMode } from "@/components/booking/BookingActionModal";
 import { useToast } from "@/hooks/use-toast";
@@ -213,7 +214,10 @@ export default function BookingDetail() {
   const canReview = Boolean(backendDetail?.actions.can_review);
   const paymentCharge = backendDetail?.payment_order?.charges?.[0];
   const canRetryPayment = Boolean(
-    backendDetail && backendDetail.status === "pendente" && ["failed", "expired"].includes(backendDetail.payment_flow_status || ""),
+    backendDetail
+      && backendDetail.status === "pendente"
+      && backendDetail.teacher_decision_status !== "rejected"
+      && ["failed", "expired"].includes(backendDetail.payment_flow_status || ""),
   );
 
   const priceValue = backendDetail ? backendDetail.price_total : 0;
@@ -386,7 +390,7 @@ export default function BookingDetail() {
         <section className="card-kidario p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-display text-lg font-semibold text-foreground">Informações da aula</h2>
-            <BookingStatusPill status={booking.status} />
+            <BookingStatusPill status={booking.status} teacherDecisionStatus={backendDetail?.teacher_decision_status} />
           </div>
 
           <div className="space-y-2 text-sm text-foreground">
@@ -423,27 +427,7 @@ export default function BookingDetail() {
           </div>
         </section>
 
-        {(paymentCharge?.pix_qr_code || paymentCharge?.boleto_line || paymentCharge?.payment_url || paymentCharge?.boleto_url) && (
-          <section className="card-kidario p-4 space-y-2">
-            <h2 className="font-display text-lg font-semibold text-foreground">Pagamento</h2>
-            {paymentCharge.pix_qr_code && (
-              <p className="text-sm text-foreground break-all">{paymentCharge.pix_qr_code}</p>
-            )}
-            {paymentCharge.boleto_line && (
-              <p className="text-sm text-foreground break-all">{paymentCharge.boleto_line}</p>
-            )}
-            {(paymentCharge.payment_url || paymentCharge.boleto_url) && (
-              <a
-                href={paymentCharge.payment_url || paymentCharge.boleto_url || "#"}
-                className="text-primary text-sm font-medium hover:underline"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Abrir pagamento
-              </a>
-            )}
-          </section>
-        )}
+        <PaymentInstructionsCard paymentOrder={backendDetail?.payment_order} paymentCharge={paymentCharge} />
 
         {canRetryPayment && (
           <section className="card-kidario p-4 space-y-3">

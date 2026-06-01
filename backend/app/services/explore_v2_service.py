@@ -19,9 +19,19 @@ MIN_BOOKING_LEAD_MINUTES = 60
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 
-def _time_to_minutes(value: str) -> int:
-    hours_part, minutes_part = value.split(":", maxsplit=1)
-    return int(hours_part) * 60 + int(minutes_part)
+def _time_parts(value: object) -> tuple[int, int]:
+    if isinstance(value, time):
+        return value.hour, value.minute
+
+    parts = str(value).strip().split(":")
+    if len(parts) < 2:
+        raise ValueError(f"Invalid time value: {value!r}")
+    return int(parts[0]), int(parts[1])
+
+
+def _time_to_minutes(value: object) -> int:
+    hours, minutes = _time_parts(value)
+    return hours * 60 + minutes
 
 
 def _minutes_to_time(total_minutes: int) -> str:
@@ -60,14 +70,14 @@ def _normalize_modality_for_slot(teacher_modality: str | None, requested: Explor
     return "online" if is_online else "presencial"
 
 
-def _build_slot_datetime(date_value: date, time_value: str) -> datetime:
-    hour_part, minute_part = time_value.split(":", maxsplit=1)
+def _build_slot_datetime(date_value: date, time_value: object) -> datetime:
+    hours, minutes = _time_parts(time_value)
     return datetime(
         date_value.year,
         date_value.month,
         date_value.day,
-        int(hour_part),
-        int(minute_part),
+        hours,
+        minutes,
         tzinfo=LOCAL_TZ,
     )
 
@@ -140,8 +150,8 @@ def _build_availability_slots(
     while current_date <= date_to and len(slots) < max_slots:
         blocked_times = booked.get(current_date, set())
         for schedule in rows_by_day.get(current_date.weekday(), []):
-            start_minutes = _time_to_minutes(str(schedule["start_time"]))
-            end_minutes = _time_to_minutes(str(schedule["end_time"]))
+            start_minutes = _time_to_minutes(schedule["start_time"])
+            end_minutes = _time_to_minutes(schedule["end_time"])
             minute = start_minutes
             while minute + duration_minutes <= end_minutes and len(slots) < max_slots:
                 time_value = _minutes_to_time(minute)
