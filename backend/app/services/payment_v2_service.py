@@ -14,6 +14,7 @@ from app.services.identity_service import (
     require_user_role,
     resolve_teacher_id,
 )
+from app.services.package_v2_service import create_first_booking_for_active_package_v2
 from app.services.pagarme_service import PagarmeIntegrationError, create_recipient
 
 
@@ -496,6 +497,7 @@ def process_pagarme_webhook_v2(db: Session, payload: dict) -> dict:
             ),
             {"package_id": str(payment_order["package_id"])},
         )
+        create_first_booking_for_active_package_v2(db, payment_order["package_id"])
     db.execute(
         text(
             """

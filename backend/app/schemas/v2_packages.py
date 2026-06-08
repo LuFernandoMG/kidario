@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.v2_bookings import PaymentMethod, PaymentOrder
+from app.schemas.v2_bookings import Booking, BookingModality, PaymentMethod, PaymentOrder
 
 
 PackagePurchaseStatus = Literal["pending_payment", "active", "completed", "canceled", "expired"]
@@ -77,6 +77,11 @@ class BookingPackage(BaseModel):
     status: PackagePurchaseStatus
     valid_from: datetime | None = None
     expires_at: datetime | None = None
+    requested_first_booking_starts_at: datetime | None = None
+    requested_first_booking_duration_minutes: int | None = None
+    requested_first_booking_modality: BookingModality | None = None
+    first_booking_id: UUID | None = None
+    first_booking: Booking | None = None
     created_at: datetime
     updated_at: datetime
     payment_order: PaymentOrder | None = None
@@ -84,6 +89,14 @@ class BookingPackage(BaseModel):
 
 class BookingPackagesResponse(BaseModel):
     packages: list[BookingPackage]
+
+
+class PackagePurchaseFirstBookingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    starts_at: datetime
+    duration_minutes: int | None = Field(default=None, ge=15, le=300)
+    modality: BookingModality
 
 
 class PackagePurchaseCreateRequest(BaseModel):
@@ -95,6 +108,7 @@ class PackagePurchaseCreateRequest(BaseModel):
     card_token: str | None = None
     card_id: str | None = None
     installments: int = Field(default=1, ge=1, le=12)
+    first_booking: PackagePurchaseFirstBookingRequest | None = None
 
     @model_validator(mode="after")
     def require_card_reference_for_credit_card(self) -> "PackagePurchaseCreateRequest":

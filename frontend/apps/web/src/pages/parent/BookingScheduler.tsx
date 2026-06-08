@@ -327,11 +327,9 @@ export default function BookingScheduler() {
 
   const canContinue = Boolean(
     teacher
-      && (!requiresChildSelection || selectedChildId),
-  ) && (
-    isPackagePurchase
-      ? true
-      : Boolean(selectedDate && selectedTime)
+      && (!requiresChildSelection || selectedChildId)
+      && selectedDate
+      && selectedTime,
   );
 
   const handleContinue = () => {
@@ -340,6 +338,9 @@ export default function BookingScheduler() {
     if (selectedPackagePlan) {
       const packageCheckoutParams = new URLSearchParams({
         packagePlanId: selectedPackagePlan.id,
+        date: selectedDate,
+        time: selectedTime,
+        modality: selectedModality,
       });
       if (selectedChildId) packageCheckoutParams.set("childId", selectedChildId);
       navigate(`/checkout/${teacher.id}?${packageCheckoutParams.toString()}`);
@@ -457,74 +458,74 @@ export default function BookingScheduler() {
           ))}
         </section>
 
-        {!isPackagePurchase && (
-          <>
-            <section className="card-kidario p-4 space-y-3">
-              <h3 className="font-display text-lg font-semibold text-foreground">Modalidade</h3>
-              <div className="flex gap-2">
-                {modalities.map((modality) => (
-                  <button key={modality} type="button" onClick={() => setSelectedModality(modality)}>
-                    <Chip variant={selectedModality === modality ? "mint" : "default"} size="md">
-                      {modality === "online" ? <Video className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
-                      {modality === "online" ? "Online" : "Presencial"}
-                    </Chip>
-                  </button>
-                ))}
-              </div>
-            </section>
+        <section className="card-kidario p-4 space-y-3">
+          <h3 className="font-display text-lg font-semibold text-foreground">Modalidade</h3>
+          <div className="flex gap-2">
+            {modalities.map((modality) => (
+              <button key={modality} type="button" onClick={() => setSelectedModality(modality)}>
+                <Chip variant={selectedModality === modality ? "mint" : "default"} size="md">
+                  {modality === "online" ? <Video className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
+                  {modality === "online" ? "Online" : "Presencial"}
+                </Chip>
+              </button>
+            ))}
+          </div>
+        </section>
 
-            <section className="card-kidario p-4 space-y-3">
-              <h3 className="font-display text-lg font-semibold text-foreground">Duração da aula</h3>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{lessonDurationMinutes} minutos</span>
-              </p>
-            </section>
+        <section className="card-kidario p-4 space-y-3">
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            {isPackagePurchase ? "Duração da primeira aula" : "Duração da aula"}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{lessonDurationMinutes} minutos</span>
+          </p>
+        </section>
 
-            <section className="card-kidario p-4 space-y-3">
-              <h3 className="font-display text-lg font-semibold text-foreground">Selecione o dia</h3>
-              {isLoadingAvailability ? (
-                <p className="text-sm text-muted-foreground">Carregando horários disponíveis...</p>
-              ) : !availability.length && (
-                <p className="text-sm text-muted-foreground">Sem horários disponíveis para esta professora.</p>
-              )}
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide [&::-webkit-scrollbar]:hidden">
-                {availability.map((day) => (
-                  <button
-                    key={day.dateIso}
-                    type="button"
-                    onClick={() => handleDateSelection(day.dateIso)}
-                    className="shrink-0"
-                  >
-                    <Chip variant={selectedDate === day.dateIso ? "mint" : "default"} size="md">
-                      <Calendar className="w-3.5 h-3.5 mr-1" />
-                      {day.dateLabel}
-                    </Chip>
-                  </button>
-                ))}
-              </div>
+        <section className="card-kidario p-4 space-y-3">
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            {isPackagePurchase ? "Selecione o dia da primeira aula" : "Selecione o dia"}
+          </h3>
+          {isLoadingAvailability ? (
+            <p className="text-sm text-muted-foreground">Carregando horários disponíveis...</p>
+          ) : !availability.length && (
+            <p className="text-sm text-muted-foreground">Sem horários disponíveis para esta professora.</p>
+          )}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide [&::-webkit-scrollbar]:hidden">
+            {availability.map((day) => (
+              <button
+                key={day.dateIso}
+                type="button"
+                onClick={() => handleDateSelection(day.dateIso)}
+                className="shrink-0"
+              >
+                <Chip variant={selectedDate === day.dateIso ? "mint" : "default"} size="md">
+                  <Calendar className="w-3.5 h-3.5 mr-1" />
+                  {day.dateLabel}
+                </Chip>
+              </button>
+            ))}
+          </div>
 
-              <div className="pt-1">
-                <p className="text-sm text-muted-foreground mb-2">Horários disponíveis</p>
-                <div className="flex flex-wrap gap-2">
-                  {timeOptions.map((time) => (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() => setSelectedTime(time)}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                        selectedTime === time
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background border-border text-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {time}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </>
-        )}
+          <div className="pt-1">
+            <p className="text-sm text-muted-foreground mb-2">Horários disponíveis</p>
+            <div className="flex flex-wrap gap-2">
+              {timeOptions.map((time) => (
+                <button
+                  key={time}
+                  type="button"
+                  onClick={() => setSelectedTime(time)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    selectedTime === time
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {time}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <BookingSummaryCard
           title={isPackagePurchase ? "Resumo do pacote" : "Resumo da reserva"}
@@ -535,6 +536,9 @@ export default function BookingScheduler() {
                   { label: "Pacote:", value: selectedPackagePlan.name },
                   { label: "Aulas:", value: `${selectedPackagePlan.sessions_count}` },
                   { label: "Desconto:", value: formatDiscount(selectedPackagePlan.discount_percent) },
+                  { label: "Primeira aula:", value: selectedDayLabel },
+                  { label: "Horário:", value: selectedTime || "-" },
+                  { label: "Modalidade:", value: selectedModality === "online" ? "Online" : "Presencial" },
                 ]
               : [
                   { label: "Filho(a):", value: selectedChildName },

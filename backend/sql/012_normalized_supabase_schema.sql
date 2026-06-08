@@ -277,6 +277,16 @@ create table if not exists public.booking_packages (
   ),
   valid_from timestamptz,
   expires_at timestamptz,
+  requested_first_booking_starts_at timestamptz,
+  requested_first_booking_duration_minutes integer check (
+    requested_first_booking_duration_minutes is null
+    or requested_first_booking_duration_minutes between 15 and 300
+  ),
+  requested_first_booking_modality text check (
+    requested_first_booking_modality is null
+    or requested_first_booking_modality in ('online', 'presencial')
+  ),
+  first_booking_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint booking_packages_plan_teacher_fkey
@@ -382,6 +392,19 @@ begin
       foreign key (package_id, parent_id, teacher_id, child_id)
       references public.booking_packages(id, parent_id, teacher_id, child_id)
       on delete restrict
+      not valid;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'booking_packages_first_booking_fkey'
+      and conrelid = 'public.booking_packages'::regclass
+  ) then
+    alter table public.booking_packages
+      add constraint booking_packages_first_booking_fkey
+      foreign key (first_booking_id)
+      references public.bookings(id)
+      on delete set null
       not valid;
   end if;
 end
@@ -2047,6 +2070,10 @@ create index if not exists idx_booking_packages_parent_child_teacher_status
 
 create index if not exists idx_booking_packages_plan_id
   on public.booking_packages(package_plan_id);
+
+create index if not exists idx_booking_packages_first_booking_id
+  on public.booking_packages(first_booking_id)
+  where first_booking_id is not null;
 
 create index if not exists idx_bookings_teacher_starts_at
   on public.bookings(teacher_id, starts_at);

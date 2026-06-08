@@ -111,6 +111,45 @@ def _booking_package() -> dict:
     }
 
 
+def _first_booking() -> dict:
+    return {
+        "id": UUID("99999999-9999-9999-9999-999999999999"),
+        "parent_id": UUID("11111111-1111-1111-1111-111111111111"),
+        "child_id": UUID("44444444-4444-4444-4444-444444444444"),
+        "teacher_id": UUID("22222222-2222-2222-2222-222222222222"),
+        "package_id": UUID("77777777-7777-7777-7777-777777777777"),
+        "starts_at": "2026-05-28T15:00:00Z",
+        "duration_minutes": 60,
+        "modality": "online",
+        "status": "pendente",
+        "teacher_decision_status": "pending",
+        "teacher_decision_reason": None,
+        "teacher_decision_at": None,
+        "payment_flow_status": "paid",
+        "cancellation_reason": None,
+        "confirmed_at": None,
+        "completed_at": None,
+        "canceled_at": None,
+        "created_at": NOW,
+        "updated_at": NOW,
+        "child": {"id": UUID("44444444-4444-4444-4444-444444444444"), "name": "Lucas"},
+        "teacher": {
+            "id": UUID("22222222-2222-2222-2222-222222222222"),
+            "display_name": "Ana Silva",
+            "profile_photo_url": None,
+        },
+        "parent": {"id": UUID("11111111-1111-1111-1111-111111111111"), "display_name": "Maria Silva"},
+        "payment_order": None,
+        "latest_follow_up": None,
+        "actions": {
+            "can_reschedule": True,
+            "can_cancel": True,
+            "can_complete": False,
+            "can_review": False,
+        },
+    }
+
+
 def test_teacher_package_plan_crud_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(packages_endpoints, "list_my_package_plans_v2", lambda db, user: {"package_plans": [_package_plan()]})
     monkeypatch.setattr(packages_endpoints, "create_my_package_plan_v2", lambda db, user, payload: _package_plan())
@@ -154,6 +193,43 @@ def test_parent_package_purchase_returns_payment_order(client: TestClient, monke
     assert body["status"] == "pending_payment"
     assert body["remaining_sessions"] == 4
     assert body["payment_order"]["amount_cents"] == 43200
+
+
+def test_parent_package_purchase_accepts_first_booking_request(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_create_package_purchase_v2(db, user, payload):
+        assert payload.first_booking.starts_at.isoformat().startswith("2026-05-28T15:00:00")
+        assert payload.first_booking.duration_minutes == 60
+        assert payload.first_booking.modality == "online"
+        return {
+            **_booking_package(),
+            "status": "active",
+            "first_booking_id": UUID("99999999-9999-9999-9999-999999999999"),
+            "first_booking": _first_booking(),
+        }
+
+    monkeypatch.setattr(packages_endpoints, "create_package_purchase_v2", _fake_create_package_purchase_v2)
+
+    response = client.post(
+        "/api/v2/packages/purchases",
+        json={
+            "package_plan_id": "33333333-3333-3333-3333-333333333333",
+            "child_id": "44444444-4444-4444-4444-444444444444",
+            "payment_method": "pix",
+            "first_booking": {
+                "starts_at": "2026-05-28T15:00:00Z",
+                "duration_minutes": 60,
+                "modality": "online",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["first_booking_id"] == "99999999-9999-9999-9999-999999999999"
+    assert body["first_booking"]["id"] == "99999999-9999-9999-9999-999999999999"
 
 
 def test_list_parent_and_teacher_packages(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

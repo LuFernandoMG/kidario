@@ -226,9 +226,10 @@ export default function Checkout() {
     teacher
       && (
         isPackagePurchaseCheckout
-        || (isPackageSessionCheckout
-          ? selectedActivePackage && dateIso && time && lessonDurationMinutes > 0
-          : dateIso && time && lessonDurationMinutes > 0)
+          ? dateIso && time && lessonDurationMinutes > 0
+          : (isPackageSessionCheckout
+            ? selectedActivePackage && dateIso && time && lessonDurationMinutes > 0
+            : dateIso && time && lessonDurationMinutes > 0)
       ),
   );
 
@@ -330,6 +331,11 @@ export default function Checkout() {
           package_plan_id: selectedPackagePlan.id,
           child_id: selectedChildId,
           payment_method: paymentMethod,
+          first_booking: {
+            starts_at: composeStartsAt(dateIso, time),
+            duration_minutes: lessonDurationMinutes,
+            modality,
+          },
           ...(paymentMethod === "credit_card"
             ? { ...cardPaymentReference, installments }
             : {}),
@@ -338,6 +344,10 @@ export default function Checkout() {
           title: "Pacote comprado",
           description: "O pacote ficará disponível para agendar aulas com esta professora.",
         });
+        if (packagePurchase.first_booking?.id) {
+          navigate(`/confirmacao-reserva/${packagePurchase.first_booking.id}`);
+          return;
+        }
         if (paymentMethod === "credit_card" || packagePurchase.status === "active") {
           navigate("/agenda");
           return;
@@ -396,6 +406,8 @@ export default function Checkout() {
               { label: "Filho(a):", value: selectedChildName },
               { label: "Pacote:", value: selectedPackagePlan?.name || "Pacote de aulas" },
               { label: "Aulas:", value: `${createdPackage.total_sessions}` },
+              { label: "Primeira aula:", value: dateLabel },
+              { label: "Horário:", value: `${time} (${lessonDurationMinutes} min)` },
               { label: "Status:", value: packageStatusLabel(createdPackage.status) },
             ]}
             totalLabel="Total"
@@ -455,6 +467,9 @@ export default function Checkout() {
                   { label: "Pacote:", value: selectedPackagePlan.name },
                   { label: "Aulas:", value: `${selectedPackagePlan.sessions_count}` },
                   { label: "Desconto:", value: `${selectedPackagePlan.discount_percent}%` },
+                  { label: "Primeira aula:", value: dateLabel },
+                  { label: "Horário:", value: `${time} (${lessonDurationMinutes} min)` },
+                  { label: "Modalidade:", value: modality === "online" ? "Online" : "Presencial" },
                 ]
               : isPackageSessionCheckout
                 ? [
@@ -733,7 +748,7 @@ export default function Checkout() {
             ? "Processando..."
             : authSession.isAuthenticated
               ? selectedPackagePlan
-                ? "Comprar pacote"
+                ? "Comprar pacote e solicitar horário"
                 : isPackageSessionCheckout
                   ? "Solicitar com pacote"
                 : paymentMethod === "credit_card"

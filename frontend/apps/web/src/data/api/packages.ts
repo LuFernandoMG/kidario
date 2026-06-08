@@ -1,6 +1,6 @@
 import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
 import { buildRequestIdHeader } from "@/lib/observability";
-import type { PaymentOrder, PaymentMethod } from "@/data/api/bookings";
+import type { BookingModality, BookingResponse, PaymentOrder, PaymentMethod } from "@/data/api/bookings";
 
 export interface PackagePlan {
   id: string;
@@ -46,6 +46,11 @@ export interface BookingPackage {
   status: "pending_payment" | "active" | "completed" | "canceled" | "expired";
   valid_from?: string | null;
   expires_at?: string | null;
+  requested_first_booking_starts_at?: string | null;
+  requested_first_booking_duration_minutes?: number | null;
+  requested_first_booking_modality?: BookingModality | null;
+  first_booking_id?: string | null;
+  first_booking?: BookingResponse | null;
   created_at: string;
   updated_at: string;
   payment_order?: PaymentOrder | null;
@@ -125,6 +130,11 @@ export async function createPackagePurchase(
     card_token?: string;
     card_id?: string;
     installments?: number;
+    first_booking?: {
+      starts_at: string;
+      duration_minutes?: number;
+      modality: BookingModality;
+    };
   },
 ) {
   return packageRequest<BookingPackage>({

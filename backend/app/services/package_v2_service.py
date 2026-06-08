@@ -5,17 +5,26 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import AuthUser
+from app.schemas.v2_bookings import BookingCreateRequest
 from app.schemas.v2_packages import PackagePlanCreateRequest, PackagePlanUpdateRequest, PackagePurchaseCreateRequest
 from app.core.config import get_settings
 from app.services.booking_v2_service import (
+    BookingConflictError,
     BookingValidationError,
     _build_pagarme_customer_payload,
     _build_payment_pricing,
     _build_split_rules,
     _create_payment_records,
+    _ensure_minimum_booking_lead_time,
+    _ensure_slot_is_available,
+    _ensure_teacher_exists,
+    _ensure_teacher_supports_modality,
     _resolve_pagarme_credit_card_reference,
     _map_payment_order,
+    _normalize_starts_at,
     _order_code,
+    create_booking_v2,
+    get_booking_v2,
 )
 from app.services.pagarme_service import PagarmeIntegrationError, create_order
 from app.services.identity_service import (
@@ -259,6 +268,207 @@ def _resolve_child(db: Session, parent_id: UUID, child_id: UUID) -> UUID:
     return child_id
 
 
+def _validate_first_booking_request(
+    db: Session,
+    *,
+    teacher_id: UUID | str,
+    payload: PackagePurchaseCreateRequest,
+) -> None:
+    if not payload.first_booking:
+        return
+
+    teacher = _ensure_teacher_exists(db, UUID(str(teacher_id)))
+    try:
+        _ensure_teacher_supports_modality(teacher, payload.first_booking.modality)
+        starts_at = _normalize_starts_at(payload.first_booking.starts_at)
+        _ensure_minimum_booking_lead_time(starts_at)
+        _ensure_slot_is_available(db, UUID(str(teacher_id)), starts_at)
+    except BookingConflictError as exc:
+        raise PackageConflictError(str(exc)) from exc
+    except BookingValidationError as exc:
+        raise PackageValidationError(str(exc)) from exc
+
+
+def create_first_booking_for_active_package_v2(
+    db: Session,
+    package_id: UUID | str,
+    *,
+    user: AuthUser | None = None,
+    strict: bool = False,
+) -> dict | None:
+    row = (
+        db.execute(
+            text(
+                """
+                select
+                  bp.id,
+                  bp.teacher_id,
+                  bp.parent_id,
+                  bp.child_id,
+                  bp.status,
+                  bp.requested_first_booking_starts_at,
+                  bp.requested_first_booking_duration_minutes,
+                  bp.requested_first_booking_modality,
+                  bp.first_booking_id,
+                  coalesce(t.lesson_duration_minutes, 60) as lesson_duration_minutes,
+                  coalesce(po.requested_payment_method, 'pix') as requested_payment_method
+                from booking_packages bp
+                join teachers t on t.id = bp.teacher_id
+                left join lateral (
+                  select requested_payment_method
+                  from payment_orders
+                  where package_id = bp.id
+                  order by created_at desc
+                  limit 1
+                ) po on true
+                where bp.id = :package_id
+                for update of bp
+                """
+            ),
+            {"package_id": str(package_id)},
+        )
+        .mappings()
+        .first()
+    )
+    if not row:
+        if strict:
+            raise PackageNotFoundError("Package purchase not found.")
+        return None
+
+    package = dict(row)
+    if package["status"] != "active" or package.get("first_booking_id"):
+        return None
+    if not package.get("requested_first_booking_starts_at") or not package.get("requested_first_booking_modality"):
+        return None
+
+    starts_at = _normalize_starts_at(package["requested_first_booking_starts_at"])
+    duration_minutes = int(package.get("requested_first_booking_duration_minutes") or package["lesson_duration_minutes"] or 60)
+    try:
+        _ensure_minimum_booking_lead_time(starts_at)
+        _ensure_slot_is_available(db, UUID(str(package["teacher_id"])), starts_at)
+    except BookingConflictError as exc:
+        if strict:
+            raise PackageConflictError(str(exc)) from exc
+        return None
+    except (BookingValidationError, PackageValidationError) as exc:
+        if strict:
+            raise PackageValidationError(str(exc)) from exc
+        return None
+    except Exception:
+        if strict:
+            raise
+        return None
+
+    if user:
+        try:
+            booking = create_booking_v2(
+                db,
+                user,
+                BookingCreateRequest(
+                    child_id=UUID(str(package["child_id"])),
+                    teacher_id=UUID(str(package["teacher_id"])),
+                    starts_at=starts_at,
+                    duration_minutes=duration_minutes,
+                    modality=package["requested_first_booking_modality"],
+                    package_id=UUID(str(package["id"])),
+                ),
+            )
+        except BookingConflictError as exc:
+            if strict:
+                raise PackageConflictError(str(exc)) from exc
+            return None
+        except BookingValidationError as exc:
+            if strict:
+                raise PackageValidationError(str(exc)) from exc
+            return None
+        booking_id = booking["id"]
+    else:
+        try:
+            booking_row = (
+                db.execute(
+                    text(
+                        """
+                        insert into bookings (
+                          parent_id,
+                          teacher_id,
+                          package_id,
+                          child_id,
+                          starts_at,
+                          duration_minutes,
+                          modality,
+                          status,
+                          teacher_decision_status,
+                          payment_flow_status,
+                          currency
+                        )
+                        values (
+                          :parent_id,
+                          :teacher_id,
+                          :package_id,
+                          :child_id,
+                          :starts_at,
+                          :duration_minutes,
+                          :modality,
+                          'pendente',
+                          'pending',
+                          'paid',
+                          'BRL'
+                        )
+                        returning id
+                        """
+                    ),
+                    {
+                        "parent_id": str(package["parent_id"]),
+                        "teacher_id": str(package["teacher_id"]),
+                        "package_id": str(package["id"]),
+                        "child_id": str(package["child_id"]),
+                        "starts_at": starts_at,
+                        "duration_minutes": duration_minutes,
+                        "modality": package["requested_first_booking_modality"],
+                    },
+                )
+                .mappings()
+                .first()
+            )
+        except IntegrityError as exc:
+            if strict:
+                raise PackageConflictError("Selected slot is no longer available.") from exc
+            return None
+        if not booking_row:
+            if strict:
+                raise PackageValidationError("Could not create first package booking.")
+            return None
+        booking_id = booking_row["id"]
+        _create_payment_records(
+            db,
+            parent_id=package["parent_id"],
+            teacher_id=package["teacher_id"],
+            booking_id=booking_id,
+            package_id=None,
+            amount_cents=0,
+            payment_method=str(package.get("requested_payment_method") or "pix"),
+            order_status="paid",
+            charge_status="paid",
+        )
+        booking = None
+
+    db.execute(
+        text(
+            """
+            update booking_packages
+            set first_booking_id = :booking_id,
+                updated_at = now()
+            where id = :package_id
+              and first_booking_id is null
+            """
+        ),
+        {"package_id": str(package["id"]), "booking_id": str(booking_id)},
+    )
+    if booking:
+        return booking
+    return {"id": booking_id}
+
+
 def _load_booking_package(db: Session, package_id: UUID) -> dict:
     row = (
         db.execute(
@@ -280,6 +490,10 @@ def _load_booking_package(db: Session, package_id: UUID) -> dict:
                   bp.status,
                   bp.valid_from,
                   bp.expires_at,
+                  bp.requested_first_booking_starts_at,
+                  bp.requested_first_booking_duration_minutes,
+                  bp.requested_first_booking_modality,
+                  bp.first_booking_id,
                   bp.created_at,
                   bp.updated_at
                 from booking_packages bp
@@ -360,6 +574,7 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
         raise PackageValidationError("Package plan is not active.")
     if plan["hourly_rate_cents"] is None:
         raise PackageValidationError("Teacher hourly rate is required to purchase a package.")
+    _validate_first_booking_request(db, teacher_id=plan["teacher_id"], payload=payload)
 
     unit_amount = round(int(plan["hourly_rate_cents"]) * (int(plan["lesson_duration_minutes"] or 60) / 60))
     original_amount = unit_amount * int(plan["sessions_count"])
@@ -387,7 +602,10 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
                   discount_amount_cents,
                   final_amount_cents,
                   currency,
-                  status
+                  status,
+                  requested_first_booking_starts_at,
+                  requested_first_booking_duration_minutes,
+                  requested_first_booking_modality
                 )
                 values (
                   :id,
@@ -402,7 +620,10 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
                   :discount_amount_cents,
                   :final_amount_cents,
                   'BRL',
-                  'pending_payment'
+                  'pending_payment',
+                  :requested_first_booking_starts_at,
+                  :requested_first_booking_duration_minutes,
+                  :requested_first_booking_modality
                 )
                 returning id
                 """
@@ -419,6 +640,13 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
                 "discount_percent": discount_percent,
                 "discount_amount_cents": discount_amount,
                 "final_amount_cents": final_amount,
+                "requested_first_booking_starts_at": (
+                    _normalize_starts_at(payload.first_booking.starts_at) if payload.first_booking else None
+                ),
+                "requested_first_booking_duration_minutes": (
+                    payload.first_booking.duration_minutes if payload.first_booking else None
+                ),
+                "requested_first_booking_modality": payload.first_booking.modality if payload.first_booking else None,
             },
         )
         .mappings()
@@ -474,6 +702,7 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
         split_rules=split_rules,
         installments=payload.installments,
     )
+    first_booking = None
     if payment_record["order_status"] == "paid":
         db.execute(
             text(
@@ -487,8 +716,12 @@ def create_package_purchase_v2(db: Session, user: AuthUser, payload: PackagePurc
             ),
             {"package_id": str(package_id)},
         )
+        first_booking = create_first_booking_for_active_package_v2(db, package_id, user=user, strict=True)
 
-    return _load_booking_package(db, package_id)
+    package_data = _load_booking_package(db, package_id)
+    if first_booking:
+        package_data["first_booking"] = get_booking_v2(db, user, UUID(str(first_booking["id"])))
+    return package_data
 
 
 def list_parent_packages_v2(db: Session, user: AuthUser) -> dict:

@@ -106,6 +106,7 @@ V2 profile rules:
 - A parent can purchase only for one of their own children.
 - Package purchase totals are stored in cents on `booking_packages` and mirrored into `payment_orders`/`payment_charges`.
 - Package purchase responses expose derived `booked_sessions`, `completed_sessions`, and `remaining_sessions` counters.
+- Package purchases may include `first_booking`; the requested first lesson is persisted on `booking_packages` and becomes a normal package-backed booking when the package is active.
 - Bookings created with `package_id` require an active package matching parent, teacher and child, and consume remaining sessions before creating extra paid bookings.
 - `payment_method` is required for one-off bookings and optional when `package_id` is provided.
 - Package payment provider remains `internal` until Pagar.me order/charge creation is implemented.
