@@ -11,6 +11,7 @@ from app.services.pagarme_service import (
     create_customer,
     create_order,
     create_recipient,
+    get_recipient,
     get_charge,
 )
 
@@ -89,6 +90,17 @@ def test_create_recipient_uses_v5_register_information_payload(monkeypatch) -> N
     }
     assert body["default_bank_account"]["holder_document"] == "12345678901"
     assert body["default_bank_account"]["type"] == "checking"
+    assert body["transfer_settings"] == {
+        "transfer_enabled": True,
+        "transfer_interval": "weekly",
+        "transfer_day": 1,
+    }
+    assert body["automatic_anticipation_settings"] == {
+        "enabled": False,
+        "type": "full",
+        "volume_percentage": "0",
+        "delay": "365",
+    }
 
 
 def test_pagarme_test_key_accepts_v5_api_base_url() -> None:
@@ -149,6 +161,23 @@ def test_create_recipient_requires_individual_kyc_fields_when_enabled() -> None:
             SimpleNamespace(pagarme_enabled=True),
             payout_profile=_payout_profile(monthly_income_cents=None),
         )
+
+
+def test_get_recipient_fetches_recipient_by_id(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_json_request(settings, *, method, path, body=None):
+        captured["method"] = method
+        captured["path"] = path
+        captured["body"] = body
+        return {"id": "rp_teacher", "status": "active"}
+
+    monkeypatch.setattr(pagarme_service, "_json_request", _fake_json_request)
+
+    response = get_recipient(SimpleNamespace(pagarme_enabled=True), provider_recipient_id="rp_teacher")
+
+    assert response == {"id": "rp_teacher", "status": "active"}
+    assert captured == {"method": "GET", "path": "/recipients/rp_teacher", "body": None}
 
 
 def test_create_customer_sends_customer_payload(monkeypatch) -> None:

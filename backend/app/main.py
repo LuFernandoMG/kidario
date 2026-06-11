@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v2.endpoints.health import get_health
 from app.api.v2.router import api_router as api_v2_router
 from app.core.config import get_settings
 from app.core.observability import configure_logging, request_observability_middleware
@@ -20,3 +21,9 @@ app.add_middleware(
 )
 
 app.include_router(api_v2_router, prefix=settings.api_v2_prefix)
+
+
+@app.get("/api/v1/health", include_in_schema=False)
+def get_legacy_health() -> dict[str, str]:
+    # Compatibility only: some deploy health checks still point to the retired v1 prefix.
+    return get_health()

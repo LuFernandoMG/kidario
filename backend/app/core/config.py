@@ -63,9 +63,18 @@ class Settings(BaseSettings):
     pagarme_secret_key: str | None = None
     pagarme_base_url: str = "https://api.pagar.me/core/v5"
     pagarme_webhook_secret: str | None = None
+    pagarme_webhook_basic_username: str | None = None
+    pagarme_webhook_basic_password: str | None = None
     pagarme_platform_recipient_id: str | None = None
     pagarme_timeout_seconds: float = 15.0
     pagarme_ca_bundle: str | None = None
+    pagarme_recipient_transfer_enabled: bool = True
+    pagarme_recipient_transfer_interval: str = "weekly"
+    pagarme_recipient_transfer_day: int = 1
+    pagarme_recipient_anticipation_enabled: bool = False
+    pagarme_recipient_anticipation_type: str = "full"
+    pagarme_recipient_anticipation_volume_percentage: str = "0"
+    pagarme_recipient_anticipation_delay: str = "365"
     platform_fee_percent: float = 20.0
     parent_service_fee_percent: float = 8.0
 

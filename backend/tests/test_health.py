@@ -17,3 +17,11 @@ def test_healthcheck() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_legacy_healthcheck_alias() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

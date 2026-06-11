@@ -342,9 +342,33 @@ Configure in `.env`:
 - `KIDARIO_PAGARME_SECRET_KEY=<sk_test_or_live>`
 - `KIDARIO_PAGARME_BASE_URL=https://api.pagar.me/core/v5`
 - `KIDARIO_PAGARME_WEBHOOK_SECRET=<webhook-secret>`
+- `KIDARIO_PAGARME_WEBHOOK_BASIC_USERNAME=<webhook-basic-username>`
+- `KIDARIO_PAGARME_WEBHOOK_BASIC_PASSWORD=<webhook-basic-password>`
 - `KIDARIO_PAGARME_PLATFORM_RECIPIENT_ID=<kidario-recipient-id>`
+- `KIDARIO_PAGARME_RECIPIENT_TRANSFER_ENABLED=true`
+- `KIDARIO_PAGARME_RECIPIENT_TRANSFER_INTERVAL=weekly`
+- `KIDARIO_PAGARME_RECIPIENT_TRANSFER_DAY=1`
+- `KIDARIO_PAGARME_RECIPIENT_ANTICIPATION_ENABLED=false`
+- `KIDARIO_PAGARME_RECIPIENT_ANTICIPATION_TYPE=full`
+- `KIDARIO_PAGARME_RECIPIENT_ANTICIPATION_VOLUME_PERCENTAGE=0`
+- `KIDARIO_PAGARME_RECIPIENT_ANTICIPATION_DELAY=365`
 - `KIDARIO_PLATFORM_FEE_PERCENT=20`
 - `KIDARIO_PUBLIC_SITE_URL=https://use.kidario.app` (sent as recipient `site_url`)
+
+Configure the Pagar.me webhook to call:
+
+- `https://<api-host>/api/v2/payments/pagarme/webhook`
+
+For production behind `use.kidario.app`, use the production API host that reaches
+FastAPI. Configure the same Basic Auth username/password from
+`KIDARIO_PAGARME_WEBHOOK_BASIC_USERNAME` and
+`KIDARIO_PAGARME_WEBHOOK_BASIC_PASSWORD` in the Pagar.me webhook settings; the
+endpoint rejects requests without valid Basic Auth. Enable at least payment
+status events for orders/charges, especially paid, failed/refused, canceled and
+expired events. PIX and boleto payments remain `pending` locally until Pagar.me
+sends these webhook events. If recipient events are available in the Pagar.me
+account, enable them too so delayed recipient activation can move local payout
+profiles from `pending` to `active`.
 
 For local/sandbox validation, use Pagar.me test keys. The backend only calls Pagar.me
 when `KIDARIO_PAGARME_SECRET_KEY` is present; without it, deterministic fake PSP

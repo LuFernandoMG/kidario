@@ -442,6 +442,25 @@ def _recipient_site_url(settings: Settings) -> str:
     return str(getattr(settings, "public_site_url", "") or "https://use.kidario.app").strip()
 
 
+def _recipient_transfer_settings_payload(settings: Settings) -> dict[str, Any]:
+    return {
+        "transfer_enabled": bool(getattr(settings, "pagarme_recipient_transfer_enabled", True)),
+        "transfer_interval": str(getattr(settings, "pagarme_recipient_transfer_interval", "weekly") or "weekly"),
+        "transfer_day": int(getattr(settings, "pagarme_recipient_transfer_day", 1) or 1),
+    }
+
+
+def _recipient_anticipation_settings_payload(settings: Settings) -> dict[str, Any]:
+    return {
+        "enabled": bool(getattr(settings, "pagarme_recipient_anticipation_enabled", False)),
+        "type": str(getattr(settings, "pagarme_recipient_anticipation_type", "full") or "full"),
+        "volume_percentage": str(
+            getattr(settings, "pagarme_recipient_anticipation_volume_percentage", "0") or "0"
+        ),
+        "delay": str(getattr(settings, "pagarme_recipient_anticipation_delay", "365") or "365"),
+    }
+
+
 def create_recipient(settings: Settings, *, payout_profile: dict[str, Any]) -> dict[str, Any]:
     if not settings.pagarme_enabled:
         return {
@@ -499,7 +518,18 @@ def create_recipient(settings: Settings, *, payout_profile: dict[str, Any]) -> d
         body={
             "code": str(payout_profile["teacher_id"]),
             "register_information": register_information,
+            "transfer_settings": _recipient_transfer_settings_payload(settings),
             "default_bank_account": default_bank_account,
+            "automatic_anticipation_settings": _recipient_anticipation_settings_payload(settings),
             "metadata": {"teacher_id": str(payout_profile["teacher_id"])},
         },
     )
+
+
+def get_recipient(settings: Settings, *, provider_recipient_id: str) -> dict[str, Any]:
+    if not settings.pagarme_enabled:
+        return {
+            "id": provider_recipient_id,
+            "status": "active",
+        }
+    return _json_request(settings, method="GET", path=f"/recipients/{provider_recipient_id}")

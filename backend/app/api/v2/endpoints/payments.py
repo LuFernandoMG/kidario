@@ -1,6 +1,8 @@
+import secrets
 from collections.abc import Callable
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -34,6 +36,7 @@ from app.services.payment_v2_service import (
 )
 
 router = APIRouter(tags=["v2-payments"])
+pagarme_webhook_basic_auth = HTTPBasic(auto_error=False)
 
 
 def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
@@ -59,6 +62,34 @@ def _run_write_transaction(db: Session, operation: Callable[[], dict]) -> dict:
     except Exception:
         db.rollback()
         raise
+
+
+def _require_pagarme_webhook_basic_auth(
+    credentials: HTTPBasicCredentials | None = Security(pagarme_webhook_basic_auth),
+) -> None:
+    settings = get_settings()
+    expected_username = settings.pagarme_webhook_basic_username
+    expected_password = settings.pagarme_webhook_basic_password
+    if not expected_username or not expected_password:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Pagar.me webhook Basic Auth is not configured.",
+        )
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Pagar.me webhook authentication required.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    username_matches = secrets.compare_digest(credentials.username, expected_username)
+    password_matches = secrets.compare_digest(credentials.password, expected_password)
+    if not username_matches or not password_matches:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Pagar.me webhook credentials.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 
 def _handle_payment_error(exc: Exception) -> None:
@@ -160,6 +191,7 @@ def post_teacher_payment_recipient_sync_endpoint(
 @router.post("/payments/pagarme/webhook", response_model=PagarmeWebhookResponse)
 async def post_pagarme_webhook_endpoint(
     request: Request,
+    _: None = Security(_require_pagarme_webhook_basic_auth),
     db: Session = Depends(get_db),
 ) -> PagarmeWebhookResponse:
     try:

@@ -1,5 +1,6 @@
 import os
 from contextlib import AbstractContextManager
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -188,6 +189,17 @@ def _booking() -> dict:
     }
 
 
+def _webhook_settings(
+    *,
+    username: str | None = "pagarme-user",
+    password: str | None = "pagarme-pass",
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        pagarme_webhook_basic_username=username,
+        pagarme_webhook_basic_password=password,
+    )
+
+
 def test_post_v2_booking_returns_normalized_booking(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -325,6 +337,70 @@ def test_get_v2_parent_payments(client: TestClient, monkeypatch: pytest.MonkeyPa
 
     assert response.status_code == 200
     assert response.json()["payments"][0]["provider"] == "legacy"
+
+
+def test_pagarme_webhook_returns_503_when_basic_auth_is_not_configured(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        payments_endpoints,
+        "get_settings",
+        lambda: _webhook_settings(username=None, password=None),
+    )
+
+    response = client.post("/api/v2/payments/pagarme/webhook", json={"type": "order.paid"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Pagar.me webhook Basic Auth is not configured."
+
+
+def test_pagarme_webhook_requires_basic_auth_credentials(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(payments_endpoints, "get_settings", lambda: _webhook_settings())
+
+    missing_response = client.post("/api/v2/payments/pagarme/webhook", json={"type": "order.paid"})
+    wrong_response = client.post(
+        "/api/v2/payments/pagarme/webhook",
+        json={"type": "order.paid"},
+        auth=("pagarme-user", "wrong-pass"),
+    )
+
+    assert missing_response.status_code == 401
+    assert missing_response.headers["www-authenticate"] == "Basic"
+    assert wrong_response.status_code == 401
+    assert wrong_response.headers["www-authenticate"] == "Basic"
+
+
+def test_pagarme_webhook_accepts_valid_basic_auth(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    active_session = _ActiveDummySession()
+    app.dependency_overrides[get_db] = lambda: active_session
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(payments_endpoints, "get_settings", lambda: _webhook_settings())
+
+    def _fake_process_pagarme_webhook_v2(db, payload):
+        captured["db"] = db
+        captured["payload"] = payload
+        return {"status": "ok", "event_id": None}
+
+    monkeypatch.setattr(payments_endpoints, "process_pagarme_webhook_v2", _fake_process_pagarme_webhook_v2)
+
+    response = client.post(
+        "/api/v2/payments/pagarme/webhook",
+        json={"type": "order.paid"},
+        auth=("pagarme-user", "pagarme-pass"),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "event_id": None}
+    assert captured == {"db": active_session, "payload": {"type": "order.paid"}}
+    assert active_session.commits == 1
+    assert active_session.rollbacks == 0
 
 
 def test_patch_teacher_payout_profile_commits_existing_transaction(
