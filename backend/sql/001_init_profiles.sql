@@ -27,7 +27,6 @@ create table if not exists parent_children (
   profile_id uuid not null references parent_profiles(profile_id) on delete cascade,
   name text not null,
   gender text,
-  age smallint,
   current_grade text,
   birth_month_year text,
   school text,

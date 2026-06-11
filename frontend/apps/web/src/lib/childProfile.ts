@@ -40,6 +40,29 @@ export function formatChildGenderLabel(gender?: string | null): string {
   return childGenderLabelMap.get(normalized) || "Gênero não informado";
 }
 
+export function calculateAgeFromBirthMonthYear(
+  value?: string | null,
+  referenceDate: Date = new Date(),
+): number | null {
+  if (!value) return null;
+
+  const [yearRaw, monthRaw] = value.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  let age = referenceDate.getFullYear() - year;
+  const referenceMonth = referenceDate.getMonth() + 1;
+  if (referenceMonth < month) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
 export interface ChildGradeOption {
   value: string;
   label: string;

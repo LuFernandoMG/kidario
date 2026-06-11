@@ -74,7 +74,7 @@ export interface TeacherChatPreview {
 export interface TeacherStudentOverview {
   child_id: string;
   child_name: string;
-  child_age?: number | null;
+  child_birth_month_year?: string | null;
   total_lessons: number;
   completed_lessons: number;
   latest_lesson_at?: string | null;

@@ -16,14 +16,19 @@ import { SignupStepCarousel, type SignupStep } from "@/components/forms/SignupSt
 import { applyBackendSignupSession } from "@/lib/authSession";
 import { signUpWithBackend } from "@/data/api/auth";
 import { AuthPageLayout } from "@/components/auth/AuthPageLayout";
-import { childGenderOptions, childGradeOptions, normalizeChildGender, type ChildGender } from "@/lib/childProfile";
+import {
+  calculateAgeFromBirthMonthYear,
+  childGenderOptions,
+  childGradeOptions,
+  normalizeChildGender,
+  type ChildGender,
+} from "@/lib/childProfile";
 import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 import { useViaCepAutocomplete } from "@/hooks/useViaCepAutocomplete";
 
 interface ChildFormData {
   name: string;
   gender: ChildGender | "";
-  age: string;
   currentGrade: string;
   birthMonthYear: string;
   school: string;
@@ -68,7 +73,6 @@ const signupSteps: SignupStep[] = [
 const createEmptyChild = (): ChildFormData => ({
   name: "",
   gender: "",
-  age: "",
   currentGrade: "",
   birthMonthYear: "",
   school: "",
@@ -313,12 +317,16 @@ export default function Signup() {
 
         if (!child.name.trim()) nextErrors[`${prefix}.name`] = "Informe o nome do filho.";
         if (!child.gender) nextErrors[`${prefix}.gender`] = "Selecione o gênero.";
-        if (!child.age) nextErrors[`${prefix}.age`] = "Informe a idade.";
-        if (child.age && (Number(child.age) < 1 || Number(child.age) > 18)) {
-          nextErrors[`${prefix}.age`] = "A idade deve estar entre 1 e 18 anos.";
-        }
         if (!child.currentGrade.trim()) nextErrors[`${prefix}.currentGrade`] = "Informe o curso atual.";
-        if (!child.birthMonthYear) nextErrors[`${prefix}.birthMonthYear`] = "Informe mês e ano.";
+        if (!child.birthMonthYear) {
+          nextErrors[`${prefix}.birthMonthYear`] = "Informe mês e ano.";
+        } else {
+          const calculatedAge = calculateAgeFromBirthMonthYear(child.birthMonthYear);
+          if (calculatedAge == null || calculatedAge < 1 || calculatedAge > 18) {
+            nextErrors[`${prefix}.birthMonthYear`] =
+              "A idade calculada pelo mês/ano de nascimento deve estar entre 1 e 18 anos.";
+          }
+        }
         if (!child.school.trim()) nextErrors[`${prefix}.school`] = "Informe a escola.";
         if (!child.focusPoints.trim()) nextErrors[`${prefix}.focusPoints`] = "Descreva os pontos de atenção.";
       });
@@ -410,7 +418,6 @@ export default function Signup() {
           children: formData.children.map((child) => ({
             name: child.name,
             gender: normalizeChildGender(child.gender),
-            age: Number(child.age),
             current_grade: child.currentGrade,
             birth_month_year: child.birthMonthYear,
             school: child.school,
@@ -863,20 +870,6 @@ export default function Signup() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Idade</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={18}
-                      value={child.age}
-                      onChange={(e) => updateChild(index, "age", e.target.value)}
-                      placeholder="Ex.: 8"
-                      className="h-12 rounded-xl bg-muted/50"
-                    />
-                    <FieldError message={errors[`children.${index}.age`]} />
-                  </div>
-
-                  <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Curso atual</label>
                     <Select
                       value={child.currentGrade}
@@ -895,17 +888,17 @@ export default function Signup() {
                     </Select>
                     <FieldError message={errors[`children.${index}.currentGrade`]} />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Mês e ano de nascimento</label>
-                  <Input
-                    type="month"
-                    value={child.birthMonthYear}
-                    onChange={(e) => updateChild(index, "birthMonthYear", e.target.value)}
-                    className="h-12 rounded-xl bg-muted/50"
-                  />
-                  <FieldError message={errors[`children.${index}.birthMonthYear`]} />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Mês e ano de nascimento</label>
+                    <Input
+                      type="month"
+                      value={child.birthMonthYear}
+                      onChange={(e) => updateChild(index, "birthMonthYear", e.target.value)}
+                      className="h-12 rounded-xl bg-muted/50"
+                    />
+                    <FieldError message={errors[`children.${index}.birthMonthYear`]} />
+                  </div>
                 </div>
 
                 <div className="space-y-2">

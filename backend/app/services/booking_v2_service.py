@@ -64,6 +64,30 @@ LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 DEFAULT_PARENT_SERVICE_FEE_PERCENT = 8.0
 
 
+def _calculate_age_from_birth_month_year(value: date | str | None, reference_date: date | None = None) -> int | None:
+    if value is None:
+        return None
+
+    if isinstance(value, date):
+        birth_month_year = date(value.year, value.month, 1)
+    else:
+        parts = str(value).split("-")
+        if len(parts) < 2:
+            return None
+        try:
+            year = int(parts[0])
+            month = int(parts[1])
+            birth_month_year = date(year, month, 1)
+        except ValueError:
+            return None
+
+    today = reference_date or date.today()
+    age = today.year - birth_month_year.year
+    if (today.month, today.day) < (birth_month_year.month, 1):
+        age -= 1
+    return age if age >= 0 else None
+
+
 def _percentage_amount_cents(amount_cents: int, percent: float) -> int:
     value = Decimal(int(amount_cents)) * Decimal(str(percent)) / Decimal("100")
     return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
@@ -2445,7 +2469,7 @@ def _load_teacher_follow_up_context_data(db: Session, user: AuthUser, booking_id
     )
     planner_input = TeacherActivityPlanInput(
         child_name=str(booking_row.get("child_name") or "Aluno"),
-        child_age=None,
+        child_age=_calculate_age_from_birth_month_year(booking_row.get("child_birth_month_year")),
         completed_lessons_with_child=completed_lessons_with_child,
         objectives=[objective["objective"] for objective in class_objectives],
         parent_focus_points=parent_focus_points,

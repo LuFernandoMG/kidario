@@ -211,6 +211,14 @@ Apply SQL scripts in order (Supabase SQL Editor):
 - `sql/011_add_parent_cpf.sql`
 - `sql/012_normalized_supabase_schema.sql`
 - `sql/013_api_v2_cutover.sql`
+- `sql/014_pagarme_psp_split.sql`
+- `sql/015_teacher_payout_profile_kyc_fields.sql`
+- `sql/016_fix_booking_child_parent_validation.sql`
+- `sql/017_fix_chat_thread_booking_validation.sql`
+- `sql/018_fix_chat_message_sender_validation.sql`
+- `sql/019_disable_legacy_booking_payment_sync.sql`
+- `sql/020_package_first_booking_request.sql`
+- `sql/021_drop_parent_children_age.sql`
 - `sql/003_rls_validation.sql` (optional smoke test)
 
 `002` enables RLS with owner-based policies for `authenticated` users and keeps

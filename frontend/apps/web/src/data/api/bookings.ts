@@ -184,7 +184,8 @@ export interface TeacherFollowUpContextResponse {
   booking_id: string;
   child_id: string;
   child_name: string;
-  child_age?: number | null;
+  child_birth_month_year?: string | null;
+  starts_at: string;
   date_iso: string;
   date_label: string;
   time: string;
@@ -492,10 +493,19 @@ export async function getTeacherFollowUpContext(
   accessToken: string,
   bookingId: string,
 ): Promise<TeacherFollowUpContextResponse> {
-  return backendRequest<TeacherFollowUpContextResponse>({
+  const response = await backendRequest<TeacherFollowUpContextResponse>({
     path: `/bookings/${bookingId}/teacher/follow-up-context`,
     accessToken,
   });
+  const startsAtDate = new Date(response.starts_at);
+  const dateIso = Number.isNaN(startsAtDate.getTime()) ? response.starts_at.slice(0, 10) : toDateIso(startsAtDate);
+
+  return {
+    ...response,
+    date_iso: response.date_iso || dateIso,
+    date_label: response.date_label || formatDateLong(dateIso),
+    time: response.time || formatTimeFromIso(response.starts_at),
+  };
 }
 
 export async function completeBooking(

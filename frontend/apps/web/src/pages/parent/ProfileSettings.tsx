@@ -20,6 +20,7 @@ import {
   type BackendParentChildView,
 } from "@/data/api/parentProfiles";
 import {
+  calculateAgeFromBirthMonthYear,
   childGenderOptions,
   childGradeOptions,
   formatChildGenderLabel,
@@ -69,10 +70,18 @@ function emptyChild(): BackendParentChildView {
   };
 }
 
+function toBirthMonthInputValue(value?: string | null): string {
+  if (!value) return "";
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  return `${year}-${month.padStart(2, "0")}`;
+}
+
 function normalizeChildForForm(child: BackendParentChildView): BackendParentChildView {
   return {
     ...child,
     gender: normalizeChildGender(child.gender),
+    birth_month_year: toBirthMonthInputValue(child.birth_month_year),
   };
 }
 
@@ -258,7 +267,6 @@ export default function ParentProfileSettings() {
             focus_points: child.focus_points?.trim() || null,
             birth_month_year: child.birth_month_year || null,
             gender: normalizeChildGender(child.gender),
-            age: child.age ?? null,
           })),
           delete_ids: deletedChildIds,
         },
@@ -416,6 +424,7 @@ export default function ParentProfileSettings() {
                 const ChildIcon = getChildIconByGender();
                 const genderValue = normalizeChildGender(child.gender);
                 const gradeValue = child.current_grade || "";
+                const calculatedAge = calculateAgeFromBirthMonthYear(child.birth_month_year);
 
                 return (
                   <div key={child.id} className="rounded-xl border border-border p-3 space-y-3">
@@ -474,19 +483,9 @@ export default function ParentProfileSettings() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <Field label="Idade">
-                        {isEditingChild ? (
-                          <Input
-                            type="number"
-                            min="0"
-                            value={child.age != null ? String(child.age) : ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              updateChild(child.id, "age", value ? Number(value) : null);
-                            }}
-                          />
-                        ) : (
-                          <StaticFieldValue value={child.age != null ? `${child.age} anos` : "Não informada"} />
-                        )}
+                        <StaticFieldValue
+                          value={calculatedAge != null ? `${calculatedAge} anos` : "Não informada"}
+                        />
                       </Field>
                       <Field label="Série/Curso">
                         {isEditingChild ? (
@@ -629,16 +628,19 @@ function validateChildrenForSave(children: BackendParentChildView[]): string | n
       return `Selecione o gênero de ${child.name?.trim() || "cada nova criança"}.`;
     }
 
-    if (child.age == null || Number.isNaN(child.age) || child.age < 1 || child.age > 18) {
-      return `Informe uma idade válida (1 a 18) para ${child.name?.trim() || "cada nova criança"}.`;
-    }
-
     if (!child.current_grade?.trim()) {
       return `Selecione a série/curso de ${child.name?.trim() || "cada nova criança"}.`;
     }
 
     if (!child.birth_month_year) {
       return `Informe mês/ano de nascimento de ${child.name?.trim() || "cada nova criança"}.`;
+    }
+
+    const calculatedAge = calculateAgeFromBirthMonthYear(child.birth_month_year);
+    if (calculatedAge == null || calculatedAge < 1 || calculatedAge > 18) {
+      return `Informe mês/ano de nascimento que resulte em idade de 1 a 18 anos para ${
+        child.name?.trim() || "cada nova criança"
+      }.`;
     }
 
     if (!child.school?.trim()) {

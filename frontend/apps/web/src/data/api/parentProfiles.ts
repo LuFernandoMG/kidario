@@ -10,7 +10,6 @@ export interface BackendParentChildView {
   parent_id?: string;
   name: string;
   gender?: ChildGender | null;
-  age?: number | null;
   current_grade?: string | null;
   birth_month_year?: string | null;
   school?: string | null;
@@ -46,7 +45,6 @@ export interface ParentChildUpsertPayload {
   id?: string | null;
   name: string;
   gender?: ChildGender | null;
-  age?: number | null;
   current_grade?: string | null;
   birth_month_year?: string | null;
   school?: string | null;
@@ -105,16 +103,6 @@ function formatAddress(address: BackendParentProfileResponse["address_detail"]) 
   ].filter(Boolean).join(", ");
 }
 
-function calculateAgeFromMonthYear(value?: string | null) {
-  if (!value) return null;
-  const [year, month] = value.split("-").map(Number);
-  if (!year || !month) return null;
-  const today = new Date();
-  let age = today.getFullYear() - year;
-  if (today.getMonth() + 1 < month) age -= 1;
-  return age >= 0 ? age : null;
-}
-
 function mapParentProfile(payload: V2ParentProfile): BackendParentProfileResponse {
   return {
     id: payload.id,
@@ -131,10 +119,7 @@ function mapParentProfile(payload: V2ParentProfile): BackendParentProfileRespons
     address: formatAddress(payload.address),
     address_detail: payload.address,
     bio: payload.bio,
-    children: (payload.children || []).map((child) => ({
-      ...child,
-      age: child.age ?? calculateAgeFromMonthYear(child.birth_month_year),
-    })),
+    children: payload.children || [],
   };
 }
 

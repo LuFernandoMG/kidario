@@ -15,6 +15,7 @@ import {
   useTeacherControlCenterOverview,
   useTeacherStudentTimeline,
 } from "@/data/queries/teacherControl";
+import { calculateAgeFromBirthMonthYear } from "@/lib/childProfile";
 import { TEACHER_AGENDA_PATH } from "@/routes/teacher";
 
 export default function TeacherStudentsPage() {
@@ -98,6 +99,7 @@ export default function TeacherStudentsPage() {
                       ? Math.min(100, Math.round((student.completed_lessons / student.total_lessons) * 100))
                       : 0;
                   const isSelected = selectedStudent?.child_id === student.child_id;
+                  const calculatedAge = calculateAgeFromBirthMonthYear(student.child_birth_month_year);
 
                   return (
                     <button
@@ -111,7 +113,7 @@ export default function TeacherStudentsPage() {
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-foreground">
                           {student.child_name}
-                          {student.child_age != null ? ` (${student.child_age} anos)` : ""}
+                          {calculatedAge != null ? ` (${calculatedAge} anos)` : ""}
                         </p>
                         <ProgressBadge status={student.progress_status} />
                       </div>

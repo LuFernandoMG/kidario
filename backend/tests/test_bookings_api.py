@@ -1,5 +1,6 @@
 import os
 from contextlib import AbstractContextManager
+from datetime import date
 from uuid import UUID
 
 import pytest
@@ -17,7 +18,11 @@ from app.api.v2.endpoints import reviews as reviews_endpoints
 from app.core.security import AuthUser
 from app.db.session import get_db
 from app.main import app
-from app.services.booking_v2_service import BookingConflictError, BookingNotFoundError
+from app.services.booking_v2_service import (
+    BookingConflictError,
+    BookingNotFoundError,
+    _calculate_age_from_birth_month_year,
+)
 
 
 NOW = "2026-02-20T10:00:00Z"
@@ -129,6 +134,12 @@ def _booking(status: str = "pendente", starts_at: str = "2026-06-25T14:00:00Z") 
             "can_review": False,
         },
     }
+
+
+def test_calculate_age_from_birth_month_year_assumes_first_day_of_month() -> None:
+    assert _calculate_age_from_birth_month_year("2017-06-01", date(2026, 6, 1)) == 9
+    assert _calculate_age_from_birth_month_year(date(2017, 7, 20), date(2026, 6, 30)) == 8
+    assert _calculate_age_from_birth_month_year("2027-01", date(2026, 6, 1)) is None
 
 
 def test_post_booking_returns_created(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
