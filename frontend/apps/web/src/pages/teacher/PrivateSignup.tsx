@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useState } from "react";
+import { type ChangeEvent, type KeyboardEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, Eye, EyeOff, Plus, Trash2, X } from "lucide-react";
@@ -22,6 +22,7 @@ import {
 import { uploadTeacherProfilePhoto } from "@/data/api/teacherProfiles";
 import { signUpWithBackend } from "@/data/api/auth";
 import { applyBackendSignupSession } from "@/lib/authSession";
+import { savePendingTeacherProfilePhoto } from "@/lib/pendingProfileSync";
 import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 import { ROOT_PATH } from "@/routes/paths";
 import { TEACHER_CONTROL_CENTER_PATH } from "@/routes/teacher";
@@ -193,6 +194,26 @@ const normalizeEmailInput = (value: string): string => value.replace(/\s+/g, "")
 
 const canonicalizeEmail = (value: string): string => normalizeEmailInput(value).toLowerCase();
 const PROFESSIONAL_REGISTRATION_DEFAULT = "12345";
+const PROFILE_PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
+const PROFILE_PHOTO_MAX_BYTES = 5_242_880;
+const PROFILE_PHOTO_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const PROFILE_PHOTO_ALLOWED_EXTENSION = /\.(jpe?g|png|webp)$/i;
+
+function validateProfilePhotoFile(file: File): string | null {
+  const fileType = file.type.toLowerCase();
+  const hasAllowedType = fileType ? PROFILE_PHOTO_ALLOWED_TYPES.has(fileType) : false;
+  const hasAllowedExtension = PROFILE_PHOTO_ALLOWED_EXTENSION.test(file.name);
+
+  if (!hasAllowedType && !hasAllowedExtension) {
+    return "Use uma imagem em JPG, PNG ou WEBP.";
+  }
+
+  if (file.size > PROFILE_PHOTO_MAX_BYTES) {
+    return "A foto deve ter até 5 MB.";
+  }
+
+  return null;
+}
 
 const isValidEmail = (value: string): boolean => {
   const normalized = canonicalizeEmail(value);
@@ -274,6 +295,35 @@ export default function TeacherPrivateSignup() {
     value: string | File | null | string[] | boolean,
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value as never }));
+  };
+
+  const handleProfilePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+
+    if (!file) {
+      setField("profilePhoto", null);
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.profilePhoto;
+        return next;
+      });
+      return;
+    }
+
+    const validationError = validateProfilePhotoFile(file);
+    if (validationError) {
+      event.target.value = "";
+      setField("profilePhoto", null);
+      setErrors((prev) => ({ ...prev, profilePhoto: validationError }));
+      return;
+    }
+
+    setField("profilePhoto", file);
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.profilePhoto;
+      return next;
+    });
   };
 
   const handleEmailChange = (value: string) => {
@@ -432,7 +482,12 @@ export default function TeacherPrivateSignup() {
       if (!formData.modality) nextErrors.modality = "Selecione a modalidade.";
       if (!formData.lessonDuration) nextErrors.lessonDuration = "Selecione a duração média da aula.";
       if (!formData.hourlyRate.trim()) nextErrors.hourlyRate = "Informe o custo por hora.";
-      if (!formData.profilePhoto) nextErrors.profilePhoto = "Adicione uma foto de perfil.";
+      if (!formData.profilePhoto) {
+        nextErrors.profilePhoto = "Adicione uma foto de perfil.";
+      } else {
+        const profilePhotoError = validateProfilePhotoFile(formData.profilePhoto);
+        if (profilePhotoError) nextErrors.profilePhoto = profilePhotoError;
+      }
       if (!formData.miniBio.trim()) nextErrors.miniBio = "Informe uma minibio profissional.";
       if (formData.specialties.length === 0) {
         nextErrors.specialties = "Adicione pelo menos uma especialidade.";
@@ -609,6 +664,16 @@ export default function TeacherPrivateSignup() {
       });
 
       if (result.email_confirmation_required) {
+        if (formData.profilePhoto) {
+          const queuedPhoto = await savePendingTeacherProfilePhoto({
+            email,
+            file: formData.profilePhoto,
+          });
+          if (!queuedPhoto) {
+            console.warn("Could not queue teacher profile photo for post-confirmation upload.");
+          }
+        }
+
         const params = new URLSearchParams();
         params.set("email", email);
         params.set("notice", "check-email");
@@ -791,12 +856,9 @@ export default function TeacherPrivateSignup() {
               <FormField label="Foto de perfil">
                 <Input
                   type="file"
-                  accept="image/*"
+                  accept={PROFILE_PHOTO_ACCEPT}
                   className="h-12 rounded-xl bg-muted/50 file:mr-4 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-primary"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
-                    setField("profilePhoto", file);
-                  }}
+                  onChange={handleProfilePhotoChange}
                 />
                 {formData.profilePhoto && (
                   <p className="text-xs text-muted-foreground">

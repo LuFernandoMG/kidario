@@ -409,7 +409,7 @@ export function TeacherPayoutProfileDialog({
                     </p>
                   </div>
 
-                  <Field label="Senha da conta">
+                  <Field label="Senha de Kidario por segurança">
                     <Input
                       value={currentPassword}
                       onChange={(event) => setCurrentPassword(event.target.value)}

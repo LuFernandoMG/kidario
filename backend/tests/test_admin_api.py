@@ -33,6 +33,26 @@ class _DummySession:
         return _DummyTransaction()
 
 
+class _ActiveTransactionSession:
+    def __init__(self) -> None:
+        self.commits = 0
+        self.rollbacks = 0
+        self.begin_calls = 0
+
+    def in_transaction(self) -> bool:
+        return True
+
+    def begin(self) -> _DummyTransaction:
+        self.begin_calls += 1
+        raise AssertionError("begin should not be called when a transaction is already active")
+
+    def commit(self) -> None:
+        self.commits += 1
+
+    def rollback(self) -> None:
+        self.rollbacks += 1
+
+
 @pytest.fixture
 def client() -> TestClient:
     app.dependency_overrides[get_current_admin] = lambda: AuthUser(
@@ -161,6 +181,35 @@ def test_patch_teacher_activation_returns_ok(client: TestClient, monkeypatch: py
     body = response.json()
     assert body["status"] == "ok"
     assert body["is_active"] is False
+
+
+def test_patch_teacher_activation_reuses_active_transaction(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    active_session = _ActiveTransactionSession()
+    app.dependency_overrides[get_db] = lambda: active_session
+
+    def _fake_set_teacher_activation(db, teacher_id, is_active):
+        assert db is active_session
+        return {
+            "status": "ok",
+            "teacher_id": teacher_id,
+            "is_active": is_active,
+        }
+
+    monkeypatch.setattr(admin_endpoints, "set_teacher_activation_v2", _fake_set_teacher_activation)
+
+    response = client.patch(
+        "/api/v2/admin/teachers/3472def4-1d03-4350-b2c2-20c7fa27d430/activation",
+        json={"is_active": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["is_active"] is True
+    assert active_session.begin_calls == 0
+    assert active_session.commits == 1
+    assert active_session.rollbacks == 0
 
 
 def test_patch_teacher_activation_not_found_returns_404(

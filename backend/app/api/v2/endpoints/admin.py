@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Security, status
@@ -35,6 +36,19 @@ def _raise_http_from_sql_error(exc: SQLAlchemyError) -> None:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail) from exc
 
 
+def _run_write_transaction(db: Session, operation: Callable[[], dict]) -> dict:
+    if hasattr(db, "in_transaction") and db.in_transaction():
+        try:
+            data = operation()
+            db.commit()
+            return data
+        except Exception:
+            db.rollback()
+            raise
+    with db.begin():
+        return operation()
+
+
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 def get_admin_dashboard_endpoint(
     _: AuthUser = Security(get_current_admin),
@@ -62,8 +76,7 @@ def patch_teacher_activation(
     db: Session = Depends(get_db),
 ) -> TeacherActivationResponse:
     try:
-        with db.begin():
-            data = set_teacher_activation_v2(db, teacher_id, payload.is_active)
+        data = _run_write_transaction(db, lambda: set_teacher_activation_v2(db, teacher_id, payload.is_active))
     except ProfileNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
