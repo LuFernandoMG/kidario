@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/backendApi", () => ({
-  getBackendApiBaseUrl: () => "https://backend.test/api/v2",
-  resolveProtectedAccessToken: vi.fn(async (token: string) => token),
-  throwBackendError: ({ fallback }: { fallback: string }) => {
-    throw new Error(fallback);
-  },
+vi.stubEnv("VITE_BACKEND_API_URL", "https://backend.test/api/v2");
+
+vi.mock("@/lib/authSession", () => ({
+  getValidSupabaseAccessToken: async () => "token",
+  handleExpiredSessionRedirect: vi.fn(),
 }));
 
 vi.mock("@/lib/observability", () => ({

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LogOut } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { KidarioButton } from "@/components/ui/KidarioButton";
@@ -11,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { getAuthSession, getSupabaseAccessToken } from "@/lib/authSession";
+import { getAuthSession, getSupabaseAccessToken, signOutFromSupabase } from "@/lib/authSession";
 import {
   type AdminDashboardResponse,
   type AdminTeacherRecord,
@@ -103,6 +104,7 @@ export default function AdminHiddenDashboard() {
   const authSession = getAuthSession();
   const accessToken = getSupabaseAccessToken();
   const [pendingTeacherId, setPendingTeacherId] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [detailModal, setDetailModal] = useState<DetailModalState>({
     open: false,
     title: "",
@@ -181,17 +183,39 @@ export default function AdminHiddenDashboard() {
     });
   }
 
+  async function handleLogout() {
+    setIsSigningOut(true);
+    await signOutFromSupabase();
+    queryClient.clear();
+    navigate("/login", { replace: true });
+  }
+
   const data = dashboardQuery.data;
 
   return (
     <AppShell hideNav className="bg-muted/20">
       <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-6 lg:px-8">
         <header className="card-kidario mb-6 border-primary/20 bg-gradient-to-r from-card to-primary/5 p-6">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">Acesso interno</p>
-          <h1 className="mt-2 font-display text-3xl text-foreground">Painel administrativo</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Visualização centralizada de registros de professoras, responsáveis, agendamentos e pagamentos.
-          </p>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">Acesso interno</p>
+              <h1 className="mt-2 font-display text-3xl text-foreground">Painel administrativo</h1>
+              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                Visualização centralizada de registros de professoras, responsáveis, agendamentos e pagamentos.
+              </p>
+            </div>
+            <KidarioButton
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={isSigningOut}
+              onClick={() => void handleLogout()}
+            >
+              <LogOut className="h-4 w-4" />
+              {isSigningOut ? "Saindo..." : "Trocar sessão"}
+            </KidarioButton>
+          </div>
         </header>
 
         {dashboardQuery.isLoading ? (

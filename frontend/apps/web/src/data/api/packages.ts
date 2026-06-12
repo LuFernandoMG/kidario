@@ -1,5 +1,4 @@
-import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
-import { buildRequestIdHeader } from "@/lib/observability";
+import { backendJsonRequest } from "@/lib/backendApi";
 import type { BookingModality, BookingResponse, PaymentOrder, PaymentMethod } from "@/data/api/bookings";
 
 export interface PackagePlan {
@@ -63,30 +62,14 @@ async function packageRequest<TResponse>(params: {
   body?: Record<string, unknown>;
 }) {
   const { path, accessToken, method = "GET", body } = params;
-  const bearerToken = await resolveProtectedAccessToken(accessToken);
-  const response = await fetch(`${getBackendApiBaseUrl()}${path}`, {
+  return backendJsonRequest<TResponse>({
+    path,
+    accessToken,
     method,
-    headers: {
-      Authorization: `Bearer ${bearerToken}`,
-      Accept: "application/json",
-      ...buildRequestIdHeader(),
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  }).catch(() => {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
+    body,
+    fallback: "Não foi possível processar o pacote.",
+    authProtected: true,
   });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throwBackendError({
-      status: response.status,
-      payload,
-      fallback: "Não foi possível processar o pacote.",
-      authProtected: true,
-    });
-  }
-  return payload as TResponse;
 }
 
 export async function listMyPackagePlans(accessToken: string) {

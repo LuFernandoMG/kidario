@@ -1,5 +1,4 @@
-import { extractErrorMessage, getBackendApiBaseUrl } from "@/lib/backendApi";
-import { buildRequestIdHeader } from "@/lib/observability";
+import { backendJsonRequest } from "@/lib/backendApi";
 
 interface AddressInputPayload {
   street?: string;
@@ -105,27 +104,10 @@ export interface AuthSignupResponse {
 }
 
 export async function signUpWithBackend(payload: AuthSignupRequestPayload): Promise<AuthSignupResponse> {
-  const url = `${getBackendApiBaseUrl()}/auth/signup`;
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...buildRequestIdHeader(),
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
-  }
-
-  const parsed = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(parsed, "Não foi possível criar a conta."));
-  }
-
-  return parsed as AuthSignupResponse;
+  return backendJsonRequest<AuthSignupResponse>({
+    path: "/auth/signup",
+    method: "POST",
+    body: payload as unknown as Record<string, unknown>,
+    fallback: "Não foi possível criar a conta.",
+  });
 }

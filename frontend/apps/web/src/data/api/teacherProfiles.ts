@@ -1,9 +1,6 @@
 import {
-  getBackendApiBaseUrl,
-  resolveProtectedAccessToken,
-  throwBackendError,
+  backendJsonRequest,
 } from "@/lib/backendApi";
-import { buildRequestIdHeader } from "@/lib/observability";
 import {
   type BackendProfileStatusResponse,
   type BackendProfileView,
@@ -294,35 +291,15 @@ export async function uploadTeacherProfilePhoto(
   accessToken: string,
   file: File,
 ): Promise<TeacherPhotoUploadResponse> {
-  const url = `${getBackendApiBaseUrl()}/teachers/me/photo`;
-  const bearerToken = await resolveProtectedAccessToken(accessToken);
   const body = new FormData();
   body.append("file", file);
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        Accept: "application/json",
-        ...buildRequestIdHeader(),
-      },
-      body,
-    });
-  } catch {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
-  }
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throwBackendError({
-      status: response.status,
-      payload,
-      fallback: "Não foi possível enviar a foto de perfil.",
-      authProtected: true,
-    });
-  }
-
-  return payload as TeacherPhotoUploadResponse;
+  return backendJsonRequest<TeacherPhotoUploadResponse>({
+    path: "/teachers/me/photo",
+    accessToken,
+    method: "POST",
+    body,
+    fallback: "Não foi possível enviar a foto de perfil.",
+    authProtected: true,
+  });
 }

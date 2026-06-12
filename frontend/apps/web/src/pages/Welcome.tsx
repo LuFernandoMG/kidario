@@ -19,6 +19,7 @@ const ROTATING_HIGHLIGHTS = [
 
 export default function Welcome() {
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(false);
   const recoveryTokens = getRecoveryTokensFromUrlHash();
   const recoveryHash =
     typeof window !== "undefined" &&
@@ -36,7 +37,24 @@ export default function Welcome() {
       window.clearInterval(intervalId);
     };
   }, []);
-    
+
+  useEffect(() => {
+    if (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShouldLoadVideo(true);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
   if (recoveryHash) {
     return <Navigate to={`${RESET_PASSWORD_PATH}${recoveryHash}`} replace />;
   }
@@ -53,16 +71,23 @@ export default function Welcome() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="absolute inset-0 h-full w-full object-cover"
-      >
-        <source src="/assets/background.mp4" type="video/mp4" />
-      </video>
+    <div
+      className="relative min-h-screen overflow-hidden bg-slate-950 bg-cover bg-center"
+      style={{ backgroundImage: "url('/assets/background-poster.jpg')" }}
+    >
+      {shouldLoadVideo ? (
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          poster="/assets/background-poster.jpg"
+          className="absolute inset-0 h-full w-full object-cover"
+        >
+          <source src="/assets/background-optimized.mp4" type="video/mp4" />
+        </video>
+      ) : null}
       <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/40 to-emerald-500/40" />
 
       <div className="relative z-10 flex min-h-screen flex-col justify-between">

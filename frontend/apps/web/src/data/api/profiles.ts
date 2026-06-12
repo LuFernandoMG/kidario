@@ -1,9 +1,6 @@
 import {
-  getBackendApiBaseUrl,
-  resolveProtectedAccessToken,
-  throwBackendError,
+  backendJsonRequest,
 } from "@/lib/backendApi";
-import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BackendUserRole = "parent" | "teacher" | "admin";
 
@@ -61,36 +58,14 @@ export async function profileBackendRequest<TResponse>(params: {
     fallback = "Não foi possível salvar o perfil no backend.",
   } = params;
 
-  const url = `${getBackendApiBaseUrl()}${path}`;
-  const bearerToken = await resolveProtectedAccessToken(accessToken);
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        Accept: "application/json",
-        ...buildRequestIdHeader(),
-        ...(body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
-  }
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throwBackendError({
-      status: response.status,
-      payload,
-      fallback,
-      authProtected: true,
-    });
-  }
-
-  return payload as TResponse;
+  return backendJsonRequest<TResponse>({
+    path,
+    accessToken,
+    method,
+    body,
+    fallback,
+    authProtected: true,
+  });
 }
 
 export async function getMyProfile(accessToken: string): Promise<BackendMeResponse> {

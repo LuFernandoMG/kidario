@@ -1,6 +1,5 @@
-import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
+import { backendJsonRequest } from "@/lib/backendApi";
 import { formatDateLong, toDateIso } from "@/lib/bookingUtils";
-import { buildRequestIdHeader } from "@/lib/observability";
 
 export type BookingStatus = "pendente" | "confirmada" | "cancelada" | "concluida";
 export type BookingModality = "online" | "presencial";
@@ -193,35 +192,14 @@ async function teacherRequest<TResponse>(params: {
   fallback: string;
 }): Promise<TResponse> {
   const { path, accessToken, method = "GET", body, fallback } = params;
-  const url = `${getBackendApiBaseUrl()}${path}`;
-  const bearerToken = await resolveProtectedAccessToken(accessToken);
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        Accept: "application/json",
-        ...buildRequestIdHeader(),
-        ...(body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
-  }
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throwBackendError({
-      status: response.status,
-      payload,
-      fallback,
-      authProtected: true,
-    });
-  }
-  return payload as TResponse;
+  return backendJsonRequest<TResponse>({
+    path,
+    accessToken,
+    method,
+    body,
+    fallback,
+    authProtected: true,
+  });
 }
 
 function normalizeLimit(value: number | undefined, fallback: number) {

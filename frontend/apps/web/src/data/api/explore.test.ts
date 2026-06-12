@@ -1,14 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/backendApi", () => ({
-  extractErrorMessage: (payload: unknown, fallback: string) => {
-    if (payload && typeof payload === "object" && "detail" in payload) {
-      const detail = (payload as { detail?: unknown }).detail;
-      if (typeof detail === "string") return detail;
-    }
-    return fallback;
-  },
-  getBackendApiBaseUrl: () => "https://backend.test/api/v2",
+vi.stubEnv("VITE_BACKEND_API_URL", "https://backend.test/api/v2");
+
+vi.mock("@/lib/authSession", () => ({
+  getValidSupabaseAccessToken: async () => null,
+  handleExpiredSessionRedirect: vi.fn(),
 }));
 
 import { getExploreTeachers } from "@/data/api/explore";

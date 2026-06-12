@@ -1,5 +1,4 @@
-import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
-import { buildRequestIdHeader } from "@/lib/observability";
+import { backendJsonRequest } from "@/lib/backendApi";
 
 export interface TeacherPayoutProfile {
   id: string;
@@ -60,34 +59,19 @@ async function paymentRequest<TResponse>(params: {
   body?: Record<string, unknown>;
 }) {
   const { path, accessToken, method = "GET", body } = params;
-  const bearerToken = await resolveProtectedAccessToken(accessToken);
-  const response = await fetch(`${getBackendApiBaseUrl()}${path}`, {
+  return backendJsonRequest<TResponse>({
+    path,
+    accessToken,
     method,
-    headers: {
-      Authorization: `Bearer ${bearerToken}`,
-      Accept: "application/json",
-      ...buildRequestIdHeader(),
-      ...(body ? { "Content-Type": "application/json" } : {}),
+    body,
+    fallback: "Não foi possível processar os dados financeiros.",
+    authProtected: true,
+    onError: ({ status }) => {
+      if (status === 404 && path === "/teachers/me/payout-profile") {
+        throw new MissingTeacherPayoutProfileError();
+      }
     },
-    body: body ? JSON.stringify(body) : undefined,
-  }).catch(() => {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
   });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    if (response.status === 404 && path === "/teachers/me/payout-profile") {
-      throw new MissingTeacherPayoutProfileError();
-    }
-
-    throwBackendError({
-      status: response.status,
-      payload,
-      fallback: "Não foi possível processar os dados financeiros.",
-      authProtected: true,
-    });
-  }
-  return payload as TResponse;
 }
 
 export async function getTeacherPayoutProfile(accessToken: string) {

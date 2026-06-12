@@ -2,7 +2,7 @@ import type { Teacher } from "@/components/explore/TeacherCard";
 import type { DayAvailability } from "@/lib/bookingUtils";
 import { formatRelativeDateLabel, toDateIso } from "@/lib/bookingUtils";
 import { resolveTeacherAvatarUrl } from "@/lib/avatarUrl";
-import { extractErrorMessage, getBackendApiBaseUrl } from "@/lib/backendApi";
+import { backendJsonRequest } from "@/lib/backendApi";
 
 export interface ExploreTeacherSlotResponse {
   starts_at: string;
@@ -109,26 +109,10 @@ export interface ExploreTeacherFilters {
 }
 
 async function exploreRequest<TResponse>(path: string): Promise<TResponse> {
-  const url = `${getBackendApiBaseUrl()}${path}`;
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-  } catch {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
-  }
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(payload, "Não foi possível carregar os dados de exploração."));
-  }
-
-  return payload as TResponse;
+  return backendJsonRequest<TResponse>({
+    path,
+    fallback: "Não foi possível carregar os dados de exploração.",
+  });
 }
 
 function pricePerLessonCents(response: ExploreTeacherSummaryResponse) {

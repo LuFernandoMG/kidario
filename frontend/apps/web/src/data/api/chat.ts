@@ -1,5 +1,4 @@
-import { getBackendApiBaseUrl, resolveProtectedAccessToken, throwBackendError } from "@/lib/backendApi";
-import { buildRequestIdHeader } from "@/lib/observability";
+import { backendJsonRequest } from "@/lib/backendApi";
 
 export interface ChatThreadView {
   id: string;
@@ -50,36 +49,14 @@ async function backendRequest<TResponse>(params: {
   body?: Record<string, unknown>;
 }): Promise<TResponse> {
   const { path, accessToken, method = "GET", body } = params;
-  const url = `${getBackendApiBaseUrl()}${path}`;
-  const bearerToken = await resolveProtectedAccessToken(accessToken);
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        Accept: "application/json",
-        ...buildRequestIdHeader(),
-        ...(body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new Error("Não foi possível conectar ao backend do Kidario.");
-  }
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throwBackendError({
-      status: response.status,
-      payload,
-      fallback: "Não foi possível processar a operação de chat.",
-      authProtected: true,
-    });
-  }
-
-  return payload as TResponse;
+  return backendJsonRequest<TResponse>({
+    path,
+    accessToken,
+    method,
+    body,
+    fallback: "Não foi possível processar a operação de chat.",
+    authProtected: true,
+  });
 }
 
 export async function getOrCreateChatThreadFromBooking(
