@@ -495,13 +495,6 @@ export default function TeacherPrivateSignup() {
       if (!formData.acceptTerms) {
         nextErrors.acceptTerms = "Você precisa aceitar os termos e condições.";
       }
-      if (captchaEnabledFlag && !isCaptchaConfigured) {
-        nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
-      }
-      if (requireCaptcha && !captchaToken) {
-        nextErrors.captcha = "Confirme que você não é um robô.";
-      }
-
       formData.formations.forEach((formation, index) => {
         const prefix = `formations.${index}`;
         if (!formation.degreeType) nextErrors[`${prefix}.degreeType`] = "Selecione o tipo.";
@@ -526,6 +519,12 @@ export default function TeacherPrivateSignup() {
     if (step === 1) {
       if (formData.weeklyAvailability.length === 0) {
         nextErrors.weeklyAvailability = "Adicione pelo menos um horário semanal.";
+      }
+      if (captchaEnabledFlag && !isCaptchaConfigured) {
+        nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
+      }
+      if (requireCaptcha && !captchaToken) {
+        nextErrors.captcha = "Confirme que você não é um robô.";
       }
     }
 
@@ -1312,39 +1311,6 @@ export default function TeacherPrivateSignup() {
               </div>
               <FieldError message={errors.acceptTerms} />
 
-              {captchaEnabledFlag && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">Verificação de segurança</p>
-                  {isCaptchaConfigured ? (
-                    <TurnstileWidget
-                      siteKey={turnstileSiteKey}
-                      onTokenChange={(token) => {
-                        setCaptchaToken(token);
-                        setErrors((prev) => {
-                          if (!prev.captcha) return prev;
-                          const next = { ...prev };
-                          if (token) {
-                            delete next.captcha;
-                          }
-                          return next;
-                        });
-                      }}
-                      onError={(errorCode) => {
-                        const suffix = errorCode ? ` (${errorCode})` : "";
-                        setErrors((prev) => ({
-                          ...prev,
-                          captcha: `Falha na verificação anti-spam${suffix}. Tente novamente.`,
-                        }));
-                      }}
-                    />
-                  ) : (
-                    <p className="text-xs text-destructive">
-                      Não foi possível carregar a verificação anti-spam.
-                    </p>
-                  )}
-                  <FieldError message={errors.captcha} />
-                </div>
-              )}
             </section>
           </>
         )}
@@ -1363,6 +1329,40 @@ export default function TeacherPrivateSignup() {
                 }));
               }}
             />
+
+            {captchaEnabledFlag && (
+              <div className="card-kidario p-5 space-y-2">
+                <p className="text-sm font-medium text-foreground">Verificação de segurança</p>
+                {isCaptchaConfigured ? (
+                  <TurnstileWidget
+                    siteKey={turnstileSiteKey}
+                    onTokenChange={(token) => {
+                      setCaptchaToken(token);
+                      setErrors((prev) => {
+                        if (!prev.captcha) return prev;
+                        const next = { ...prev };
+                        if (token) {
+                          delete next.captcha;
+                        }
+                        return next;
+                      });
+                    }}
+                    onError={(errorCode) => {
+                      const suffix = errorCode ? ` (${errorCode})` : "";
+                      setErrors((prev) => ({
+                        ...prev,
+                        captcha: `Falha na verificação anti-spam${suffix}. Tente novamente.`,
+                      }));
+                    }}
+                  />
+                ) : (
+                  <p className="text-xs text-destructive">
+                    Não foi possível carregar a verificação anti-spam.
+                  </p>
+                )}
+                <FieldError message={errors.captcha} />
+              </div>
+            )}
           </section>
         )}
 

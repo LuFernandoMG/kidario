@@ -272,12 +272,6 @@ export default function Signup() {
       if (email && !isValidEmail(email)) {
         nextErrors.email = "Informe um e-mail válido no formato email@dominio.ext.";
       }
-      if (captchaEnabledFlag && !isCaptchaConfigured) {
-        nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
-      }
-      if (requireCaptcha && !captchaToken) {
-        nextErrors.captcha = "Confirme que você não é um robô.";
-      }
       if (!formData.birthDate) nextErrors.birthDate = "Informe sua data de nascimento.";
       if (!formData.password) nextErrors.password = "Crie uma senha.";
       if (formData.password && formData.password.length < 8) {
@@ -330,6 +324,13 @@ export default function Signup() {
         if (!child.school.trim()) nextErrors[`${prefix}.school`] = "Informe a escola.";
         if (!child.focusPoints.trim()) nextErrors[`${prefix}.focusPoints`] = "Descreva os pontos de atenção.";
       });
+
+      if (captchaEnabledFlag && !isCaptchaConfigured) {
+        nextErrors.captcha = "Configuração de segurança indisponível. Tente novamente em instantes.";
+      }
+      if (requireCaptcha && !captchaToken) {
+        nextErrors.captcha = "Confirme que você não é um robô.";
+      }
     }
 
     setErrors(nextErrors);
@@ -645,39 +646,6 @@ export default function Signup() {
               <FieldError message={errors.confirmPassword} />
             </div>
 
-            {captchaEnabledFlag && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Verificação de segurança</label>
-                {isCaptchaConfigured ? (
-                  <TurnstileWidget
-                    siteKey={turnstileSiteKey}
-                    onTokenChange={(token) => {
-                      setCaptchaToken(token);
-                      setErrors((prev) => {
-                        if (!prev.captcha) return prev;
-                        const next = { ...prev };
-                        if (token) {
-                          delete next.captcha;
-                        }
-                        return next;
-                      });
-                    }}
-                    onError={(errorCode) => {
-                      const suffix = errorCode ? ` (${errorCode})` : "";
-                      setErrors((prev) => ({
-                        ...prev,
-                        captcha: `Falha na verificação anti-spam${suffix}. Tente novamente.`,
-                      }));
-                    }}
-                  />
-                ) : (
-                  <p className="text-xs text-destructive">
-                    Não foi possível carregar a verificação anti-spam.
-                  </p>
-                )}
-                <FieldError message={errors.captcha} />
-              </div>
-            )}
           </section>
         )}
 
@@ -931,6 +899,40 @@ export default function Signup() {
               <Plus className="w-5 h-5" />
               Adicionar outro filho
             </KidarioButton>
+
+            {captchaEnabledFlag && (
+              <div className="card-kidario p-5 space-y-2">
+                <label className="text-sm font-medium text-foreground">Verificação de segurança</label>
+                {isCaptchaConfigured ? (
+                  <TurnstileWidget
+                    siteKey={turnstileSiteKey}
+                    onTokenChange={(token) => {
+                      setCaptchaToken(token);
+                      setErrors((prev) => {
+                        if (!prev.captcha) return prev;
+                        const next = { ...prev };
+                        if (token) {
+                          delete next.captcha;
+                        }
+                        return next;
+                      });
+                    }}
+                    onError={(errorCode) => {
+                      const suffix = errorCode ? ` (${errorCode})` : "";
+                      setErrors((prev) => ({
+                        ...prev,
+                        captcha: `Falha na verificação anti-spam${suffix}. Tente novamente.`,
+                      }));
+                    }}
+                  />
+                ) : (
+                  <p className="text-xs text-destructive">
+                    Não foi possível carregar a verificação anti-spam.
+                  </p>
+                )}
+                <FieldError message={errors.captcha} />
+              </div>
+            )}
           </section>
         )}
 
