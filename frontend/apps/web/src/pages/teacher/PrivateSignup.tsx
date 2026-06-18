@@ -19,10 +19,8 @@ import {
   WeeklyAvailabilityCalendar,
   type WeeklyAvailabilitySlot,
 } from "@/components/teacher/WeeklyAvailabilityCalendar";
-import { uploadTeacherProfilePhoto } from "@/data/api/teacherProfiles";
-import { signUpWithBackend } from "@/data/api/auth";
+import { signUpTeacherWithProfilePhoto } from "@/data/api/auth";
 import { applyBackendSignupSession } from "@/lib/authSession";
-import { savePendingTeacherProfilePhoto } from "@/lib/pendingProfileSync";
 import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 import { ROOT_PATH } from "@/routes/paths";
 import { TEACHER_CONTROL_CENTER_PATH } from "@/routes/teacher";
@@ -556,6 +554,10 @@ export default function TeacherPrivateSignup() {
     setIsLoading(true);
 
     try {
+      if (!formData.profilePhoto) {
+        throw new Error("Adicione uma foto de perfil.");
+      }
+
       const email = canonicalizeEmail(formData.email);
       const buildTeacherProfilePayload = (profilePhotoFileName: string | null) => ({
         first_name: formData.firstName,
@@ -614,43 +616,46 @@ export default function TeacherPrivateSignup() {
       });
 
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-      const result = await signUpWithBackend({
-        email,
-        password: formData.password,
-        full_name: fullName,
-        role: "teacher",
-        teacher: buildTeacherProfilePayload(null),
-        captcha_token: captchaToken || undefined,
-        honeypot,
-        metadata: {
-          signup_source: "teacher_private_invite",
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          phone: formData.phone,
-          cpf: formData.cpf,
-          professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
-          address: {
-            street: formData.address.trim(),
-            number: formData.addressNumber.trim(),
-            complement: formData.addressComplement.trim() || undefined,
-            district: formData.district.trim(),
-            city: formData.city.trim(),
-            state: formData.state,
-            postal_code: formData.postalCode,
-            country: "BR",
+      const result = await signUpTeacherWithProfilePhoto(
+        {
+          email,
+          password: formData.password,
+          full_name: fullName,
+          role: "teacher",
+          teacher: buildTeacherProfilePayload(null),
+          captcha_token: captchaToken || undefined,
+          honeypot,
+          metadata: {
+            signup_source: "teacher_private_invite",
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            phone: formData.phone,
+            cpf: formData.cpf,
+            professional_registration: PROFESSIONAL_REGISTRATION_DEFAULT,
+            address: {
+              street: formData.address.trim(),
+              number: formData.addressNumber.trim(),
+              complement: formData.addressComplement.trim() || undefined,
+              district: formData.district.trim(),
+              city: formData.city.trim(),
+              state: formData.state,
+              postal_code: formData.postalCode,
+              country: "BR",
+            },
+            modality: formData.modality,
+            mini_bio: formData.miniBio,
+            hourly_rate: Number(formData.hourlyRate),
+            lesson_duration_minutes: Number(formData.lessonDuration),
+            profile_photo_file_name: null,
+            request_experience_anonymity: formData.requestExperienceAnonymity,
+            specialties: formData.specialties,
+            formations: formData.formations,
+            experiences: formData.experiences,
+            weekly_availability: formData.weeklyAvailability,
           },
-          modality: formData.modality,
-          mini_bio: formData.miniBio,
-          hourly_rate: Number(formData.hourlyRate),
-          lesson_duration_minutes: Number(formData.lessonDuration),
-          profile_photo_file_name: null,
-          request_experience_anonymity: formData.requestExperienceAnonymity,
-          specialties: formData.specialties,
-          formations: formData.formations,
-          experiences: formData.experiences,
-          weekly_availability: formData.weeklyAvailability,
         },
-      });
+        formData.profilePhoto,
+      );
 
       applyBackendSignupSession({
         role: result.role,
@@ -663,31 +668,12 @@ export default function TeacherPrivateSignup() {
       });
 
       if (result.email_confirmation_required) {
-        if (formData.profilePhoto) {
-          const queuedPhoto = await savePendingTeacherProfilePhoto({
-            email,
-            file: formData.profilePhoto,
-          });
-          if (!queuedPhoto) {
-            console.warn("Could not queue teacher profile photo for post-confirmation upload.");
-          }
-        }
-
         const params = new URLSearchParams();
         params.set("email", email);
         params.set("notice", "check-email");
         params.set("role", "teacher");
         navigate(`/login?${params.toString()}`);
         return;
-      }
-
-      const accessToken = result.access_token || undefined;
-      if (!accessToken) {
-        throw new Error("Conta criada no Auth, mas token não encontrado para salvar o perfil.");
-      }
-
-      if (formData.profilePhoto) {
-        await uploadTeacherProfilePhoto(accessToken, formData.profilePhoto);
       }
 
       navigate(TEACHER_CONTROL_CENTER_PATH);

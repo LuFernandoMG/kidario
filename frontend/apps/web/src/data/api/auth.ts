@@ -111,3 +111,20 @@ export async function signUpWithBackend(payload: AuthSignupRequestPayload): Prom
     fallback: "Não foi possível criar a conta.",
   });
 }
+
+export async function signUpTeacherWithProfilePhoto(
+  payload: AuthSignupRequestPayload,
+  profilePhoto: File,
+): Promise<AuthSignupResponse> {
+  const body = new FormData();
+  body.append("payload", JSON.stringify(payload));
+  body.append("profile_photo", profilePhoto);
+
+  return backendJsonRequest<AuthSignupResponse>({
+    path: "/auth/signup/teacher",
+    method: "POST",
+    body,
+    fallback: "Não foi possível criar a conta da professora.",
+    timeoutMs: 30_000,
+  });
+}

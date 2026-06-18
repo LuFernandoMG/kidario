@@ -1,4 +1,5 @@
 import json
+from dataclasses import dataclass
 from typing import Any
 from urllib import error, request
 from uuid import UUID
@@ -17,6 +18,11 @@ from app.services.profile_v2_service import (
     update_parent_profile_v2,
     update_teacher_profile_v2,
 )
+from app.services.profile_photo_service import (
+    ProfilePhotoUploadError,
+    delete_teacher_profile_photo_blob,
+    upload_teacher_profile_photo_blob,
+)
 
 
 class AuthSignupError(Exception):
@@ -31,6 +37,13 @@ class AuthPasswordVerificationError(Exception):
         super().__init__(detail)
         self.detail = detail
         self.status_code = status_code
+
+
+@dataclass(frozen=True)
+class TeacherSignupProfilePhoto:
+    file_name: str | None
+    content_type: str | None
+    file_bytes: bytes
 
 
 def _http_json_request(
@@ -185,7 +198,17 @@ def _try_delete_auth_user(settings: Settings, auth_user_id: str) -> tuple[bool, 
     return False, detail
 
 
-def signup_with_profile(db: Session, settings: Settings, payload: AuthSignupRequest) -> dict[str, Any]:
+def _delete_uploaded_signup_photo(settings: Settings, object_key: str | None) -> None:
+    if object_key:
+        delete_teacher_profile_photo_blob(settings=settings, object_key=object_key)
+
+
+def signup_with_profile(
+    db: Session,
+    settings: Settings,
+    payload: AuthSignupRequest,
+    teacher_profile_photo: TeacherSignupProfilePhoto | None = None,
+) -> dict[str, Any]:
     if not settings.supabase_anon_key:
         raise AuthSignupError(
             "Supabase anon key is not configured (KIDARIO_SUPABASE_ANON_KEY).",
@@ -229,8 +252,27 @@ def signup_with_profile(db: Session, settings: Settings, payload: AuthSignupRequ
         raise AuthSignupError("Este e-mail ja esta cadastrado.", status_code=409)
 
     auth_user = AuthUser(user_id=auth_user_id, email=payload.email, role="authenticated")
+    uploaded_profile_photo_object_key: str | None = None
 
     try:
+        if payload.role == "teacher" and teacher_profile_photo is not None:
+            if payload.teacher is None:
+                raise AuthSignupError("teacher is required when role is 'teacher'.", status_code=422)
+            uploaded_profile_photo_object_key = upload_teacher_profile_photo_blob(
+                settings=settings,
+                user_id=auth_user_id,
+                file_name=teacher_profile_photo.file_name,
+                content_type=teacher_profile_photo.content_type,
+                file_bytes=teacher_profile_photo.file_bytes,
+            )
+            payload = payload.model_copy(
+                update={
+                    "teacher": payload.teacher.model_copy(
+                        update={"profile_photo_file_name": uploaded_profile_photo_object_key},
+                    ),
+                },
+            )
+
         with db.begin():
             if payload.role == "parent":
                 if payload.parent is None:
@@ -266,17 +308,25 @@ def signup_with_profile(db: Session, settings: Settings, payload: AuthSignupRequ
                     "teacher_id": teacher_profile["id"],
                     "role": "teacher",
                 }
+    except ProfilePhotoUploadError as exc:
+        deleted, reason = _try_delete_auth_user(settings, auth_user_id)
+        suffix = "" if deleted else f" Compensation pending ({reason})."
+        raise AuthSignupError(f"{exc.detail}{suffix}", status_code=exc.status_code) from exc
     except ProfileConflictError as exc:
+        _delete_uploaded_signup_photo(settings, uploaded_profile_photo_object_key)
         deleted, reason = _try_delete_auth_user(settings, auth_user_id)
         suffix = "" if deleted else f" Compensation pending ({reason})."
         raise AuthSignupError(f"{exc}{suffix}", status_code=409) from exc
     except ProfileValidationError as exc:
+        _delete_uploaded_signup_photo(settings, uploaded_profile_photo_object_key)
         deleted, reason = _try_delete_auth_user(settings, auth_user_id)
         suffix = "" if deleted else f" Compensation pending ({reason})."
         raise AuthSignupError(f"{exc}{suffix}", status_code=422) from exc
     except AuthSignupError:
+        _delete_uploaded_signup_photo(settings, uploaded_profile_photo_object_key)
         raise
     except Exception as exc:
+        _delete_uploaded_signup_photo(settings, uploaded_profile_photo_object_key)
         deleted, reason = _try_delete_auth_user(settings, auth_user_id)
         suffix = "" if deleted else f" Compensation pending ({reason})."
         raise AuthSignupError(

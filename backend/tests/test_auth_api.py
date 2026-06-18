@@ -1,4 +1,5 @@
 import os
+import json
 from contextlib import AbstractContextManager
 from uuid import UUID
 
@@ -88,6 +89,65 @@ def test_post_auth_signup_parent_returns_created(client: TestClient, monkeypatch
     assert body["status"] == "ok"
     assert body["role"] == "parent"
     assert body["email_confirmation_required"] is False
+
+
+def test_post_auth_teacher_signup_uploads_photo_before_response(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_signup_with_profile(db, settings, payload, teacher_profile_photo=None):
+        assert payload.role == "teacher"
+        assert payload.teacher is not None
+        assert teacher_profile_photo is not None
+        assert teacher_profile_photo.file_name == "foto.png"
+        assert teacher_profile_photo.content_type == "image/png"
+        assert teacher_profile_photo.file_bytes == b"fake-image-content"
+        return {
+            "status": "ok",
+            "user_id": UUID("b4f13a88-9e68-4d11-bd1b-5d03498ea5f0"),
+            "parent_id": None,
+            "teacher_id": UUID("3472def4-1d03-4350-b2c2-20c7fa27d430"),
+            "role": "teacher",
+            "email_confirmation_required": True,
+            "access_token": None,
+            "refresh_token": None,
+            "expires_in": None,
+            "token_type": None,
+        }
+
+    monkeypatch.setattr(auth_endpoints, "signup_with_profile", _fake_signup_with_profile)
+    monkeypatch.setattr(auth_endpoints, "enforce_signup_protection", lambda settings, payload, client_ip: None)
+
+    response = client.post(
+        "/api/v2/auth/signup/teacher",
+        data={
+            "payload": json.dumps(
+                {
+                    "email": "teacher@example.com",
+                    "password": "very-secure-password",
+                    "role": "teacher",
+                    "teacher": {
+                        "first_name": "Ana",
+                        "last_name": "Silva",
+                        "cpf": "12345678900",
+                        "address": {
+                            "street": "Rua B",
+                            "district": "Centro",
+                            "city": "Sao Paulo",
+                            "state": "SP",
+                        },
+                    },
+                }
+            ),
+        },
+        files={"profile_photo": ("foto.png", b"fake-image-content", "image/png")},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["role"] == "teacher"
+    assert body["email_confirmation_required"] is True
 
 
 def test_post_auth_signup_returns_conflict(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

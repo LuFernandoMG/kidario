@@ -253,6 +253,32 @@ def _upload_photo_blob(
     return object_key
 
 
+def upload_teacher_profile_photo_blob(
+    *,
+    settings: Settings,
+    user_id: str,
+    file_name: str | None,
+    content_type: str | None,
+    file_bytes: bytes,
+) -> str:
+    return _upload_photo_blob(
+        settings=settings,
+        user_id=user_id,
+        file_name=file_name,
+        content_type=content_type,
+        file_bytes=file_bytes,
+    )
+
+
+def delete_teacher_profile_photo_blob(*, settings: Settings, object_key: str) -> None:
+    _delete_via_s3(settings=settings, bucket=settings.profile_photos_bucket, object_key=object_key)
+    _delete_via_supabase_storage_rest(
+        settings=settings,
+        bucket=settings.profile_photos_bucket,
+        object_key=object_key,
+    )
+
+
 def upload_teacher_profile_photo(
     db: Session,
     settings: Settings,
@@ -276,12 +302,7 @@ def upload_teacher_profile_photo(
             TeacherProfileUpdateRequest(profile_photo_file_name=object_key),
         )
     except Exception as exc:
-        _delete_via_s3(settings=settings, bucket=settings.profile_photos_bucket, object_key=object_key)
-        _delete_via_supabase_storage_rest(
-            settings=settings,
-            bucket=settings.profile_photos_bucket,
-            object_key=object_key,
-        )
+        delete_teacher_profile_photo_blob(settings=settings, object_key=object_key)
         raise ProfilePhotoUploadError(
             "Uploaded photo, but failed to link it to teacher profile. Upload rolled back when possible.",
             status_code=500,
